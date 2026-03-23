@@ -1,12 +1,12 @@
 {
   "data": {
     "pillar": "macro_sentiment",
-    "timestamp": "2026-03-23T00:08:50.401344-04:00",
+    "timestamp": "2026-03-23T07:51:10.982881-04:00",
     "vix": null,
     "vxn": null,
     "fear_greed": null,
     "pillar_score": 0,
     "status": "live"
   },
-  "timestamp": "2026-03-23T04:08:50.401379"
+  "timestamp": "2026-03-23T11:51:10.982924"
 }
