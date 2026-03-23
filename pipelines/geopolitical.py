@@ -68,6 +68,7 @@ class GeopoliticalPipeline:
                     f"&language=en"
                     f"&sortBy=publishedAt"
                     f"&pageSize=10"
+                    f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com"
                     f"&apiKey={NEWS_API_KEY}"
                 )
                 response = requests.get(url, timeout=10)
@@ -100,7 +101,7 @@ class GeopoliticalPipeline:
 
                     items.append({
                         'headline': title,
-                        'description': description[:300],
+                        'description': ' '.join(description[:300].split()),
                         'source': article.get('source', {}).get('name', 'NewsAPI'),
                         'timestamp': timestamp,
                         'date': date,
