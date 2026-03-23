@@ -25,11 +25,11 @@ class EconomicCalendarPipeline:
 
     def convert_to_est(self, date_str):
         try:
-            dt = datetime.fromisoformat(date_str)
-            est = dt.astimezone(self.timezone)
-            return est.strftime('%I:%M %p EST')
+            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            est = dt.astimezone(pytz.timezone(TIMEZONE))
+            return est.strftime('%a %b %d, %I:%M %p EST')
         except:
-            return 'TBD'
+            return date_str
 
     def get_market_implication(self, title, actual, forecast, previous):
         if not actual or actual == '':

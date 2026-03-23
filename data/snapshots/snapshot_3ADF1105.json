@@ -1,0 +1,169 @@
+{
+  "id": "3ADF1105",
+  "timestamp": "2026-03-23T08:50:37.407312-04:00",
+  "bias": {
+    "final_score": -0.567,
+    "bias": "Bearish",
+    "bias_emoji": "\ud83d\udd34",
+    "confidence": 28,
+    "pillar_contributions": {
+      "economic_calendar": {
+        "raw_score": -1.5,
+        "weight": 40,
+        "contribution": -0.6
+      },
+      "geopolitical": {
+        "raw_score": 0.0,
+        "weight": 28,
+        "contribution": 0.0
+      },
+      "institutional": {
+        "raw_score": 0,
+        "weight": 20,
+        "contribution": 0.0
+      },
+      "macro_sentiment": {
+        "raw_score": 0.33,
+        "weight": 10,
+        "contribution": 0.033
+      },
+      "news_sentiment": {
+        "raw_score": 0,
+        "weight": 2,
+        "contribution": 0.0
+      }
+    },
+    "gauge_value": 35
+  },
+  "pillars": {
+    "macro": {
+      "pillar": "macro_sentiment",
+      "timestamp": "2026-03-23T08:50:36.835476-04:00",
+      "vix": {
+        "value": 24.06,
+        "previous": 25.09,
+        "change": -1.03,
+        "change_pct": -4.11,
+        "signal": "bearish"
+      },
+      "vxn": {
+        "value": 26.9,
+        "previous": 27.72,
+        "change": -0.82,
+        "change_pct": -2.96,
+        "signal": "bearish"
+      },
+      "fear_greed": {
+        "score": 8,
+        "rating": "Extreme Fear",
+        "signal": "bearish",
+        "source": "Alternative.me"
+      },
+      "pillar_score": 0.33,
+      "status": "live"
+    },
+    "economic": {
+      "pillar": "economic_calendar",
+      "timestamp": "2026-03-23T08:50:36.919649-04:00",
+      "events": [
+        {
+          "title": "Flash Manufacturing PMI",
+          "time_est": "09:45 AM EST",
+          "forecast": "N/A",
+          "previous": "51.2",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Flash Manufacturing PMI not yet released"
+        },
+        {
+          "title": "Flash Services PMI",
+          "time_est": "09:45 AM EST",
+          "forecast": "N/A",
+          "previous": "52.3",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Flash Services PMI not yet released"
+        },
+        {
+          "title": "Richmond Manufacturing Index",
+          "time_est": "10:00 AM EST",
+          "forecast": "-5",
+          "previous": "-10",
+          "actual": "Pending",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Richmond Manufacturing Index not yet released"
+        },
+        {
+          "title": "Unemployment Claims",
+          "time_est": "08:30 AM EST",
+          "forecast": "211K",
+          "previous": "205K",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Unemployment Claims not yet released"
+        },
+        {
+          "title": "Revised UoM Consumer Sentiment",
+          "time_est": "10:00 AM EST",
+          "forecast": "N/A",
+          "previous": "55.5",
+          "actual": "Pending",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Revised UoM Consumer Sentiment not yet released"
+        }
+      ],
+      "pillar_score": -1.5,
+      "warnings": [
+        "\u26a0\ufe0f Flash Manufacturing PMI at 09:45 AM EST \u2014 Flash Manufacturing PMI not yet released",
+        "\u26a0\ufe0f Flash Services PMI at 09:45 AM EST \u2014 Flash Services PMI not yet released",
+        "\u26a0\ufe0f Richmond Manufacturing Index at 10:00 AM EST \u2014 Richmond Manufacturing Index not yet released",
+        "\u26a0\ufe0f Unemployment Claims at 08:30 AM EST \u2014 Unemployment Claims not yet released",
+        "\u26a0\ufe0f Revised UoM Consumer Sentiment at 10:00 AM EST \u2014 Revised UoM Consumer Sentiment not yet released"
+      ],
+      "status": "live"
+    },
+    "institutional": {
+      "pillar": "institutional",
+      "timestamp": "2026-03-23T08:33:08.907840-04:00",
+      "nq_futures": {
+        "direction": "unknown",
+        "score": 0
+      },
+      "es_futures": {
+        "direction": "unknown",
+        "score": 0
+      },
+      "pillar_score": 0,
+      "update_frequency": "Weekly (Fridays)",
+      "next_update": "Next Friday",
+      "status": "live"
+    },
+    "geopolitical": {
+      "pillar": "geopolitical",
+      "timestamp": "2026-03-23T08:50:37.406348-04:00",
+      "financial_juice_items": [],
+      "unbiased_network_items": [],
+      "active_flags": [],
+      "total_items": 0,
+      "pillar_score": 0.0,
+      "status": "live"
+    },
+    "news": {
+      "pillar": "news_sentiment",
+      "timestamp": "2026-03-23T08:50:37.406890-04:00",
+      "analysis": null,
+      "pillar_score": 0,
+      "status": "live"
+    }
+  }
+}

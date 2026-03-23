@@ -304,14 +304,13 @@
                 <div class="flag-title">${e.title}</div>
                 <div class="flag-meta">
                     <span class="flag-status ${e.result === 'pending' ? 'status-awaiting' : 'status-resolved'}">${e.result === 'pending' ? 'Pending' : e.result.toUpperCase()}</span>
-                    <span class="flag-source">${e.time_est} EST</span>
+                    <span class="flag-source">${e.time_est}</span>
                 </div>
                 <div class="data-row"><span class="data-label">Expected</span><span class="data-value">${e.forecast}</span></div>
                 <div class="data-row"><span class="data-label">Actual</span><span class="data-value ${valClass(e.market_impact)}">${e.actual}</span></div>
                 ${e.result !== 'pending' ? `<div class="data-row"><span class="data-label">Impact</span><span class="data-value ${valClass(e.market_impact)}">${(e.market_impact || '').toUpperCase()}</span></div>` : ''}
             </div>`;
         });
-        (data.warnings || []).forEach(w => { html += `<div class="stale-warning">${w}</div>`; });
         return html;
     }
 
