@@ -1,16 +1,26 @@
 {
   "data": {
     "pillar": "geopolitical",
-    "timestamp": "2026-03-23T09:44:52.359988-04:00",
+    "timestamp": "2026-03-23T09:50:21.573888-04:00",
     "news_items": [
       {
-        "headline": "Trump Threatens to Flood US Airports With ICE as Senate GOP Blocks Dem Bill to Pay TSA",
-        "description": "As Senate Republicans on Saturday voted against advancing a Democratic bill to pay Transportation Security Administration workers during talks over Department of Homeland Security funding, GOP President Donald Trump tried to pin the blame for the partial DHS \u2026",
-        "source": "Common Dreams",
-        "timestamp": "Mar 22, 09:20 AM EST",
+        "headline": "ICE Officers Soon Will Help With Airport Security Unless Democrats End Shutdown, Trump Says",
+        "description": "In a series of social media posts, Trump said he was making plans to put officers from U.S. Immigration and Customs Enforcement in airports if the congressional standoff continues.",
+        "source": "HuffPost",
+        "timestamp": "Mar 22, 09:50 AM EST",
         "date": "2026-03-22",
-        "link": "https://www.commondreams.org/news/trump-tsa",
-        "sentiment_score": -0.998,
+        "link": "https://www.huffpost.com/entry/trump-ice-airport-security-dhs_n_69bff008e4b0284f9be0ccba",
+        "sentiment_score": -0.981,
+        "market_relevant": true
+      },
+      {
+        "headline": "TSA airport security by Donald Trump: Waiting time to checking at airports - What will happen on Monday?",
+        "description": "Donald Trump TSA Security: Elon Musk, the world\u2019s richest person, on Saturday offered to cover TSA paychecks.",
+        "source": "The Times of India",
+        "timestamp": "Mar 22, 09:44 AM EST",
+        "date": "2026-03-22",
+        "link": "https://economictimes.indiatimes.com/news/international/us/tsa-airport-security-by-donald-trump-waiting-time-to-checking-at-airports-what-will-happen-on-monday/articleshow/129733748.cms",
+        "sentiment_score": -0.985,
         "market_relevant": true
       },
       {
@@ -34,53 +44,33 @@
         "market_relevant": true
       },
       {
-        "headline": "China touts itself as \u2018harbour of stability\u2019 to global CEOs - Financial Times",
-        "description": "China touts itself as \u2018harbour of stability\u2019 to global CEOsFinancial Times China\u2019s Premier Vows to Back Balanced Trade as Exports SurgeBloomberg.com China pledges more balanced trade and further opening of the economy after record surplusReuters Premier Li Qi\u2026",
-        "source": "Slashdot.org",
-        "timestamp": "Mar 22, 09:12 AM EST",
+        "headline": "\u2018Saturday Night Live U.K.\u2019 Premiere Roasts Keir Starmer\u2019s Trump Anxiety in Awkward Cold Open",
+        "description": "Even a Gen Z adviser can\u2019t save this transatlantic meltdown.",
+        "source": "Decider",
+        "timestamp": "Mar 22, 09:47 AM EST",
         "date": "2026-03-22",
-        "link": "https://slashdot.org/firehose.pl?op=view&amp;id=181077180",
-        "sentiment_score": -0.747,
+        "link": "https://decider.com/2026/03/22/saturday-night-live-uk-premiere-keir-starmer-trump-cold-open/",
+        "sentiment_score": -0.99,
         "market_relevant": true
       },
       {
-        "headline": "Iran says will hit region\u2019s energy sites if US, Israel target power plants",
-        "description": "Iran warns of 'irreversibly' destroying vital infrastructure across region after Trump threatens to bomb power plants.",
-        "source": "Al Jazeera English",
-        "timestamp": "Mar 22, 09:42 AM EST",
+        "headline": "Deepfakes and AI Misinformation Reshape How War Is Seen Online",
+        "description": "Viral synthetic videos of the war on Iran highlight urgent need for AI literacy.",
+        "source": "Substack.com",
+        "timestamp": "Mar 22, 09:44 AM EST",
         "date": "2026-03-22",
-        "link": "https://www.aljazeera.com/news/2026/3/22/iran-says-will-hit-regions-energy-sites-if-us-israel-target-power-plants",
-        "sentiment_score": -0.997,
+        "link": "https://nolanhigdon.substack.com/p/the-age-of-generative-warfare?utm_source=post-email-title&publication_id=1418461&post_id=191143627&utm_campaign=email-post-title&isFreemail=true&r=1nfvfo&triedRedirect=true&utm_medium=email",
+        "sentiment_score": -0.961,
         "market_relevant": true
       },
       {
-        "headline": "'Normal' Lyrics: BTS Reflect on Fame on 'ARIRANG' Album Track",
-        "description": "BTS is back, and they\u2019re reflecting on their massive superstardom and how their life is now. The K-pop boy band just released ARIRANG on March 20, their long awaited comeback album after each member served their required military service in South Korea. One o\u2026",
-        "source": "Just Jared",
-        "timestamp": "Mar 22, 09:41 AM EST",
-        "date": "2026-03-22",
-        "link": "https://www.justjared.com/2026/03/22/bts-normal-lyrics-arirang-album-meaning/",
-        "sentiment_score": 0.996,
-        "market_relevant": true
-      },
-      {
-        "headline": "Myanmar\u2019s Elections and the Future of India\u2019s Act East Strategy",
-        "description": "Myanmar held its first nationwide elections since the February 2021 military coup on January 25, 2026. Despite ongoing conflict and a boycott campaign led by the National Unity Government (NUG) and allied armed groups, voting was conducted in 265 of the count\u2026",
-        "source": "Fair Observer",
-        "timestamp": "Mar 22, 09:39 AM EST",
-        "date": "2026-03-22",
-        "link": "https://www.fairobserver.com/election-news/myanmars-elections-and-the-future-of-indias-act-east-strategy/",
-        "sentiment_score": 0.993,
-        "market_relevant": true
-      },
-      {
-        "headline": "Apple CEO praises China partners as Beijing applies pressure",
-        "description": "Cook, speaking at the China Development Forum in Beijing on Sunday, praised the innovations of Chinese developers and the automation at the country\u2019s manufacturing facilities. He said Apple and China share common goals, including in green development and carb\u2026",
+        "headline": "Oil crisis: Russian crude tanker docks near Mangaluru port",
+        "description": "A Russian oil tanker, MT Aqua Titan, has arrived in India. This comes as global energy supplies face disruption due to the West Asia conflict. Another cargo ship carrying LPG from the United States also reached Mangaluru. Indian ports are waiving charges for \u2026",
         "source": "The Times of India",
-        "timestamp": "Mar 22, 09:38 AM EST",
+        "timestamp": "Mar 22, 09:43 AM EST",
         "date": "2026-03-22",
-        "link": "https://economictimes.indiatimes.com/tech/technology/apple-ceo-praises-china-partners-as-beijing-applies-pressure/articleshow/129733725.cms",
-        "sentiment_score": 0.998,
+        "link": "https://economictimes.indiatimes.com/industry/energy/oil-gas/oil-crisis-russian-crude-tanker-docks-near-mangaluru-port/articleshow/129733744.cms",
+        "sentiment_score": -0.994,
         "market_relevant": true
       },
       {
@@ -96,6 +86,32 @@
     ],
     "active_flags": [
       {
+        "title": "\u2018Saturday Night Live U.K.\u2019 Premiere Roasts Keir Starmer\u2019s Trump Anxiety in Awkward Cold Open",
+        "priority": 90,
+        "flag_type": "war",
+        "status": "Developing",
+        "source": "Decider",
+        "date": "2026-03-22",
+        "timestamp": "Mar 22, 09:47 AM EST",
+        "link": "https://decider.com/2026/03/22/saturday-night-live-uk-premiere-keir-starmer-trump-cold-open/",
+        "sentiment": -0.99,
+        "predicted_impact": "bearish",
+        "context": "Even a Gen Z adviser can\u2019t save this transatlantic meltdown."
+      },
+      {
+        "title": "Deepfakes and AI Misinformation Reshape How War Is Seen Online",
+        "priority": 90,
+        "flag_type": "war",
+        "status": "Developing",
+        "source": "Substack.com",
+        "date": "2026-03-22",
+        "timestamp": "Mar 22, 09:44 AM EST",
+        "link": "https://nolanhigdon.substack.com/p/the-age-of-generative-warfare?utm_source=post-email-title&publication_id=1418461&post_id=191143627&utm_campaign=email-post-title&isFreemail=true&r=1nfvfo&triedRedirect=true&utm_medium=email",
+        "sentiment": -0.961,
+        "predicted_impact": "bearish",
+        "context": "Viral synthetic videos of the war on Iran highlight urgent need for AI literacy."
+      },
+      {
         "title": "From Iran to Cuba, Trump\u2019s Sanctions Have Hurt People More Than Governments",
         "priority": 75,
         "flag_type": "sanctions",
@@ -107,11 +123,24 @@
         "sentiment": -0.971,
         "predicted_impact": "bearish",
         "context": "The US says \u201csanctions\u201d are about regime change, but in practice they are economic warfare against entire populations."
+      },
+      {
+        "title": "ICE Officers Soon Will Help With Airport Security Unless Democrats End Shutdown, Trump Says",
+        "priority": 70,
+        "flag_type": "shutdown",
+        "status": "Developing",
+        "source": "HuffPost",
+        "date": "2026-03-22",
+        "timestamp": "Mar 22, 09:50 AM EST",
+        "link": "https://www.huffpost.com/entry/trump-ice-airport-security-dhs_n_69bff008e4b0284f9be0ccba",
+        "sentiment": -0.981,
+        "predicted_impact": "bearish",
+        "context": "In a series of social media posts, Trump said he was making plans to put officers from U.S. Immigration and Customs Enforcement in airports if the congressional standoff continues."
       }
     ],
-    "total_items": 9,
-    "pillar_score": -0.45,
+    "total_items": 8,
+    "pillar_score": -1.63,
     "status": "live"
   },
-  "timestamp": "2026-03-23T13:44:52.360036"
+  "timestamp": "2026-03-23T13:50:21.573927"
 }

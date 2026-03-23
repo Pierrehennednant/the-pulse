@@ -1,7 +1,8 @@
 import requests
+from bs4 import BeautifulSoup
 from datetime import datetime
 import pytz
-from config import TIMEZONE, COT_CACHE_FILE
+from config import TIMEZONE
 from utils.cache import cache
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
@@ -16,57 +17,69 @@ class InstitutionalPipeline:
     def is_friday(self):
         return datetime.now(pytz.timezone(TIMEZONE)).weekday() == 4
 
+    def parse_positions(self, text, instrument):
+        try:
+            idx = text.upper().find(instrument.upper())
+            if idx == -1:
+                return None
+            section = text[idx:idx+600]
+            lines = section.split('\n')
+            positions = {}
+            for line in lines:
+                line = line.strip()
+                if line.startswith('Asset Mgr:') or line.startswith('Asset Manager:'):
+                    parts = line.replace('Asset Mgr:', '').replace('Asset Manager:', '').strip()
+                    nums = [int(x.strip().replace(',', '')) for x in parts.split() if x.strip().replace(',', '').isdigit()]
+                    if len(nums) >= 2:
+                        positions['asset_mgr_long'] = nums[0]
+                        positions['asset_mgr_short'] = nums[1]
+                elif line.startswith('Leveraged:'):
+                    parts = line.replace('Leveraged:', '').strip()
+                    nums = [int(x.strip().replace(',', '')) for x in parts.split() if x.strip().replace(',', '').isdigit()]
+                    if len(nums) >= 2:
+                        positions['leveraged_long'] = nums[0]
+                        positions['leveraged_short'] = nums[1]
+            if not positions:
+                return None
+            asset_mgr_net = positions.get('asset_mgr_long', 0) - positions.get('asset_mgr_short', 0)
+            leveraged_net = positions.get('leveraged_long', 0) - positions.get('leveraged_short', 0)
+            combined_long = positions.get('asset_mgr_long', 0) + positions.get('leveraged_long', 0)
+            combined_short = positions.get('asset_mgr_short', 0) + positions.get('leveraged_short', 0)
+            combined_net = combined_long - combined_short
+            total = combined_long + combined_short
+            net_pct = round((combined_net / total * 100), 2) if total > 0 else 0
+            direction = 'bullish' if combined_net > 0 else 'bearish'
+            score = 1.0 if net_pct > 10 else -1.0 if net_pct < -10 else 0.5 if net_pct > 0 else -0.5
+            return {
+                'asset_mgr_long': positions.get('asset_mgr_long', 0),
+                'asset_mgr_short': positions.get('asset_mgr_short', 0),
+                'asset_mgr_net': asset_mgr_net,
+                'leveraged_long': positions.get('leveraged_long', 0),
+                'leveraged_short': positions.get('leveraged_short', 0),
+                'leveraged_net': leveraged_net,
+                'combined_net': combined_net,
+                'net_pct': net_pct,
+                'direction': direction,
+                'score': score
+            }
+        except Exception as e:
+            error_handler.handle(e, f"COT Parser {instrument}")
+            return None
+
     def fetch_cot(self):
         try:
-            from bs4 import BeautifulSoup
             response = requests.get(self.cot_url, headers=self.headers, timeout=15)
             soup = BeautifulSoup(response.content, 'html.parser')
-            tables = soup.find_all('table')
-            nq_data = None
-            es_data = None
-            for table in tables:
-                text = table.get_text()
-                if 'NASDAQ' in text.upper() or 'E-MINI' in text.upper():
-                    rows = table.find_all('tr')
-                    for row in rows:
-                        cells = row.find_all('td')
-                        if len(cells) >= 4:
-                            row_text = row.get_text().upper()
-                            if 'NASDAQ' in row_text:
-                                try:
-                                    nq_data = {
-                                        'long': int(cells[1].get_text(strip=True).replace(',', '')),
-                                        'short': int(cells[2].get_text(strip=True).replace(',', ''))
-                                    }
-                                except:
-                                    pass
-                            if 'S&P 500' in row_text or 'ES' in row_text:
-                                try:
-                                    es_data = {
-                                        'long': int(cells[1].get_text(strip=True).replace(',', '')),
-                                        'short': int(cells[2].get_text(strip=True).replace(',', ''))
-                                    }
-                                except:
-                                    pass
+            pre = soup.find('pre')
+            if not pre:
+                raise ValueError("No pre tag found in CFTC page")
+            text = pre.get_text()
+            nq_data = self.parse_positions(text, 'NASDAQ')
+            es_data = self.parse_positions(text, 'S&P 500')
             return nq_data, es_data
         except Exception as e:
             error_handler.handle(e, "COT Fetcher")
             return None, None
-
-    def calculate_positioning(self, data):
-        if not data:
-            return {'direction': 'unknown', 'score': 0}
-        net = data['long'] - data['short']
-        total = data['long'] + data['short']
-        net_pct = (net / total * 100) if total > 0 else 0
-        return {
-            'long': data['long'],
-            'short': data['short'],
-            'net': net,
-            'net_pct': round(net_pct, 2),
-            'direction': 'bullish' if net > 0 else 'bearish',
-            'score': 1.0 if net_pct > 10 else -1.0 if net_pct < -10 else 0.5 if net_pct > 0 else -0.5
-        }
 
     def fetch(self):
         try:
@@ -74,27 +87,25 @@ class InstitutionalPipeline:
             if not self.is_friday() and existing:
                 pulse_logger.log("↺ Institutional — using weekly COT cache (updates Fridays)")
                 return existing['data']
-            nq_raw, es_raw = self.fetch_cot()
-            nq_positioning = self.calculate_positioning(nq_raw)
-            es_positioning = self.calculate_positioning(es_raw)
+            nq_data, es_data = self.fetch_cot()
             scores = []
-            if nq_positioning.get('score'):
-                scores.append(nq_positioning['score'])
-            if es_positioning.get('score'):
-                scores.append(es_positioning['score'])
+            if nq_data and nq_data.get('score'):
+                scores.append(nq_data['score'])
+            if es_data and es_data.get('score'):
+                scores.append(es_data['score'])
             pillar_score = round(sum(scores) / len(scores), 2) if scores else 0
             result = {
                 'pillar': 'institutional',
                 'timestamp': datetime.now(pytz.timezone(TIMEZONE)).isoformat(),
-                'nq_futures': nq_positioning,
-                'es_futures': es_positioning,
+                'nq_futures': nq_data or {'direction': 'unknown', 'score': 0},
+                'es_futures': es_data or {'direction': 'unknown', 'score': 0},
                 'pillar_score': pillar_score,
                 'update_frequency': 'Weekly (Fridays)',
                 'next_update': 'Next Friday',
                 'status': 'live'
             }
             cache.save(self.cache_key, result)
-            pulse_logger.log(f"✓ Institutional COT updated | NQ: {nq_positioning['direction']} | Score: {pillar_score}")
+            pulse_logger.log(f"✓ Institutional COT updated | NQ: {nq_data['direction'] if nq_data else 'unknown'} | ES: {es_data['direction'] if es_data else 'unknown'} | Score: {pillar_score}")
             return result
         except Exception as e:
             error_handler.handle(e, "Institutional")

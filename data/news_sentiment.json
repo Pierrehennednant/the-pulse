@@ -1,19 +1,19 @@
 {
   "data": {
     "pillar": "news_sentiment",
-    "timestamp": "2026-03-23T09:44:52.360895-04:00",
+    "timestamp": "2026-03-23T09:50:21.574601-04:00",
     "analysis": {
-      "average_score": -0.3,
+      "average_score": -0.982,
       "overall_sentiment": "bearish",
-      "bullish_pct": 33.3,
-      "bearish_pct": 66.7,
+      "bullish_pct": 0.0,
+      "bearish_pct": 100.0,
       "neutral_pct": 0.0,
-      "total_headlines": 9,
-      "dominant_theme": "From Iran to Cuba, Trump\u2019s Sanctions Have Hurt People More Than Governments",
-      "pillar_score": -0.6
+      "total_headlines": 8,
+      "dominant_theme": "\u2018Saturday Night Live U.K.\u2019 Premiere Roasts Keir Starmer\u2019s Trump Anxiety in Awkward Cold Open",
+      "pillar_score": -1.96
     },
-    "pillar_score": -0.6,
+    "pillar_score": -1.96,
     "status": "live"
   },
-  "timestamp": "2026-03-23T13:44:52.360919"
+  "timestamp": "2026-03-23T13:50:21.574626"
 }

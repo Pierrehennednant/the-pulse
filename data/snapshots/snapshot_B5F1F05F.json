@@ -1,0 +1,305 @@
+{
+  "id": "B5F1F05F",
+  "timestamp": "2026-03-23T09:50:21.574937-04:00",
+  "bias": {
+    "final_score": -1.196,
+    "bias": "Bearish",
+    "bias_emoji": "\ud83d\udd34",
+    "confidence": 59,
+    "pillar_contributions": {
+      "economic_calendar": {
+        "raw_score": -1.5,
+        "weight": 40,
+        "contribution": -0.6
+      },
+      "geopolitical": {
+        "raw_score": -1.63,
+        "weight": 28,
+        "contribution": -0.456
+      },
+      "institutional": {
+        "raw_score": 0,
+        "weight": 20,
+        "contribution": 0.0
+      },
+      "macro_sentiment": {
+        "raw_score": -1.0,
+        "weight": 10,
+        "contribution": -0.1
+      },
+      "news_sentiment": {
+        "raw_score": -1.96,
+        "weight": 2,
+        "contribution": -0.039
+      }
+    },
+    "gauge_value": 20
+  },
+  "pillars": {
+    "macro": {
+      "pillar": "macro_sentiment",
+      "timestamp": "2026-03-23T09:50:19.828871-04:00",
+      "vix": {
+        "value": 26.78,
+        "previous": 24.06,
+        "change": 2.72,
+        "change_pct": 11.31,
+        "signal": "bearish"
+      },
+      "vxn": {
+        "value": 29.2,
+        "previous": 26.9,
+        "change": 2.3,
+        "change_pct": 8.55,
+        "signal": "bearish"
+      },
+      "fear_greed": {
+        "score": 8,
+        "rating": "Extreme Fear",
+        "signal": "bearish",
+        "source": "Alternative.me"
+      },
+      "pillar_score": -1.0,
+      "status": "live"
+    },
+    "economic": {
+      "pillar": "economic_calendar",
+      "timestamp": "2026-03-23T09:50:19.877924-04:00",
+      "events": [
+        {
+          "title": "Flash Manufacturing PMI",
+          "time_est": "Tue Mar 24, 09:45 AM EST",
+          "forecast": "51.3",
+          "previous": "51.2",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Flash Manufacturing PMI not yet released"
+        },
+        {
+          "title": "Flash Services PMI",
+          "time_est": "Tue Mar 24, 09:45 AM EST",
+          "forecast": "52.1",
+          "previous": "52.3",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Flash Services PMI not yet released"
+        },
+        {
+          "title": "Richmond Manufacturing Index",
+          "time_est": "Tue Mar 24, 10:00 AM EST",
+          "forecast": "-5",
+          "previous": "-10",
+          "actual": "Pending",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Richmond Manufacturing Index not yet released"
+        },
+        {
+          "title": "Unemployment Claims",
+          "time_est": "Thu Mar 26, 08:30 AM EST",
+          "forecast": "211K",
+          "previous": "205K",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Unemployment Claims not yet released"
+        },
+        {
+          "title": "Revised UoM Consumer Sentiment",
+          "time_est": "Fri Mar 27, 10:00 AM EST",
+          "forecast": "54.2",
+          "previous": "55.5",
+          "actual": "Pending",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Revised UoM Consumer Sentiment not yet released"
+        }
+      ],
+      "pillar_score": -1.5,
+      "warnings": [],
+      "status": "live"
+    },
+    "institutional": {
+      "pillar": "institutional",
+      "timestamp": "2026-03-23T09:50:20.295196-04:00",
+      "nq_futures": {
+        "direction": "unknown",
+        "score": 0
+      },
+      "es_futures": {
+        "direction": "unknown",
+        "score": 0
+      },
+      "pillar_score": 0,
+      "update_frequency": "Weekly (Fridays)",
+      "next_update": "Next Friday",
+      "status": "live"
+    },
+    "geopolitical": {
+      "pillar": "geopolitical",
+      "timestamp": "2026-03-23T09:50:21.573888-04:00",
+      "news_items": [
+        {
+          "headline": "ICE Officers Soon Will Help With Airport Security Unless Democrats End Shutdown, Trump Says",
+          "description": "In a series of social media posts, Trump said he was making plans to put officers from U.S. Immigration and Customs Enforcement in airports if the congressional standoff continues.",
+          "source": "HuffPost",
+          "timestamp": "Mar 22, 09:50 AM EST",
+          "date": "2026-03-22",
+          "link": "https://www.huffpost.com/entry/trump-ice-airport-security-dhs_n_69bff008e4b0284f9be0ccba",
+          "sentiment_score": -0.981,
+          "market_relevant": true
+        },
+        {
+          "headline": "TSA airport security by Donald Trump: Waiting time to checking at airports - What will happen on Monday?",
+          "description": "Donald Trump TSA Security: Elon Musk, the world\u2019s richest person, on Saturday offered to cover TSA paychecks.",
+          "source": "The Times of India",
+          "timestamp": "Mar 22, 09:44 AM EST",
+          "date": "2026-03-22",
+          "link": "https://economictimes.indiatimes.com/news/international/us/tsa-airport-security-by-donald-trump-waiting-time-to-checking-at-airports-what-will-happen-on-monday/articleshow/129733748.cms",
+          "sentiment_score": -0.985,
+          "market_relevant": true
+        },
+        {
+          "headline": "Cuba Says Its Military Is Prepared as Trump\u2019s Threats Multiply",
+          "description": "A senior Cuban official said the country is preparing for a possible military assault as President Donald Trump increases economic pressure on the government in Havana and suggests it could be the next US target after Venezuela and Iran.",
+          "source": "Financial Post",
+          "timestamp": "Mar 22, 09:17 AM EST",
+          "date": "2026-03-22",
+          "link": "https://financialpost.com/pmn/business-pmn/cuba-says-its-military-is-prepared-as-trumps-threats-multiply",
+          "sentiment_score": -0.991,
+          "market_relevant": true
+        },
+        {
+          "headline": "From Iran to Cuba, Trump\u2019s Sanctions Have Hurt People More Than Governments",
+          "description": "The US says \u201csanctions\u201d are about regime change, but in practice they are economic warfare against entire populations.",
+          "source": "Truthout",
+          "timestamp": "Mar 22, 09:17 AM EST",
+          "date": "2026-03-22",
+          "link": "https://truthout.org/articles/from-iran-to-cuba-trumps-sanctions-have-hurt-people-more-than-governments/",
+          "sentiment_score": -0.971,
+          "market_relevant": true
+        },
+        {
+          "headline": "\u2018Saturday Night Live U.K.\u2019 Premiere Roasts Keir Starmer\u2019s Trump Anxiety in Awkward Cold Open",
+          "description": "Even a Gen Z adviser can\u2019t save this transatlantic meltdown.",
+          "source": "Decider",
+          "timestamp": "Mar 22, 09:47 AM EST",
+          "date": "2026-03-22",
+          "link": "https://decider.com/2026/03/22/saturday-night-live-uk-premiere-keir-starmer-trump-cold-open/",
+          "sentiment_score": -0.99,
+          "market_relevant": true
+        },
+        {
+          "headline": "Deepfakes and AI Misinformation Reshape How War Is Seen Online",
+          "description": "Viral synthetic videos of the war on Iran highlight urgent need for AI literacy.",
+          "source": "Substack.com",
+          "timestamp": "Mar 22, 09:44 AM EST",
+          "date": "2026-03-22",
+          "link": "https://nolanhigdon.substack.com/p/the-age-of-generative-warfare?utm_source=post-email-title&publication_id=1418461&post_id=191143627&utm_campaign=email-post-title&isFreemail=true&r=1nfvfo&triedRedirect=true&utm_medium=email",
+          "sentiment_score": -0.961,
+          "market_relevant": true
+        },
+        {
+          "headline": "Oil crisis: Russian crude tanker docks near Mangaluru port",
+          "description": "A Russian oil tanker, MT Aqua Titan, has arrived in India. This comes as global energy supplies face disruption due to the West Asia conflict. Another cargo ship carrying LPG from the United States also reached Mangaluru. Indian ports are waiving charges for \u2026",
+          "source": "The Times of India",
+          "timestamp": "Mar 22, 09:43 AM EST",
+          "date": "2026-03-22",
+          "link": "https://economictimes.indiatimes.com/industry/energy/oil-gas/oil-crisis-russian-crude-tanker-docks-near-mangaluru-port/articleshow/129733744.cms",
+          "sentiment_score": -0.994,
+          "market_relevant": true
+        },
+        {
+          "headline": "Govt may consider OFS option for raising public float in IDBI Bank",
+          "description": "The government may consider selling a stake in IDBI Bank through the Offer-for-Sale (OFS) route to increase public shareholding, after the unsuccessful attempt to divest stake in the LIC-controlled lender, sources said.",
+          "source": "The Times of India",
+          "timestamp": "Mar 22, 07:20 AM EST",
+          "date": "2026-03-22",
+          "link": "https://economictimes.indiatimes.com/markets/stocks/news/govt-may-consider-ofs-option-for-raising-public-float-in-idbi-bank/articleshow/129732323.cms",
+          "sentiment_score": -0.983,
+          "market_relevant": true
+        }
+      ],
+      "active_flags": [
+        {
+          "title": "\u2018Saturday Night Live U.K.\u2019 Premiere Roasts Keir Starmer\u2019s Trump Anxiety in Awkward Cold Open",
+          "priority": 90,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "Decider",
+          "date": "2026-03-22",
+          "timestamp": "Mar 22, 09:47 AM EST",
+          "link": "https://decider.com/2026/03/22/saturday-night-live-uk-premiere-keir-starmer-trump-cold-open/",
+          "sentiment": -0.99,
+          "predicted_impact": "bearish",
+          "context": "Even a Gen Z adviser can\u2019t save this transatlantic meltdown."
+        },
+        {
+          "title": "Deepfakes and AI Misinformation Reshape How War Is Seen Online",
+          "priority": 90,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "Substack.com",
+          "date": "2026-03-22",
+          "timestamp": "Mar 22, 09:44 AM EST",
+          "link": "https://nolanhigdon.substack.com/p/the-age-of-generative-warfare?utm_source=post-email-title&publication_id=1418461&post_id=191143627&utm_campaign=email-post-title&isFreemail=true&r=1nfvfo&triedRedirect=true&utm_medium=email",
+          "sentiment": -0.961,
+          "predicted_impact": "bearish",
+          "context": "Viral synthetic videos of the war on Iran highlight urgent need for AI literacy."
+        },
+        {
+          "title": "From Iran to Cuba, Trump\u2019s Sanctions Have Hurt People More Than Governments",
+          "priority": 75,
+          "flag_type": "sanctions",
+          "status": "Developing",
+          "source": "Truthout",
+          "date": "2026-03-22",
+          "timestamp": "Mar 22, 09:17 AM EST",
+          "link": "https://truthout.org/articles/from-iran-to-cuba-trumps-sanctions-have-hurt-people-more-than-governments/",
+          "sentiment": -0.971,
+          "predicted_impact": "bearish",
+          "context": "The US says \u201csanctions\u201d are about regime change, but in practice they are economic warfare against entire populations."
+        },
+        {
+          "title": "ICE Officers Soon Will Help With Airport Security Unless Democrats End Shutdown, Trump Says",
+          "priority": 70,
+          "flag_type": "shutdown",
+          "status": "Developing",
+          "source": "HuffPost",
+          "date": "2026-03-22",
+          "timestamp": "Mar 22, 09:50 AM EST",
+          "link": "https://www.huffpost.com/entry/trump-ice-airport-security-dhs_n_69bff008e4b0284f9be0ccba",
+          "sentiment": -0.981,
+          "predicted_impact": "bearish",
+          "context": "In a series of social media posts, Trump said he was making plans to put officers from U.S. Immigration and Customs Enforcement in airports if the congressional standoff continues."
+        }
+      ],
+      "total_items": 8,
+      "pillar_score": -1.63,
+      "status": "live"
+    },
+    "news": {
+      "pillar": "news_sentiment",
+      "timestamp": "2026-03-23T09:50:21.574601-04:00",
+      "analysis": {
+        "average_score": -0.982,
+        "overall_sentiment": "bearish",
+        "bullish_pct": 0.0,
+        "bearish_pct": 100.0,
+        "neutral_pct": 0.0,
+        "total_headlines": 8,
+        "dominant_theme": "\u2018Saturday Night Live U.K.\u2019 Premiere Roasts Keir Starmer\u2019s Trump Anxiety in Awkward Cold Open",
+        "pillar_score": -1.96
+      },
+      "pillar_score": -1.96,
+      "status": "live"
+    }
+  }
+}
