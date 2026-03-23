@@ -1,12 +1,17 @@
 {
   "data": {
     "pillar": "macro_sentiment",
-    "timestamp": "2026-03-23T07:51:10.982881-04:00",
+    "timestamp": "2026-03-23T07:55:30.453467-04:00",
     "vix": null,
     "vxn": null,
-    "fear_greed": null,
-    "pillar_score": 0,
+    "fear_greed": {
+      "score": 15.9,
+      "rating": "extreme fear",
+      "signal": "bearish",
+      "source": "CNN"
+    },
+    "pillar_score": -1.0,
     "status": "live"
   },
-  "timestamp": "2026-03-23T11:51:10.982924"
+  "timestamp": "2026-03-23T11:55:30.453502"
 }

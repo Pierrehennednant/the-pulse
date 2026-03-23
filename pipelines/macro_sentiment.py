@@ -1,6 +1,5 @@
 import yfinance as yf
 import requests
-from bs4 import BeautifulSoup
 from datetime import datetime
 import pytz
 from config import TIMEZONE, STALE_THRESHOLDS
@@ -12,15 +11,17 @@ class MacroSentimentPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "macro_sentiment"
-    
+
     def fetch_vix(self):
         try:
             vix = yf.Ticker("^VIX")
-            data = vix.history(period="2d")
+            data = vix.history(period="5d")
+            if data.empty or len(data) < 1:
+                raise ValueError("No VIX data returned")
             current = round(float(data['Close'].iloc[-1]), 2)
-            previous = round(float(data['Close'].iloc[-2]), 2)
+            previous = round(float(data['Close'].iloc[-2]), 2) if len(data) >= 2 else current
             change = round(current - previous, 2)
-            change_pct = round((change / previous) * 100, 2)
+            change_pct = round((change / previous) * 100, 2) if previous else 0
             return {
                 'value': current,
                 'previous': previous,
@@ -31,15 +32,17 @@ class MacroSentimentPipeline:
         except Exception as e:
             error_handler.handle(e, "VIX")
             return None
-    
+
     def fetch_vxn(self):
         try:
             vxn = yf.Ticker("^VXN")
-            data = vxn.history(period="2d")
+            data = vxn.history(period="5d")
+            if data.empty or len(data) < 1:
+                raise ValueError("No VXN data returned")
             current = round(float(data['Close'].iloc[-1]), 2)
-            previous = round(float(data['Close'].iloc[-2]), 2)
+            previous = round(float(data['Close'].iloc[-2]), 2) if len(data) >= 2 else current
             change = round(current - previous, 2)
-            change_pct = round((change / previous) * 100, 2)
+            change_pct = round((change / previous) * 100, 2) if previous else 0
             return {
                 'value': current,
                 'previous': previous,
@@ -50,29 +53,54 @@ class MacroSentimentPipeline:
         except Exception as e:
             error_handler.handle(e, "VXN")
             return None
-    
+
     def fetch_fear_greed(self):
+        endpoints = [
+            "https://production.dataviz.cnn.io/index/fearandgreed/graphdata",
+            "https://fear-and-greed-index.p.rapidapi.com/v1/fgi",
+            "https://api.alternative.me/fng/?limit=1"
+        ]
+        
         try:
-            url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
-            headers = {'User-Agent': 'Mozilla/5.0'}
-            response = requests.get(url, headers=headers, timeout=10)
-            data = response.json()
-            score = round(float(data['fear_and_greed']['score']), 1)
-            rating = data['fear_and_greed']['rating']
-            return {
-                'score': score,
-                'rating': rating,
-                'signal': 'bearish' if score < 40 else 'bullish' if score > 60 else 'neutral'
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/json',
+                'Referer': 'https://www.cnn.com/markets/fear-and-greed'
             }
+            response = requests.get(endpoints[0], headers=headers, timeout=10)
+            if response.status_code == 200 and response.text:
+                data = response.json()
+                score = round(float(data['fear_and_greed']['score']), 1)
+                rating = data['fear_and_greed']['rating']
+                return {
+                    'score': score,
+                    'rating': rating,
+                    'signal': 'bearish' if score < 40 else 'bullish' if score > 60 else 'neutral',
+                    'source': 'CNN'
+                }
+        except:
+            pass
+
+        try:
+            response = requests.get(endpoints[2], timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                score = int(data['data'][0]['value'])
+                rating = data['data'][0]['value_classification']
+                return {
+                    'score': score,
+                    'rating': rating,
+                    'signal': 'bearish' if score < 40 else 'bullish' if score > 60 else 'neutral',
+                    'source': 'Alternative.me'
+                }
         except Exception as e:
             error_handler.handle(e, "Fear & Greed")
             return None
-    
+
     def calculate_score(self, vix, vxn, fear_greed):
         score = 0.0
         count = 0
         signal_map = {'bearish': -1, 'neutral': 0, 'bullish': 1}
-        
         if vix:
             score += signal_map.get(vix['signal'], 0) * -1
             count += 1
@@ -82,16 +110,14 @@ class MacroSentimentPipeline:
         if fear_greed:
             score += signal_map.get(fear_greed['signal'], 0)
             count += 1
-        
         return round(score / count if count > 0 else 0, 2)
-    
+
     def fetch(self):
         try:
             vix = self.fetch_vix()
             vxn = self.fetch_vxn()
             fear_greed = self.fetch_fear_greed()
             score = self.calculate_score(vix, vxn, fear_greed)
-            
             result = {
                 'pillar': 'macro_sentiment',
                 'timestamp': datetime.now(self.timezone).isoformat(),
