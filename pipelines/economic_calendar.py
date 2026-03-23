@@ -21,24 +21,31 @@ class EconomicCalendarPipeline:
             response = requests.get(self.url, headers=self.headers, timeout=15)
             soup = BeautifulSoup(response.content, 'html.parser')
             events = []
+            
             calendar_table = soup.find('table', class_='calendar__table')
             if not calendar_table:
                 return []
+            
             rows = calendar_table.find_all('tr', class_='calendar__row')
+            
             for row in rows:
                 impact = row.find('td', class_='calendar__impact')
                 if not impact:
                     continue
+                
                 impact_icon = impact.find('span')
                 if not impact_icon or 'high' not in str(impact_icon).lower():
                     continue
+                
                 title_td = row.find('td', class_='calendar__event')
                 time_td = row.find('td', class_='calendar__time')
                 forecast_td = row.find('td', class_='calendar__forecast')
                 previous_td = row.find('td', class_='calendar__previous')
                 actual_td = row.find('td', class_='calendar__actual')
+                
                 if not title_td:
                     continue
+                
                 event = {
                     'title': title_td.get_text(strip=True),
                     'time_est': time_td.get_text(strip=True) if time_td else 'TBD',
@@ -47,6 +54,7 @@ class EconomicCalendarPipeline:
                     'actual': actual_td.get_text(strip=True) if actual_td else 'Pending',
                     'impact': 'red'
                 }
+                
                 if event['actual'] != 'Pending' and event['forecast'] != 'N/A':
                     try:
                         actual_val = float(event['actual'].replace('%', '').replace('K', ''))
@@ -66,39 +74,46 @@ class EconomicCalendarPipeline:
                 else:
                     event['result'] = 'pending'
                     event['market_impact'] = 'unknown'
+                
                 events.append(event)
+            
             return events
         except Exception as e:
             error_handler.handle(e, "Economic Calendar Scraper")
             return []
-
+    
     def calculate_score(self, events):
         if not events:
             return 0.0
+        
         score = 0.0
         count = 0
         impact_map = {'bullish': 1, 'bearish': -1, 'neutral': 0}
+        
         for event in events:
             if event.get('market_impact') in impact_map:
                 score += impact_map[event['market_impact']]
                 count += 1
+        
         pending_count = sum(1 for e in events if e['result'] == 'pending')
         if pending_count > 0:
             score -= 0.3 * pending_count
+        
         return round(score / max(count, 1), 2)
-
+    
     def get_upcoming_warning(self, events):
         warnings = []
         for event in events:
             if event['result'] == 'pending':
                 warnings.append(f"⚠️ {event['title']} at {event['time_est']} EST — be cautious until release")
         return warnings
-
+    
     def fetch(self):
         try:
             events = self.fetch_events()
             score = self.calculate_score(events)
             warnings = self.get_upcoming_warning(events)
+            
             result = {
                 'pillar': 'economic_calendar',
                 'timestamp': datetime.now(self.timezone).isoformat(),
