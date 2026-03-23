@@ -15,6 +15,7 @@ class NewsSentimentPipeline:
             if not geo_data:
                 return None
             all_items = (
+                geo_data.get('news_items', []) +
                 geo_data.get('financial_juice_items', []) +
                 geo_data.get('unbiased_network_items', [])
             )

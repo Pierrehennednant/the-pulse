@@ -1,10 +1,19 @@
 {
   "data": {
     "pillar": "news_sentiment",
-    "timestamp": "2026-03-23T09:42:53.396826-04:00",
-    "analysis": null,
-    "pillar_score": 0,
+    "timestamp": "2026-03-23T09:44:52.360895-04:00",
+    "analysis": {
+      "average_score": -0.3,
+      "overall_sentiment": "bearish",
+      "bullish_pct": 33.3,
+      "bearish_pct": 66.7,
+      "neutral_pct": 0.0,
+      "total_headlines": 9,
+      "dominant_theme": "From Iran to Cuba, Trump\u2019s Sanctions Have Hurt People More Than Governments",
+      "pillar_score": -0.6
+    },
+    "pillar_score": -0.6,
     "status": "live"
   },
-  "timestamp": "2026-03-23T13:42:53.396851"
+  "timestamp": "2026-03-23T13:44:52.360919"
 }
