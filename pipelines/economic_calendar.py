@@ -79,6 +79,25 @@ class EconomicCalendarPipeline:
     def fetch(self):
         try:
             response = requests.get(self.url, headers=self.headers, timeout=15)
+
+            if response.status_code == 429:
+                pulse_logger.log("⚠️ Forex Factory rate limited — using cached data", level="WARNING")
+                cached = cache.load(self.cache_key)
+                if cached:
+                    cached['data']['status'] = 'stale'
+                    return cached['data']
+                return {
+                    'pillar': 'economic_calendar',
+                    'timestamp': datetime.now(self.timezone).isoformat(),
+                    'events': [],
+                    'pillar_score': 0,
+                    'warnings': ['⚠️ Economic calendar temporarily unavailable — rate limited'],
+                    'status': 'stale'
+                }
+
+            if not response.text.strip():
+                raise ValueError("Empty response from Forex Factory")
+
             raw_events = response.json()
             events = []
             for event in raw_events:
@@ -101,11 +120,10 @@ class EconomicCalendarPipeline:
                     'market_impact': market_impact,
                     'reason': reason
                 })
+
             score = self.calculate_score(events)
             warnings = []
-            for event in events:
-                if event['result'] == 'pending':
-                    warnings.append(f"⚠️ {event['title']} at {event['time_est']} — {event['reason']}")
+
             result_data = {
                 'pillar': 'economic_calendar',
                 'timestamp': datetime.now(self.timezone).isoformat(),
@@ -117,12 +135,20 @@ class EconomicCalendarPipeline:
             cache.save(self.cache_key, result_data)
             pulse_logger.log(f"✓ Economic Calendar updated | {len(events)} USD high/medium impact events | Score: {score}")
             return result_data
+
         except Exception as e:
             error_handler.handle(e, "Economic Calendar")
             cached = cache.load(self.cache_key)
             if cached:
                 cached['data']['status'] = 'stale'
                 return cached['data']
-            return None
+            return {
+                'pillar': 'economic_calendar',
+                'timestamp': datetime.now(self.timezone).isoformat(),
+                'events': [],
+                'pillar_score': 0,
+                'warnings': [],
+                'status': 'unavailable'
+            }
 
 economic_calendar_pipeline = EconomicCalendarPipeline()
