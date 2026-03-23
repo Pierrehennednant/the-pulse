@@ -20,10 +20,6 @@ class SnapshotGenerator:
         return hashlib.md5(timestamp.encode()).hexdigest()[:8].upper()
 
     def save(self, bias_score, formatted_data):
-        for pillar, data in formatted_data.items():
-            if data.get('status') == 'unavailable':
-                pulse_logger.log(f"⚠️ Snapshot not generated — {pillar} data unavailable", level="WARNING")
-                return None
         timestamp = datetime.now(self.timezone).isoformat()
         snapshot_id = self.generate_id(timestamp)
         snapshot = {
