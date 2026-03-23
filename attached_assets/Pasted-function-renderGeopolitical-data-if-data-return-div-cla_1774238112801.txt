@@ -1,0 +1,83 @@
+function renderGeopolitical(data) {
+        if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
+        let html = '';
+        if (data.status === 'stale') html += '<div class="stale-warning">⚠️ Stale data</div>';
+        const flags = data.active_flags || [];
+        if (flags.length === 0) return html + '<div class="data-row"><span class="data-label">No active flags</span></div>';
+        flags.forEach(flag => {
+            const statusClass = flag.status === 'Developing' ? 'status-developing' : flag.status === 'Awaiting Outcome' ? 'status-awaiting' : 'status-resolved';
+            const impactClass = flag.predicted_impact === 'bullish' ? 'value-bullish' : flag.predicted_impact === 'bearish' ? 'value-bearish' : 'value-neutral';
+            html += `
+                <div class="flag-item">
+                    <div class="flag-title">${flag.title}</div>
+                    <div class="flag-meta">
+                        <span class="flag-status ${statusClass}">${flag.status}</span>
+                        <span class="flag-source">${flag.source}</span>
+                        <span class="flag-source">${flag.date} ${flag.timestamp}</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label">Predicted Impact</span>
+                        <span class="data-value ${impactClass}">${flag.predicted_impact?.toUpperCase()}</span>
+                    </div>
+                    ${flag.context ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${flag.context}</div>` : ''}
+                    <div style="margin-top:8px">
+                        <a class="flag-link" href="${flag.link}" target="_blank">🔗 View Source →</a>
+                    </div>
+                </div>`;
+        });
+        return html;
+    }
+
+    function renderNews(data) {
+        if (!data || !data.analysis) return '<div class="stale-warning">⚠️ Data unavailable</div>';
+        let html = '';
+        if (data.status === 'stale') html += '<div class="stale-warning">⚠️ Stale data</div>';
+        const a = data.analysis;
+        const overallClass = a.overall_sentiment === 'bullish' ? 'value-bullish' : a.overall_sentiment === 'bearish' ? 'value-bearish' : 'value-neutral';
+        html += `
+            <div class="data-row">
+                <span class="data-label">Overall Sentiment</span>
+                <span class="data-value ${overallClass}">${a.overall_sentiment?.toUpperCase()}</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Bullish / Neutral / Bearish</span>
+                <span class="data-value">${a.bullish_pct}% / ${a.neutral_pct}% / ${a.bearish_pct}%</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Headlines Analyzed</span>
+                <span class="data-value">${a.total_headlines}</span>
+            </div>
+            <div style="margin-top:10px;font-size:12px;color:#7a8fa8;line-height:1.5">
+                <strong style="color:#8aa8c8">Theme:</strong> ${a.dominant_theme}
+            </div>`;
+        return html;
+    }
+
+    function generateWhyToday(snapshot) {
+        if (!snapshot) return 'Analyzing current market regime...';
+        const bias = snapshot.bias;
+        const pillars = snapshot.pillars;
+        const econScore = pillars?.economic?.pillar_score || 0;
+        const geoScore = pillars?.geopolitical?.pillar_score || 0;
+        const dominant = econScore !== 0 ? 'Economic Calendar' : geoScore !== 0 ? 'Geopolitical landscape' : 'Institutional positioning';
+        const direction = bias?.bias || 'Neutral';
+        const confidence = bias?.confidence || 0;
+        return `Today's bias is <strong style="color:${direction === 'Bullish' ? '#2ecc71' : direction === 'Bearish' ? '#e74c3c' : '#f39c12'}">${direction}</strong> with ${confidence}% confidence. ${dominant} is the primary driver. Monitor active geopolitical flags and upcoming red folder events before sizing into positions.`;
+    }
+
+    function updateDashboard(snapshot) {
+        if (!snapshot) return;
+        const bias = snapshot.bias || {};
+        const pillars = snapshot.pillars || {};
+        setGauge(bias.gauge_value || 50);
+        const biasLabel = document.getElementById('bias-label');
+        biasLabel.textContent = `${bias.bias_emoji || ''} ${bias.bias || 'Neutral'}`;
+        biasLabel.className = `gauge-label ${(bias.bias || 'neutral').toLowerCase()}`;
+        document.getElementById('confidence-text').textContent = `Confidence: ${bias.confidence || 0}%`;
+        document.getElementById('last-updated-text').textContent = `Last updated: ${new Date(snapshot.timestamp).toLocaleTimeString('en-US', {timeZone: 'America/New_York'})} EST`;
+        document.getElementById('why-today-text').innerHTML = generateWhyToday(snapshot);
+        const scoreClass = s => s > 0.3 ? 'score-bullish' : s < -0.3 ? 'score-bearish' : 'score-neutral';
+        const scoreLabel = s => s > 0.3 ? '↑ Bullish' : s < -0.3 ? '↓ Bearish' : '→ Neutral';
+        const econ = pillars.economic || {};
+        document.getElementById('econ-score-badge').textContent = scoreLabel(econ.pillar_score || 0);
+        document.getE
