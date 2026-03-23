@@ -1,7 +1,7 @@
 {
   "data": {
     "pillar": "geopolitical",
-    "timestamp": "2026-03-23T12:18:32.992546-04:00",
+    "timestamp": "2026-03-23T12:23:41.631226-04:00",
     "news_items": [
       {
         "headline": "Oil futures face new pressure as the US and Iran trade threats to strike key infrastructure",
@@ -30,16 +30,6 @@
         "timestamp": "Mar 22, 12:05 PM EST",
         "date": "2026-03-22",
         "link": "https://www.justjared.com/2026/03/22/donald-trump-ice-airports-dhs-funding/",
-        "sentiment_score": -0.996,
-        "market_relevant": true
-      },
-      {
-        "headline": "Scandinavian Airlines: Newark \u2013 Vilnius, Lithuania. $476 (Basic Economy) / $576 (Regular Economy). Roundtrip, including all Taxes",
-        "description": "A good sale to Vilnius. Pricing will vary slightly depending on routingMatrix Airfare Search by ITA Software will price this at $501 (Basic Economy). Use those dates on\u00a0 Scandinavian should repri",
-        "source": "Theflightdeal.com",
-        "timestamp": "Mar 22, 12:13 PM EST",
-        "date": "2026-03-22",
-        "link": "https://www.theflightdeal.com/2026/03/22/scandinavian-airlines-newark-vilnius-lithuania-476-basic-economy-576-regular-economy-roundtrip-including-all-taxes/",
         "sentiment_score": -0.996,
         "market_relevant": true
       },
@@ -82,16 +72,6 @@
         "link": "https://slashdot.org/firehose.pl?op=view&amp;id=181077726",
         "sentiment_score": -0.949,
         "market_relevant": true
-      },
-      {
-        "headline": "Ethiopia eyes China's horticultural market under zero-tariff policy",
-        "description": "ADDIS ABABA, March 22 (Xinhua) -- Ethiopia eyes tapping into the massive horticultural market in China, taking advantage of the zero-tariff policy the Chinese government has granted for 53 African countries that have diplomatic ties with the country, a senior\u2026",
-        "source": "The Star Online",
-        "timestamp": "Mar 22, 12:11 PM EST",
-        "date": "2026-03-22",
-        "link": "https://www.thestar.com.my/news/world/2026/03/23/ethiopia-eyes-china039s-horticultural-market-under-zero-tariff-policy",
-        "sentiment_score": 0.991,
-        "market_relevant": true
       }
     ],
     "active_flags": [
@@ -109,19 +89,6 @@
         "context": "Tehran strikes near Israeli nuclear center as Trump threatens attacks on Iranian power plantspolitico.eu 'A direct hit' - BBC visits Israeli town after Iranian strikeBBC Iran attacks near Israeli nucl"
       },
       {
-        "title": "Scandinavian Airlines: Newark \u2013 Vilnius, Lithuania. $476 (Basic Economy) / $576 (Regular Economy). Roundtrip, including all Taxes",
-        "priority": 90,
-        "flag_type": "war",
-        "status": "Developing",
-        "source": "Theflightdeal.com",
-        "date": "2026-03-22",
-        "timestamp": "Mar 22, 12:13 PM EST",
-        "link": "https://www.theflightdeal.com/2026/03/22/scandinavian-airlines-newark-vilnius-lithuania-476-basic-economy-576-regular-economy-roundtrip-including-all-taxes/",
-        "sentiment": -0.996,
-        "predicted_impact": "bearish",
-        "context": "A good sale to Vilnius. Pricing will vary slightly depending on routingMatrix Airfare Search by ITA Software will price this at $501 (Basic Economy). Use those dates on\u00a0 Scandinavian should repri"
-      },
-      {
         "title": "War more than six months would hit global economy, TotalEnergies boss says",
         "priority": 90,
         "flag_type": "war",
@@ -133,19 +100,6 @@
         "sentiment": -0.992,
         "predicted_impact": "bearish",
         "context": "Global economies face serious damage if the Middle East conflict extends beyond six months.  TotalEnergies CEO Patrick Pouyanne stated this on Sunday.  The closure of the Strait of Hormuz is blocking "
-      },
-      {
-        "title": "Ethiopia eyes China's horticultural market under zero-tariff policy",
-        "priority": 80,
-        "flag_type": "tariff",
-        "status": "Developing",
-        "source": "The Star Online",
-        "date": "2026-03-22",
-        "timestamp": "Mar 22, 12:11 PM EST",
-        "link": "https://www.thestar.com.my/news/world/2026/03/23/ethiopia-eyes-china039s-horticultural-market-under-zero-tariff-policy",
-        "sentiment": 0.991,
-        "predicted_impact": "bullish",
-        "context": "ADDIS ABABA, March 22 (Xinhua) -- Ethiopia eyes tapping into the massive horticultural market in China, taking advantage of the zero-tariff policy the Chinese government has granted for 53 African cou"
       },
       {
         "title": "Trump could be stuck with Powell as 'shadow Fed chair' due to Pirro's failures: report",
@@ -161,9 +115,9 @@
         "context": "Donald Trump's attempt to force Federal Reserve Chair Jerome Powell out of office appears destined to backfire spectacularly, with the botched criminal prosecution potentially extending Powell's stay "
       }
     ],
-    "total_items": 9,
-    "pillar_score": -1.09,
+    "total_items": 7,
+    "pillar_score": -1.23,
     "status": "live"
   },
-  "timestamp": "2026-03-23T16:18:32.992586"
+  "timestamp": "2026-03-23T16:23:41.631276"
 }

@@ -22,8 +22,11 @@ class GeopoliticalPipeline:
             'senate', 'budget', 'deficit', 'spy', 'conflict', 'troops'
         ]
         self.ignore_keywords = [
-            'sports', 'nba', 'nfl', 'celebrity', 'entertainment',
-            'weather', 'fashion', 'travel', 'food', 'recipe'
+            'airlines', 'flight deal', 'roundtrip', 'airfare', 'hotel', 'travel deal',
+            'ticket', 'cryptocurrency', 'bitcoin', 'crypto', 'nba', 'nfl', 'sports',
+            'celebrity', 'entertainment', 'weather', 'fashion', 'food', 'recipe',
+            'saturday night live', 'comedy', 'movie', 'television', 'tv show',
+            'travel'
         ]
 
     def is_market_relevant(self, text):

@@ -1,7 +1,7 @@
 {
   "data": {
     "pillar": "macro_sentiment",
-    "timestamp": "2026-03-23T12:18:30.779155-04:00",
+    "timestamp": "2026-03-23T12:23:39.951436-04:00",
     "vix": {
       "value": 26.78,
       "previous": 24.06,
@@ -25,5 +25,5 @@
     "pillar_score": -1.0,
     "status": "live"
   },
-  "timestamp": "2026-03-23T16:18:30.779195"
+  "timestamp": "2026-03-23T16:23:39.951479"
 }

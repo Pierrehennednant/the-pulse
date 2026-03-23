@@ -1,21 +1,21 @@
 {
-  "id": "4B8473EF",
-  "timestamp": "2026-03-23T12:18:32.993640-04:00",
+  "id": "AB762747",
+  "timestamp": "2026-03-23T12:23:41.632215-04:00",
   "bias": {
-    "final_score": -0.877,
-    "bias": "Bearish",
-    "bias_emoji": "\ud83d\udd34",
-    "confidence": 43,
+    "final_score": -0.323,
+    "bias": "Neutral",
+    "bias_emoji": "\ud83d\udfe1",
+    "confidence": 16,
     "pillar_contributions": {
       "economic_calendar": {
-        "raw_score": -1.5,
+        "raw_score": 0,
         "weight": 40,
-        "contribution": -0.6
+        "contribution": 0.0
       },
       "geopolitical": {
-        "raw_score": -1.09,
+        "raw_score": -1.23,
         "weight": 28,
-        "contribution": -0.305
+        "contribution": -0.344
       },
       "institutional": {
         "raw_score": 0.75,
@@ -28,17 +28,17 @@
         "contribution": -0.1
       },
       "news_sentiment": {
-        "raw_score": -1.1,
+        "raw_score": -1.41,
         "weight": 2,
-        "contribution": -0.022
+        "contribution": -0.028
       }
     },
-    "gauge_value": 28
+    "gauge_value": 41
   },
   "pillars": {
     "macro": {
       "pillar": "macro_sentiment",
-      "timestamp": "2026-03-23T12:18:30.779155-04:00",
+      "timestamp": "2026-03-23T12:23:39.951436-04:00",
       "vix": {
         "value": 26.78,
         "previous": 24.06,
@@ -64,71 +64,17 @@
     },
     "economic": {
       "pillar": "economic_calendar",
-      "timestamp": "2026-03-23T12:18:30.858939-04:00",
-      "events": [
-        {
-          "title": "Flash Manufacturing PMI",
-          "time_est": "Tue Mar 24, 09:45 AM EST",
-          "forecast": "51.3",
-          "previous": "51.2",
-          "actual": "Pending",
-          "impact": "High",
-          "result": "pending",
-          "market_impact": "unknown",
-          "reason": "Flash Manufacturing PMI not yet released"
-        },
-        {
-          "title": "Flash Services PMI",
-          "time_est": "Tue Mar 24, 09:45 AM EST",
-          "forecast": "52.1",
-          "previous": "52.3",
-          "actual": "Pending",
-          "impact": "High",
-          "result": "pending",
-          "market_impact": "unknown",
-          "reason": "Flash Services PMI not yet released"
-        },
-        {
-          "title": "Richmond Manufacturing Index",
-          "time_est": "Tue Mar 24, 10:00 AM EST",
-          "forecast": "-5",
-          "previous": "-10",
-          "actual": "Pending",
-          "impact": "Medium",
-          "result": "pending",
-          "market_impact": "unknown",
-          "reason": "Richmond Manufacturing Index not yet released"
-        },
-        {
-          "title": "Unemployment Claims",
-          "time_est": "Thu Mar 26, 08:30 AM EST",
-          "forecast": "211K",
-          "previous": "205K",
-          "actual": "Pending",
-          "impact": "High",
-          "result": "pending",
-          "market_impact": "unknown",
-          "reason": "Unemployment Claims not yet released"
-        },
-        {
-          "title": "Revised UoM Consumer Sentiment",
-          "time_est": "Fri Mar 27, 10:00 AM EST",
-          "forecast": "54.2",
-          "previous": "55.5",
-          "actual": "Pending",
-          "impact": "Medium",
-          "result": "pending",
-          "market_impact": "unknown",
-          "reason": "Revised UoM Consumer Sentiment not yet released"
-        }
+      "timestamp": "2026-03-23T12:23:40.007435-04:00",
+      "events": [],
+      "pillar_score": 0,
+      "warnings": [
+        "\u26a0\ufe0f Economic calendar temporarily unavailable \u2014 rate limited"
       ],
-      "pillar_score": -1.5,
-      "warnings": [],
-      "status": "live"
+      "status": "stale"
     },
     "institutional": {
       "pillar": "institutional",
-      "timestamp": "2026-03-23T12:18:31.330028-04:00",
+      "timestamp": "2026-03-23T12:23:40.413818-04:00",
       "nq_futures": {
         "asset_mgr_long": 97885,
         "asset_mgr_short": 36494,
@@ -160,7 +106,7 @@
     },
     "geopolitical": {
       "pillar": "geopolitical",
-      "timestamp": "2026-03-23T12:18:32.992546-04:00",
+      "timestamp": "2026-03-23T12:23:41.631226-04:00",
       "news_items": [
         {
           "headline": "Oil futures face new pressure as the US and Iran trade threats to strike key infrastructure",
@@ -189,16 +135,6 @@
           "timestamp": "Mar 22, 12:05 PM EST",
           "date": "2026-03-22",
           "link": "https://www.justjared.com/2026/03/22/donald-trump-ice-airports-dhs-funding/",
-          "sentiment_score": -0.996,
-          "market_relevant": true
-        },
-        {
-          "headline": "Scandinavian Airlines: Newark \u2013 Vilnius, Lithuania. $476 (Basic Economy) / $576 (Regular Economy). Roundtrip, including all Taxes",
-          "description": "A good sale to Vilnius. Pricing will vary slightly depending on routingMatrix Airfare Search by ITA Software will price this at $501 (Basic Economy). Use those dates on\u00a0 Scandinavian should repri",
-          "source": "Theflightdeal.com",
-          "timestamp": "Mar 22, 12:13 PM EST",
-          "date": "2026-03-22",
-          "link": "https://www.theflightdeal.com/2026/03/22/scandinavian-airlines-newark-vilnius-lithuania-476-basic-economy-576-regular-economy-roundtrip-including-all-taxes/",
           "sentiment_score": -0.996,
           "market_relevant": true
         },
@@ -241,16 +177,6 @@
           "link": "https://slashdot.org/firehose.pl?op=view&amp;id=181077726",
           "sentiment_score": -0.949,
           "market_relevant": true
-        },
-        {
-          "headline": "Ethiopia eyes China's horticultural market under zero-tariff policy",
-          "description": "ADDIS ABABA, March 22 (Xinhua) -- Ethiopia eyes tapping into the massive horticultural market in China, taking advantage of the zero-tariff policy the Chinese government has granted for 53 African countries that have diplomatic ties with the country, a senior\u2026",
-          "source": "The Star Online",
-          "timestamp": "Mar 22, 12:11 PM EST",
-          "date": "2026-03-22",
-          "link": "https://www.thestar.com.my/news/world/2026/03/23/ethiopia-eyes-china039s-horticultural-market-under-zero-tariff-policy",
-          "sentiment_score": 0.991,
-          "market_relevant": true
         }
       ],
       "active_flags": [
@@ -268,19 +194,6 @@
           "context": "Tehran strikes near Israeli nuclear center as Trump threatens attacks on Iranian power plantspolitico.eu 'A direct hit' - BBC visits Israeli town after Iranian strikeBBC Iran attacks near Israeli nucl"
         },
         {
-          "title": "Scandinavian Airlines: Newark \u2013 Vilnius, Lithuania. $476 (Basic Economy) / $576 (Regular Economy). Roundtrip, including all Taxes",
-          "priority": 90,
-          "flag_type": "war",
-          "status": "Developing",
-          "source": "Theflightdeal.com",
-          "date": "2026-03-22",
-          "timestamp": "Mar 22, 12:13 PM EST",
-          "link": "https://www.theflightdeal.com/2026/03/22/scandinavian-airlines-newark-vilnius-lithuania-476-basic-economy-576-regular-economy-roundtrip-including-all-taxes/",
-          "sentiment": -0.996,
-          "predicted_impact": "bearish",
-          "context": "A good sale to Vilnius. Pricing will vary slightly depending on routingMatrix Airfare Search by ITA Software will price this at $501 (Basic Economy). Use those dates on\u00a0 Scandinavian should repri"
-        },
-        {
           "title": "War more than six months would hit global economy, TotalEnergies boss says",
           "priority": 90,
           "flag_type": "war",
@@ -292,19 +205,6 @@
           "sentiment": -0.992,
           "predicted_impact": "bearish",
           "context": "Global economies face serious damage if the Middle East conflict extends beyond six months.  TotalEnergies CEO Patrick Pouyanne stated this on Sunday.  The closure of the Strait of Hormuz is blocking "
-        },
-        {
-          "title": "Ethiopia eyes China's horticultural market under zero-tariff policy",
-          "priority": 80,
-          "flag_type": "tariff",
-          "status": "Developing",
-          "source": "The Star Online",
-          "date": "2026-03-22",
-          "timestamp": "Mar 22, 12:11 PM EST",
-          "link": "https://www.thestar.com.my/news/world/2026/03/23/ethiopia-eyes-china039s-horticultural-market-under-zero-tariff-policy",
-          "sentiment": 0.991,
-          "predicted_impact": "bullish",
-          "context": "ADDIS ABABA, March 22 (Xinhua) -- Ethiopia eyes tapping into the massive horticultural market in China, taking advantage of the zero-tariff policy the Chinese government has granted for 53 African cou"
         },
         {
           "title": "Trump could be stuck with Powell as 'shadow Fed chair' due to Pirro's failures: report",
@@ -320,24 +220,24 @@
           "context": "Donald Trump's attempt to force Federal Reserve Chair Jerome Powell out of office appears destined to backfire spectacularly, with the botched criminal prosecution potentially extending Powell's stay "
         }
       ],
-      "total_items": 9,
-      "pillar_score": -1.09,
+      "total_items": 7,
+      "pillar_score": -1.23,
       "status": "live"
     },
     "news": {
       "pillar": "news_sentiment",
-      "timestamp": "2026-03-23T12:18:32.993205-04:00",
+      "timestamp": "2026-03-23T12:23:41.631766-04:00",
       "analysis": {
-        "average_score": -0.549,
+        "average_score": -0.705,
         "overall_sentiment": "bearish",
-        "bullish_pct": 22.2,
-        "bearish_pct": 77.8,
+        "bullish_pct": 14.3,
+        "bearish_pct": 85.7,
         "neutral_pct": 0.0,
-        "total_headlines": 9,
+        "total_headlines": 7,
         "dominant_theme": "Tehran strikes near Israeli nuclear center as Trump threatens attacks on Iranian power plants - poli",
-        "pillar_score": -1.1
+        "pillar_score": -1.41
       },
-      "pillar_score": -1.1,
+      "pillar_score": -1.41,
       "status": "live"
     }
   }
