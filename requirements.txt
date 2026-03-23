@@ -6,3 +6,17 @@ beautifulsoup4==4.12.2
 transformers==4.37.0
 torch==2.1.0
 pytz==2024.1
+beautifulsoup4
+flask
+pytz
+requests
+schedule
+yfinance
+beautifulsoup4
+flask
+pytz
+requests
+schedule
+torch
+transformers
+yfinance

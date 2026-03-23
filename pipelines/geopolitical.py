@@ -15,7 +15,7 @@ class GeopoliticalPipeline:
         self.fj_url = "https://www.financialjuice.com/home"
         self.un_url = "https://www.unbiasednetwork.com/episodes"
         self.headers = {'User-Agent': 'Mozilla/5.0'}
-        self.sentiment_analyzer = pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
+        self._sentiment_analyzer = None
         self.market_keywords = [
             'tariff', 'fed', 'fomc', 'rate', 'inflation', 'war', 'sanctions',
             'trade', 'gdp', 'jobs', 'unemployment', 'iran', 'china', 'russia',
@@ -27,6 +27,12 @@ class GeopoliticalPipeline:
             'constitutional', 'historical background', 'branches of government',
             'amendment', '1979', 'legal analysis'
         ]
+
+    @property
+    def sentiment_analyzer(self):
+        if self._sentiment_analyzer is None:
+            self._sentiment_analyzer = pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
+        return self._sentiment_analyzer
 
     def is_market_relevant(self, text):
         text_lower = text.lower()
