@@ -16,6 +16,14 @@ class EconomicCalendarPipeline:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
     
+    def is_market_moving(self, event):
+        if event.get('country', '').upper() != 'USD':
+            return False
+        impact = event.get('impact', '').lower()
+        if impact not in ['high', 'medium']:
+            return False
+        return True
+
     def fetch_events(self):
         try:
             response = requests.get(self.url, headers=self.headers, timeout=15)
