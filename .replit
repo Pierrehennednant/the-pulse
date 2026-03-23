@@ -44,3 +44,8 @@ outputType = "webview"
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[userenv]
+
+[userenv.shared]
+FRED_API_KEY = "4b560856fe7d4a4f62e342c9d6491748"
