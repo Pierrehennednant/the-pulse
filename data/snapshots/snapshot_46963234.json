@@ -1,6 +1,6 @@
 {
-  "id": "AB762747",
-  "timestamp": "2026-03-23T12:23:41.632215-04:00",
+  "id": "46963234",
+  "timestamp": "2026-03-23T12:24:48.097879-04:00",
   "bias": {
     "final_score": -0.323,
     "bias": "Neutral",
@@ -38,7 +38,7 @@
   "pillars": {
     "macro": {
       "pillar": "macro_sentiment",
-      "timestamp": "2026-03-23T12:23:39.951436-04:00",
+      "timestamp": "2026-03-23T12:24:46.576856-04:00",
       "vix": {
         "value": 26.78,
         "previous": 24.06,
@@ -64,7 +64,7 @@
     },
     "economic": {
       "pillar": "economic_calendar",
-      "timestamp": "2026-03-23T12:23:40.007435-04:00",
+      "timestamp": "2026-03-23T12:24:46.653361-04:00",
       "events": [],
       "pillar_score": 0,
       "warnings": [
@@ -74,7 +74,7 @@
     },
     "institutional": {
       "pillar": "institutional",
-      "timestamp": "2026-03-23T12:23:40.413818-04:00",
+      "timestamp": "2026-03-23T12:24:47.078066-04:00",
       "nq_futures": {
         "asset_mgr_long": 97885,
         "asset_mgr_short": 36494,
@@ -106,7 +106,7 @@
     },
     "geopolitical": {
       "pillar": "geopolitical",
-      "timestamp": "2026-03-23T12:23:41.631226-04:00",
+      "timestamp": "2026-03-23T12:24:48.096946-04:00",
       "news_items": [
         {
           "headline": "Oil futures face new pressure as the US and Iran trade threats to strike key infrastructure",
@@ -226,7 +226,7 @@
     },
     "news": {
       "pillar": "news_sentiment",
-      "timestamp": "2026-03-23T12:23:41.631766-04:00",
+      "timestamp": "2026-03-23T12:24:48.097455-04:00",
       "analysis": {
         "average_score": -0.705,
         "overall_sentiment": "bearish",

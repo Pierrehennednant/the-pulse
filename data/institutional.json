@@ -1,7 +1,7 @@
 {
   "data": {
     "pillar": "institutional",
-    "timestamp": "2026-03-23T12:23:40.413818-04:00",
+    "timestamp": "2026-03-23T12:24:47.078066-04:00",
     "nq_futures": {
       "asset_mgr_long": 97885,
       "asset_mgr_short": 36494,
@@ -31,5 +31,5 @@
     "next_update": "Next Friday",
     "status": "live"
   },
-  "timestamp": "2026-03-23T16:23:40.413852"
+  "timestamp": "2026-03-23T16:24:47.078102"
 }
