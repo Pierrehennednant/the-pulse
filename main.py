@@ -48,6 +48,7 @@ def run_pulse():
 
 def run_scheduler():
     schedule.every(REFRESH_INTERVAL_MINUTES).minutes.do(run_pulse)
+    schedule.every(30).minutes.do(lambda: geopolitical_pipeline.fetch())
     while True:
         schedule.run_pending()
         time.sleep(1)

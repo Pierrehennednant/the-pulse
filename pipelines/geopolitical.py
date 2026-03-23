@@ -168,8 +168,7 @@ class GeopoliticalPipeline:
             result = {
                 'pillar': 'geopolitical',
                 'timestamp': datetime.now(self.timezone).isoformat(),
-                'financial_juice_items': items[:10],
-                'unbiased_network_items': [],
+                'news_items': items[:10],
                 'active_flags': flags,
                 'total_items': len(items),
                 'pillar_score': score,

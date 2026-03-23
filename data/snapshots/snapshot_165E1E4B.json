@@ -1,21 +1,21 @@
 {
-  "id": "FCEF42F3",
-  "timestamp": "2026-03-23T09:27:25.244800-04:00",
+  "id": "165E1E4B",
+  "timestamp": "2026-03-23T09:31:20.018047-04:00",
   "bias": {
-    "final_score": -0.297,
-    "bias": "Neutral",
-    "bias_emoji": "\ud83d\udfe1",
-    "confidence": 14,
+    "final_score": -0.763,
+    "bias": "Bearish",
+    "bias_emoji": "\ud83d\udd34",
+    "confidence": 38,
     "pillar_contributions": {
       "economic_calendar": {
-        "raw_score": 0,
+        "raw_score": -1.5,
         "weight": 40,
-        "contribution": 0.0
+        "contribution": -0.6
       },
       "geopolitical": {
-        "raw_score": -1.12,
+        "raw_score": -0.7,
         "weight": 28,
-        "contribution": -0.314
+        "contribution": -0.196
       },
       "institutional": {
         "raw_score": 0,
@@ -28,17 +28,17 @@
         "contribution": 0.033
       },
       "news_sentiment": {
-        "raw_score": -0.82,
+        "raw_score": 0,
         "weight": 2,
-        "contribution": -0.016
+        "contribution": 0.0
       }
     },
-    "gauge_value": 42
+    "gauge_value": 30
   },
   "pillars": {
     "macro": {
       "pillar": "macro_sentiment",
-      "timestamp": "2026-03-23T09:27:23.298926-04:00",
+      "timestamp": "2026-03-23T09:31:17.381860-04:00",
       "vix": {
         "value": 24.06,
         "previous": 25.09,
@@ -64,17 +64,71 @@
     },
     "economic": {
       "pillar": "economic_calendar",
-      "timestamp": "2026-03-23T09:27:23.346046-04:00",
-      "events": [],
-      "pillar_score": 0,
-      "warnings": [
-        "\u26a0\ufe0f Economic calendar temporarily unavailable \u2014 rate limited"
+      "timestamp": "2026-03-23T09:31:17.463081-04:00",
+      "events": [
+        {
+          "title": "Flash Manufacturing PMI",
+          "time_est": "Tue Mar 24, 09:45 AM EST",
+          "forecast": "N/A",
+          "previous": "51.2",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Flash Manufacturing PMI not yet released"
+        },
+        {
+          "title": "Flash Services PMI",
+          "time_est": "Tue Mar 24, 09:45 AM EST",
+          "forecast": "N/A",
+          "previous": "52.3",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Flash Services PMI not yet released"
+        },
+        {
+          "title": "Richmond Manufacturing Index",
+          "time_est": "Tue Mar 24, 10:00 AM EST",
+          "forecast": "-5",
+          "previous": "-10",
+          "actual": "Pending",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Richmond Manufacturing Index not yet released"
+        },
+        {
+          "title": "Unemployment Claims",
+          "time_est": "Thu Mar 26, 08:30 AM EST",
+          "forecast": "211K",
+          "previous": "205K",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Unemployment Claims not yet released"
+        },
+        {
+          "title": "Revised UoM Consumer Sentiment",
+          "time_est": "Fri Mar 27, 10:00 AM EST",
+          "forecast": "N/A",
+          "previous": "55.5",
+          "actual": "Pending",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Revised UoM Consumer Sentiment not yet released"
+        }
       ],
-      "status": "stale"
+      "pillar_score": -1.5,
+      "warnings": [],
+      "status": "live"
     },
     "institutional": {
       "pillar": "institutional",
-      "timestamp": "2026-03-23T09:27:23.802355-04:00",
+      "timestamp": "2026-03-23T09:31:18.012889-04:00",
       "nq_futures": {
         "direction": "unknown",
         "score": 0
@@ -90,8 +144,8 @@
     },
     "geopolitical": {
       "pillar": "geopolitical",
-      "timestamp": "2026-03-23T09:27:25.243608-04:00",
-      "financial_juice_items": [
+      "timestamp": "2026-03-23T09:31:20.016057-04:00",
+      "news_items": [
         {
           "headline": "Trump Threatens to Flood US Airports With ICE as Senate GOP Blocks Dem Bill to Pay TSA",
           "description": "As Senate Republicans on Saturday voted against advancing a Democratic bill to pay Transportation Security Administration workers during talks over Department of Homeland Security funding, GOP President Donald Trump tried to pin the blame for the partial DHS \u2026",
@@ -120,16 +174,6 @@
           "date": "2026-03-22",
           "link": "https://grist.org/regulation/california-bets-on-an-obscure-tool-to-replace-clean-air-authority-trump-revoked/",
           "sentiment_score": -0.999,
-          "market_relevant": true
-        },
-        {
-          "headline": "Anna Paulina Luna offers update on Trump's UFO files release",
-          "description": "The US Representative has provided a few words hinting at what might be going on behind the scenes. Back in February, President Donald Trump made the ...",
-          "source": "Unexplained-mysteries.com",
-          "timestamp": "Mar 22, 08:51 AM EST",
-          "date": "2026-03-22",
-          "link": "https://www.unexplained-mysteries.com/news/396166/anna-paulina-luna-offers-update-on-trumps-ufo-files-release",
-          "sentiment_score": 0.764,
           "market_relevant": true
         },
         {
@@ -183,31 +227,27 @@
           "market_relevant": true
         },
         {
-          "headline": "CMA CGM\u2019s PEARL service to offer direct India\u2013US West Coast link via China; cuts transshipment costs",
-          "description": "The service aims to lessen reliance on traditional transshipment hubs like Colombo and Singapore, where containers are usually offloaded and reloaded onto long-haul vessels",
-          "source": "BusinessLine",
-          "timestamp": "Mar 22, 09:20 AM EST",
+          "headline": "Trump Declares \u2018The Death of Iran\u2019 \u2014 Then Brands Democratic Party America\u2019s \u2018Greatest Enemy\u2019 in Stunning Post",
+          "description": "Trump proclaimed \"the death of Iran\" \u2014 and subsequently branded the Democratic party America's \"greatest enemy\" in a stunning Truth Social post Sunday.\nThe post Trump Declares \u2018The Death of Iran\u2019 \u2014 Then Brands Democratic Party America\u2019s \u2018Greatest Enemy\u2019 in St\u2026",
+          "source": "Mediaite",
+          "timestamp": "Mar 22, 09:28 AM EST",
           "date": "2026-03-22",
-          "link": "https://www.thehindubusinessline.com/economy/logistics/cma-cgms-pearl-service-to-offer-direct-indiaus-west-coast-link-via-china-cuts-transshipment-costs/article70771835.ece",
-          "sentiment_score": -0.989,
+          "link": "https://www.mediaite.com/media/news/trump-declares-the-death-of-iran-then-brands-democratic-party-americas-greatest-enemy-in-stunning-post/",
+          "sentiment_score": 0.926,
+          "market_relevant": true
+        },
+        {
+          "headline": "Bitcoin Drops Below $69,000 as War Fears Weigh on Crypto Markets",
+          "description": "Bitcoin and other cryptocurrencies declined anew as the US, Israel and Iran traded fresh threats and attacks.",
+          "source": "Financial Post",
+          "timestamp": "Mar 22, 09:27 AM EST",
+          "date": "2026-03-22",
+          "link": "https://financialpost.com/pmn/business-pmn/bitcoin-drops-below-69000-as-war-fears-weigh-on-crypto-markets",
+          "sentiment_score": -0.999,
           "market_relevant": true
         }
       ],
-      "unbiased_network_items": [],
       "active_flags": [
-        {
-          "title": "Tehran strikes near Israeli nuclear center as Trump threatens attacks on Iranian power plants (Leonie Cater/Politico)",
-          "priority": 95,
-          "flag_type": "nuclear",
-          "status": "Developing",
-          "source": "Memeorandum.com",
-          "date": "2026-03-22",
-          "timestamp": "Mar 22, 09:20 AM EST",
-          "link": "https://www.memeorandum.com/260322/p7",
-          "sentiment": -0.987,
-          "predicted_impact": "bearish",
-          "context": "Leonie Cater / Politico:\nTehran strikes near Israeli nuclear center as Trump threatens attacks on Iranian power plants\u00a0 \u2014\u00a0 Iran said the attack was retaliation for Israeli strikes on an Iranian nuclea"
-        },
         {
           "title": "Sunday Summary: War, Oil Blockades, Interest Rates \u2014 Oh My!",
           "priority": 90,
@@ -235,50 +275,41 @@
           "context": "The United States\u2019 war against Iran has triggered a shortage\r\n of a critical resource, one so crucial to the economy that one expert predicted a \u201chorrendous\u201d and imminent \u201ccollapse,\u201d while another sai"
         },
         {
-          "title": "FDA Drug Safety Communication: Warning against use of Xyrem (sodium oxybate) with alcohol or drugs causing respiratory depression",
+          "title": "Bitcoin Drops Below $69,000 as War Fears Weigh on Crypto Markets",
           "priority": 90,
           "flag_type": "war",
           "status": "Developing",
-          "source": "FDA.gov",
+          "source": "Financial Post",
           "date": "2026-03-22",
-          "timestamp": "Mar 22, 09:16 AM EST",
-          "link": "https://www.fda.gov/drugs/drug-safety-and-availability/fda-drug-safety-communication-warning-against-use-xyrem-sodium-oxybate-alcohol-or-drugs-causing",
-          "sentiment": -0.995,
+          "timestamp": "Mar 22, 09:27 AM EST",
+          "link": "https://financialpost.com/pmn/business-pmn/bitcoin-drops-below-69000-as-war-fears-weigh-on-crypto-markets",
+          "sentiment": -0.999,
           "predicted_impact": "bearish",
-          "context": "The U.S. Food and Drug Administration (FDA) is reminding healthcare professionals and patients that the combined use of Xyrem (sodium oxybate) with alcohol or central nervous system (CNS) depressant d"
+          "context": "Bitcoin and other cryptocurrencies declined anew as the US, Israel and Iran traded fresh threats and attacks."
         },
         {
-          "title": "Iran missiles and drones target Saudi Arabia, UAE; Riyadh expels Iranian diplomats",
-          "priority": 88,
-          "flag_type": "missile",
+          "title": "From Iran to Cuba, Trump\u2019s Sanctions Have Hurt People More Than Governments",
+          "priority": 75,
+          "flag_type": "sanctions",
           "status": "Developing",
-          "source": "Haaretz",
+          "source": "Truthout",
           "date": "2026-03-22",
-          "timestamp": "Mar 22, 09:20 AM EST",
-          "link": "https://www.haaretz.com/middle-east-news/2026-03-22/ty-article/iran-missiles-drones-target-saudi-arabia-uae-riyadh-expels-iranian-diplomats/0000019d-1512-dd21-a1df-f73732030000",
-          "sentiment": -0.983,
+          "timestamp": "Mar 22, 09:17 AM EST",
+          "link": "https://truthout.org/articles/from-iran-to-cuba-trumps-sanctions-have-hurt-people-more-than-governments/",
+          "sentiment": -0.971,
           "predicted_impact": "bearish",
-          "context": "No damage was reported following the attacks. Meanwhile, it was reported on Saturday that a U.S.-operated Patriot air defense battery likely fired the interceptor missile involved in the March 9 explo"
+          "context": "The US says \u201csanctions\u201d are about regime change, but in practice they are economic warfare against entire populations."
         }
       ],
-      "total_items": 14,
-      "pillar_score": -1.12,
+      "total_items": 13,
+      "pillar_score": -0.7,
       "status": "live"
     },
     "news": {
       "pillar": "news_sentiment",
-      "timestamp": "2026-03-23T09:27:25.244338-04:00",
-      "analysis": {
-        "average_score": -0.41,
-        "overall_sentiment": "bearish",
-        "bullish_pct": 30.0,
-        "bearish_pct": 70.0,
-        "neutral_pct": 0.0,
-        "total_headlines": 10,
-        "dominant_theme": "Tehran strikes near Israeli nuclear center as Trump threatens attacks on Iranian power plants (Leoni",
-        "pillar_score": -0.82
-      },
-      "pillar_score": -0.82,
+      "timestamp": "2026-03-23T09:31:20.016885-04:00",
+      "analysis": null,
+      "pillar_score": 0,
       "status": "live"
     }
   }
