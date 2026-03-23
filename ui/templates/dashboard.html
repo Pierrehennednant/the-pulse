@@ -301,15 +301,17 @@
         if (!events.length) return html + '<div class="data-row"><span class="data-label">No red folder events today</span></div>';
         events.forEach(e => {
             html += `<div class="flag-item">
-                <div class="flag-title">${e.title}</div>
-                <div class="flag-meta">
-                    <span class="flag-status ${e.result === 'pending' ? 'status-awaiting' : 'status-resolved'}">${e.result === 'pending' ? 'Pending' : e.result.toUpperCase()}</span>
-                    <span class="flag-source">${e.time_est}</span>
-                </div>
-                <div class="data-row"><span class="data-label">Expected</span><span class="data-value">${e.forecast}</span></div>
-                <div class="data-row"><span class="data-label">Actual</span><span class="data-value ${valClass(e.market_impact)}">${e.actual}</span></div>
-                ${e.result !== 'pending' ? `<div class="data-row"><span class="data-label">Impact</span><span class="data-value ${valClass(e.market_impact)}">${(e.market_impact || '').toUpperCase()}</span></div>` : ''}
-            </div>`;
+    <div class="flag-title">${e.title}</div>
+    <div class="flag-meta">
+        <span class="flag-status ${e.result === 'pending' ? 'status-awaiting' : 'status-resolved'}">${e.result === 'pending' ? 'Pending' : e.result.toUpperCase()}</span>
+        <span class="flag-source">${e.time_est}</span>
+    </div>
+    <div class="data-row"><span class="data-label">Previous</span><span class="data-value">${e.previous}</span></div>
+    <div class="data-row"><span class="data-label">Expected</span><span class="data-value">${e.forecast}</span></div>
+    <div class="data-row"><span class="data-label">Actual</span><span class="data-value ${valClass(e.market_impact)}">${e.actual}</span></div>
+    ${e.result !== 'pending' ? `<div class="data-row"><span class="data-label">Impact</span><span class="data-value ${valClass(e.market_impact)}">${(e.market_impact || '').toUpperCase()}</span></div>` : ''}
+    ${e.reason ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${e.reason}</div>` : ''}
+</div>`;
         });
         return html;
     }
@@ -379,13 +381,72 @@
         if (!snapshot) return 'Analyzing current market regime...';
         const bias = snapshot.bias || {};
         const pillars = snapshot.pillars || {};
-        const econScore = pillars.economic?.pillar_score || 0;
-        const geoScore = pillars.geopolitical?.pillar_score || 0;
-        const dominant = econScore !== 0 ? 'Economic Calendar' : geoScore !== 0 ? 'Geopolitical landscape' : 'Institutional positioning';
         const direction = bias.bias || 'Neutral';
         const confidence = bias.confidence || 0;
         const color = direction === 'Bullish' ? '#2ecc71' : direction === 'Bearish' ? '#e74c3c' : '#f39c12';
-        return `Today's bias is <strong style="color:${color}">${direction}</strong> with ${confidence}% confidence. ${dominant} is the primary driver. Monitor active geopolitical flags and upcoming red folder events before sizing into positions.`;
+
+        const econ = pillars.economic || {};
+        const inst = pillars.institutional || {};
+        const macro = pillars.macro || {};
+        const geo = pillars.geopolitical || {};
+        const news = pillars.news || {};
+
+        const econEvents = econ.events || [];
+        const pendingEvents = econEvents.filter(e => e.result === 'pending');
+        const econReason = pendingEvents.length > 0
+            ? `Economic Calendar has ${pendingEvents.length} pending USD events this week including ${pendingEvents.slice(0,2).map(e => e.title).join(' and ')} — markets cautious ahead of releases.`
+            : econEvents.length > 0
+            ? `Economic Calendar shows recent releases — bias ${econ.pillar_score > 0 ? 'bullish' : econ.pillar_score < 0 ? 'bearish' : 'neutral'} based on beats vs misses.`
+            : 'No major economic events this week.';
+
+        const nq = inst.nq_futures || {};
+        const es = inst.es_futures || {};
+        const instReason = nq.direction && nq.direction !== 'unknown'
+            ? `Institutional positioning shows big money net ${nq.direction} on NQ (${nq.net_pct || 0}%) and ${es.direction} on ES (${es.net_pct || 0}%) — ${inst.pillar_score > 0 ? 'supportive of upside' : 'suggesting distribution'}.`
+            : 'Institutional COT data pending Friday update.';
+
+        const vix = macro.vix || {};
+        const vxn = macro.vxn || {};
+        const fg = macro.fear_greed || {};
+        const macroReason = vix.value
+            ? `Macro Sentiment is ${macro.pillar_score < 0 ? 'elevated fear' : 'calm'} — VIX at ${vix.value} (+${vix.change}), VXN at ${vxn.value}, Fear & Greed at ${fg.score} (${fg.rating}).`
+            : 'Macro sentiment data loading.';
+
+        const flags = geo.active_flags || [];
+        const geoReason = flags.length > 0
+            ? `Geopolitical flags active: ${flags.slice(0,2).map(f => f.title.substring(0,60)).join(' | ')} — adding ${geo.pillar_score < 0 ? 'bearish' : 'bullish'} pressure.`
+            : 'No major geopolitical flags active.';
+
+        const analysis = news.analysis || {};
+        const newsReason = analysis.overall_sentiment
+            ? `News Sentiment is ${analysis.overall_sentiment} across ${analysis.total_headlines} headlines — ${analysis.bearish_pct}% bearish, ${analysis.bullish_pct}% bullish.`
+            : 'News sentiment analyzing.';
+
+        const watchItems = [];
+        if (pendingEvents.length > 0) {
+            watchItems.push(`📅 ${pendingEvents[0].title} on ${pendingEvents[0].time_est} — ${pendingEvents[0].reason}`);
+        }
+        if (flags.length > 0) {
+            watchItems.push(`🌍 Monitor: ${flags[0].title.substring(0,80)} — resolution could flip geopolitical bias.`);
+        }
+        if (vix.value > 25) {
+            watchItems.push(`📊 VIX above 25 — elevated volatility expected. Size down until fear subsides.`);
+        }
+
+        const watchSection = watchItems.length > 0
+            ? `<div style="margin-top:12px;padding-top:10px;border-top:1px solid #1e2d4a">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#4a9eff;margin-bottom:8px">What To Watch</div>
+                ${watchItems.map(w => `<div style="font-size:12px;color:#b0c4d8;margin-bottom:6px;line-height:1.4">• ${w}</div>`).join('')}
+               </div>`
+            : '';
+
+        return `Today's bias is <strong style="color:${color}">${direction}</strong> with ${confidence}% confidence.<br><br>
+            <span style="color:#e0e6f0">${econReason}</span><br><br>
+            <span style="color:#e0e6f0">${instReason}</span><br><br>
+            <span style="color:#e0e6f0">${macroReason}</span><br><br>
+            <span style="color:#e0e6f0">${geoReason}</span><br><br>
+            <span style="color:#e0e6f0">${newsReason}</span>
+            ${watchSection}`;
     }
 
     function updateDashboard(snapshot) {
