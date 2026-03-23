@@ -1,0 +1,169 @@
+<script>
+    function updateTime() {
+        const now = new Date();
+        document.getElementById('datetime').textContent = now.toLocaleString('en-US', {
+            timeZone: 'America/New_York', weekday: 'short', month: 'short',
+            day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short'
+        });
+    }
+    setInterval(updateTime, 1000);
+    updateTime();
+
+    function setGauge(gaugeValue) {
+        const rotation = (gaugeValue / 100) * 180 - 90;
+        document.getElementById('gauge-needle').setAttribute('transform', `rotate(${rotation}, 130, 140)`);
+        document.getElementById('gauge-score-text').textContent = gaugeValue;
+    }
+
+    function scoreClass(s) { return s > 0.3 ? 'score-bullish' : s < -0.3 ? 'score-bearish' : 'score-neutral'; }
+    function scoreLabel(s) { return s > 0.3 ? '↑ Bullish' : s < -0.3 ? '↓ Bearish' : '→ Neutral'; }
+    function valClass(s) { return s === 'bullish' ? 'value-bullish' : s === 'bearish' ? 'value-bearish' : 'value-neutral'; }
+
+    function renderEconomic(data) {
+        if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
+        let html = data.status === 'stale' ? '<div class="stale-warning">⚠️ Stale data</div>' : '';
+        const events = data.events || [];
+        if (!events.length) return html + '<div class="data-row"><span class="data-label">No red folder events today</span></div>';
+        events.forEach(e => {
+            html += `<div class="flag-item">
+                <div class="flag-title">${e.title}</div>
+                <div class="flag-meta">
+                    <span class="flag-status ${e.result === 'pending' ? 'status-awaiting' : 'status-resolved'}">${e.result === 'pending' ? 'Pending' : e.result.toUpperCase()}</span>
+                    <span class="flag-source">${e.time_est} EST</span>
+                </div>
+                <div class="data-row"><span class="data-label">Expected</span><span class="data-value">${e.forecast}</span></div>
+                <div class="data-row"><span class="data-label">Actual</span><span class="data-value ${valClass(e.market_impact)}">${e.actual}</span></div>
+                ${e.result !== 'pending' ? `<div class="data-row"><span class="data-label">Impact</span><span class="data-value ${valClass(e.market_impact)}">${(e.market_impact || '').toUpperCase()}</span></div>` : ''}
+            </div>`;
+        });
+        (data.warnings || []).forEach(w => { html += `<div class="stale-warning">${w}</div>`; });
+        return html;
+    }
+
+    function renderInstitutional(data) {
+        if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
+        let html = data.status === 'stale' ? '<div class="stale-warning">⚠️ Stale data</div>' : '';
+        const nq = data.nq_futures || {};
+        const es = data.es_futures || {};
+        html += `
+            <div class="data-row"><span class="data-label">NQ Direction</span><span class="data-value ${valClass(nq.direction)}">${(nq.direction || 'N/A').toUpperCase()}</span></div>
+            <div class="data-row"><span class="data-label">NQ Net Position</span><span class="data-value">${(nq.net || 0).toLocaleString()} (${nq.net_pct || 0}%)</span></div>
+            <div class="data-row"><span class="data-label">ES Direction</span><span class="data-value ${valClass(es.direction)}">${(es.direction || 'N/A').toUpperCase()}</span></div>
+            <div class="data-row"><span class="data-label">ES Net Position</span><span class="data-value">${(es.net || 0).toLocaleString()} (${es.net_pct || 0}%)</span></div>
+            <div class="data-row"><span class="data-label">Updates</span><span class="data-value" style="color:#7a8fa8">${data.update_frequency || 'Weekly'}</span></div>`;
+        return html;
+    }
+
+    function renderMacro(data) {
+        if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
+        let html = data.status === 'stale' ? '<div class="stale-warning">⚠️ Stale data</div>' : '';
+        const vix = data.vix || {};
+        const vxn = data.vxn || {};
+        const fg = data.fear_greed || {};
+        html += `
+            <div class="data-row"><span class="data-label">VIX</span><span class="data-value ${valClass(vix.signal)}">${vix.value || '--'} <small>(${vix.change >= 0 ? '+' : ''}${vix.change || 0})</small></span></div>
+            <div class="data-row"><span class="data-label">VXN</span><span class="data-value ${valClass(vxn.signal)}">${vxn.value || '--'} <small>(${vxn.change >= 0 ? '+' : ''}${vxn.change || 0})</small></span></div>
+            <div class="data-row"><span class="data-label">Fear & Greed</span><span class="data-value ${valClass(fg.signal)}">${fg.score || '--'} — ${fg.rating || 'N/A'}</span></div>`;
+        return html;
+    }
+
+    function renderGeopolitical(data) {
+        if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
+        let html = data.status === 'stale' ? '<div class="stale-warning">⚠️ Stale data</div>' : '';
+        const flags = data.active_flags || [];
+        if (!flags.length) return html + '<div class="data-row"><span class="data-label">No active flags</span></div>';
+        flags.forEach(flag => {
+            const sc = flag.status === 'Developing' ? 'status-developing' : flag.status === 'Awaiting Outcome' ? 'status-awaiting' : 'status-resolved';
+            html += `<div class="flag-item">
+                <div class="flag-title">${flag.title}</div>
+                <div class="flag-meta">
+                    <span class="flag-status ${sc}">${flag.status}</span>
+                    <span class="flag-source">${flag.source}</span>
+                    <span class="flag-source">${flag.date} ${flag.timestamp}</span>
+                </div>
+                <div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${valClass(flag.predicted_impact)}">${(flag.predicted_impact || '').toUpperCase()}</span></div>
+                ${flag.context ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${flag.context}</div>` : ''}
+                <div style="margin-top:8px"><a class="flag-link" href="${flag.link}" target="_blank">🔗 View Source →</a></div>
+            </div>`;
+        });
+        return html;
+    }
+
+    function renderNews(data) {
+        if (!data || !data.analysis) return '<div class="stale-warning">⚠️ Data unavailable</div>';
+        let html = data.status === 'stale' ? '<div class="stale-warning">⚠️ Stale data</div>' : '';
+        const a = data.analysis;
+        html += `
+            <div class="data-row"><span class="data-label">Overall Sentiment</span><span class="data-value ${valClass(a.overall_sentiment)}">${(a.overall_sentiment || '').toUpperCase()}</span></div>
+            <div class="data-row"><span class="data-label">Bullish / Neutral / Bearish</span><span class="data-value">${a.bullish_pct}% / ${a.neutral_pct}% / ${a.bearish_pct}%</span></div>
+            <div class="data-row"><span class="data-label">Headlines Analyzed</span><span class="data-value">${a.total_headlines}</span></div>
+            <div style="margin-top:10px;font-size:12px;color:#7a8fa8;line-height:1.5"><strong style="color:#8aa8c8">Theme:</strong> ${a.dominant_theme}</div>`;
+        return html;
+    }
+
+    function generateWhyToday(snapshot) {
+        if (!snapshot) return 'Analyzing current market regime...';
+        const bias = snapshot.bias || {};
+        const pillars = snapshot.pillars || {};
+        const econScore = pillars.economic?.pillar_score || 0;
+        const geoScore = pillars.geopolitical?.pillar_score || 0;
+        const dominant = econScore !== 0 ? 'Economic Calendar' : geoScore !== 0 ? 'Geopolitical landscape' : 'Institutional positioning';
+        const direction = bias.bias || 'Neutral';
+        const confidence = bias.confidence || 0;
+        const color = direction === 'Bullish' ? '#2ecc71' : direction === 'Bearish' ? '#e74c3c' : '#f39c12';
+        return `Today's bias is <strong style="color:${color}">${direction}</strong> with ${confidence}% confidence. ${dominant} is the primary driver. Monitor active geopolitical flags and upcoming red folder events before sizing into positions.`;
+    }
+
+    function updateDashboard(snapshot) {
+        if (!snapshot) return;
+        const bias = snapshot.bias || {};
+        const pillars = snapshot.pillars || {};
+        setGauge(bias.gauge_value || 50);
+        const biasLabel = document.getElementById('bias-label');
+        biasLabel.textContent = `${bias.bias_emoji || ''} ${bias.bias || 'Neutral'}`;
+        biasLabel.className = `gauge-label ${(bias.bias || 'neutral').toLowerCase()}`;
+        document.getElementById('confidence-text').textContent = `Confidence: ${bias.confidence || 0}%`;
+        document.getElementById('last-updated-text').textContent = `Last updated: ${new Date(snapshot.timestamp).toLocaleTimeString('en-US', {timeZone: 'America/New_York'})} EST`;
+        document.getElementById('why-today-text').innerHTML = generateWhyToday(snapshot);
+        const econ = pillars.economic || {};
+        document.getElementById('econ-score-badge').textContent = scoreLabel(econ.pillar_score || 0);
+        document.getElementById('econ-score-badge').className = `pillar-score ${scoreClass(econ.pillar_score || 0)}`;
+        document.getElementById('econ-content').innerHTML = renderEconomic(econ);
+        const inst = pillars.institutional || {};
+        document.getElementById('inst-score-badge').textContent = scoreLabel(inst.pillar_score || 0);
+        document.getElementById('inst-score-badge').className = `pillar-score ${scoreClass(inst.pillar_score || 0)}`;
+        document.getElementById('inst-content').innerHTML = renderInstitutional(inst);
+        const macro = pillars.macro || {};
+        document.getElementById('macro-score-badge').textContent = scoreLabel(macro.pillar_score || 0);
+        document.getElementById('macro-score-badge').className = `pillar-score ${scoreClass(macro.pillar_score || 0)}`;
+        document.getElementById('macro-content').innerHTML = renderMacro(macro);
+        const geo = pillars.geopolitical || {};
+        document.getElementById('geo-score-badge').textContent = scoreLabel(geo.pillar_score || 0);
+        document.getElementById('geo-score-badge').className = `pillar-score ${scoreClass(geo.pillar_score || 0)}`;
+        document.getElementById('geo-content').innerHTML = renderGeopolitical(geo);
+        const news = pillars.news || {};
+        document.getElementById('news-score-badge').textContent = scoreLabel(news.pillar_score || 0);
+        document.getElementById('news-score-badge').className = `pillar-score ${scoreClass(news.pillar_score || 0)}`;
+        document.getElementById('news-content').innerHTML = renderNews(news);
+        document.getElementById('share-btn').href = `/snapshot/${snapshot.id}`;
+    }
+
+    function copySnapshot() {
+        const url = window.location.origin + document.getElementById('share-btn').getAttribute('href');
+        navigator.clipboard.writeText(url).then(() => alert('Snapshot link copied!'));
+        return false;
+    }
+
+    async function fetchData() {
+        try {
+            const response = await fetch('/api/latest');
+            const data = await response.json();
+            updateDashboard(data);
+        } catch(e) { console.error('Fetch failed:', e); }
+    }
+
+    fetchData();
+    setInterval(fetchData, 5 * 60 * 1000);
+</script>
+</body>
+</html>

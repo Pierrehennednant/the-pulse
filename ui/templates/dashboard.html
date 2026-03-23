@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Pulse</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0e1a;
+            color: #e0e6f0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            min-height: 100vh;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: #0d1224;
+            border-bottom: 1px solid #1e2d4a;
+        }
+        .header .logo {
+            font-size: 22px;
+            font-weight: 700;
+            color: #4a9eff;
+            letter-spacing: 1px;
+        }
+        .header .datetime {
+            font-size: 13px;
+            color: #7a8fa8;
+        }
+        .header .share-btn {
+            background: #1a2d4a;
+            color: #4a9eff;
+            border: 1px solid #2a4a7a;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            text-decoration: none;
+        }
+        .header .share-btn:hover { background: #2a4a7a; }
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 20px 16px;
+        }
+        .gauge-section {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .gauge-wrapper {
+            position: relative;
+            width: 260px;
+            height: 160px;
+            margin: 0 auto 16px;
+        }
+        .gauge-svg { width: 100%; height: 100%; }
+        .gauge-label {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .gauge-label.bullish { color: #2ecc71; }
+        .gauge-label.bearish { color: #e74c3c; }
+        .gauge-label.neutral { color: #f39c12; }
+        .confidence {
+            font-size: 13px;
+            color: #7a8fa8;
+            margin-bottom: 8px;
+        }
+        .last-updated {
+            font-size: 11px;
+            color: #4a5a70;
+        }
+        .why-today {
+            background: #0d1224;
+            border: 1px solid #1e2d4a;
+            border-left: 3px solid #4a9eff;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #b0c4d8;
+        }
+        .why-today h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #4a9eff;
+            margin-bottom: 8px;
+        }
+        .pillar-card {
+            background: #0d1224;
+            border: 1px solid #1e2d4a;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .pillar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .pillar-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #8aa8c8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .pillar-score {
+            font-size: 12px;
+            padding: 3px 8px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        .score-bullish { background: #1a3a2a; color: #2ecc71; }
+        .score-bearish { background: #3a1a1a; color: #e74c3c; }
+        .score-neutral { background: #2a2a1a; color: #f39c12; }
+        .pillar-weight {
+            font-size: 11px;
+            color: #4a5a70;
+            margin-bottom: 8px;
+        }
+        .flag-item {
+            background: #0a0e1a;
+            border: 1px solid #1e2d4a;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+        }
+        .flag-title {
+            font-size: 13px;
+            color: #e0e6f0;
+            margin-bottom: 6px;
+            line-height: 1.4;
+        }
+        .flag-meta {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+        }
+        .flag-status {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        .status-developing { background: #3a1a00; color: #ff8c00; }
+        .status-awaiting { background: #1a1a3a; color: #7a8fff; }
+        .status-resolved { background: #1a3a1a; color: #2ecc71; }
+        .flag-source { font-size: 11px; color: #4a5a70; }
+        .flag-link { font-size: 11px; color: #4a9eff; text-decoration: none; }
+        .flag-link:hover { text-decoration: underline; }
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px solid #1a2030;
+            font-size: 13px;
+        }
+        .data-row:last-child { border-bottom: none; }
+        .data-label { color: #7a8fa8; }
+        .data-value { font-weight: 600; }
+        .value-bullish { color: #2ecc71; }
+        .value-bearish { color: #e74c3c; }
+        .value-neutral { color: #f39c12; }
+        .stale-warning {
+            background: #2a1a00;
+            border: 1px solid #5a3a00;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: #ff8c00;
+            margin-bottom: 8px;
+        }
+        .refresh-bar {
+            text-align: center;
+            padding: 12px;
+            font-size: 11px;
+            color: #4a5a70;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+        .live-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: #2ecc71;
+            border-radius: 50%;
+            margin-right: 6px;
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <div class="logo">⚡ THE PULSE</div>
+    <div class="datetime" id="datetime"></div>
+    <a class="share-btn" id="share-btn" href="#" onclick="copySnapshot()">📤 Share</a>
+</div>
+<div class="container">
+    <div class="gauge-section">
+        <div class="gauge-wrapper">
+            <svg class="gauge-svg" viewBox="0 0 260 160">
+                <path d="M 30 140 A 100 100 0 0 1 230 140" fill="none" stroke="#1e2d4a" stroke-width="20"/>
+                <path d="M 30 140 A 100 100 0 0 1 80 57" fill="none" stroke="#e74c3c" stroke-width="20" opacity="0.7"/>
+                <path d="M 80 57 A 100 100 0 0 1 180 57" fill="none" stroke="#f39c12" stroke-width="20" opacity="0.7"/>
+                <path d="M 180 57 A 100 100 0 0 1 230 140" fill="none" stroke="#2ecc71" stroke-width="20" opacity="0.7"/>
+                <line id="gauge-needle" x1="130" y1="140" x2="130" y2="50" stroke="#fff" stroke-width="3" stroke-linecap="round" transform="rotate(0, 130, 140)"/>
+                <circle cx="130" cy="140" r="6" fill="#4a9eff"/>
+                <text x="130" y="125" text-anchor="middle" fill="#fff" font-size="22" font-weight="bold" id="gauge-score-text">--</text>
+            </svg>
+        </div>
+        <div class="gauge-label" id="bias-label">Loading...</div>
+        <div class="confidence" id="confidence-text"></div>
+        <div class="last-updated"><span class="live-dot"></span><span id="last-updated-text">Fetching data...</span></div>
+    </div>
+    <div class="why-today">
+        <h3>Why Today</h3>
+        <p id="why-today-text">Analyzing current market regime...</p>
+    </div>
+    <div class="pillar-card" id="card-economic">
+        <div class="pillar-header">
+            <div class="pillar-title">📅 Economic Calendar</div>
+            <div class="pillar-score" id="econ-score-badge">--</div>
+        </div>
+        <div class="pillar-weight">Weight: 40% | Red Folder Events Only</div>
+        <div id="econ-content">Loading...</div>
+    </div>
+    <div class="pillar-card" id="card-institutional">
+        <div class="pillar-header">
+            <div class="pillar-title">🏦 Institutional Positioning</div>
+            <div class="pillar-score" id="inst-score-badge">--</div>
+        </div>
+        <div class="pillar-weight">Weight: 20% | COT Report (Updates Fridays)</div>
+        <div id="inst-content">Loading...</div>
+    </div>
+    <div class="pillar-card" id="card-macro">
+        <div class="pillar-header">
+            <div class="pillar-title">📊 Macro Sentiment</div>
+            <div class="pillar-score" id="macro-score-badge">--</div>
+        </div>
+        <div class="pillar-weight">Weight: 10% | VIX · VXN · Fear & Greed</div>
+        <div id="macro-content">Loading...</div>
+    </div>
+    <div class="pillar-card" id="card-geo">
+        <div class="pillar-header">
+            <div class="pillar-title">🌍 Political & Geopolitical</div>
+            <div class="pillar-score" id="geo-score-badge">--</div>
+        </div>
+        <div class="pillar-weight">Weight: 28% | Financial Juice · Unbiased Network</div>
+        <div id="geo-content">Loading...</div>
+    </div>
+    <div class="pillar-card" id="card-news">
+        <div class="pillar-header">
+            <div class="pillar-title">📰 News Sentiment</div>
+            <div class="pillar-score" id="news-score-badge">--</div>
+        </div>
+        <div class="pillar-weight">Weight: 2% | AI Synthesis Layer</div>
+        <div id="news-content">Loading...</div>
+    </div>
+    <div class="refresh-bar">
+        <span class="live-dot"></span> Auto-refreshes every 5 minutes
+    </div>
+</div>
+<script>
+    function updateTime() {
+        const now = new Date();
+        document.getElementById('datetime').textContent = now.toLocaleString('en-US', {
+            timeZone: 'America/New_York', weekday: 'short', month: 'short',
+            day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short'
+        });
+    }
+    setInterval(updateTime, 1000);
+    updateTime();
+
+    function setGauge(gaugeValue) {
+        const rotation = (gaugeValue / 100) * 180 - 90;
+        document.getElementById('gauge-needle').setAttribute('transform', `rotate(${rotation}, 130, 140)`);
+        document.getElementById('gauge-score-text').textContent = gaugeValue;
+    }
+
+    function scoreClass(s) { return s > 0.3 ? 'score-bullish' : s < -0.3 ? 'score-bearish' : 'score-neutral'; }
+    function scoreLabel(s) { return s > 0.3 ? '↑ Bullish' : s < -0.3 ? '↓ Bearish' : '→ Neutral'; }
+    function valClass(s) { return s === 'bullish' ? 'value-bullish' : s === 'bearish' ? 'value-bearish' : 'value-neutral'; }
+
+    function renderEconomic(data) {
+        if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
+        let html = data.status === 'stale' ? '<div class="stale-warning">⚠️ Stale data</div>' : '';
+        const events = data.events || [];
+        if (!events.length) return html + '<div class="data-row"><span class="data-label">No red folder events today</span></div>';
+        events.forEach(e => {
+            html += `<div class="flag-item">
+                <div class="flag-title">${e.title}</div>
+                <div class="flag-meta">
+                    <span class="flag-status ${e.result === 'pending' ? 'status-awaiting' : 'status-resolved'}">${e.result === 'pending' ? 'Pending' : e.result.toUpperCase()}</span>
+                    <span class="flag-source">${e.time_est} EST</span>
+                </div>
+                <div class="data-row"><span class="data-label">Expected</span><span class="data-value">${e.forecast}</span></div>
+                <div class="data-row"><span class="data-label">Actual</span><span class="data-value ${valClass(e.market_impact)}">${e.actual}</span></div>
+                ${e.result !== 'pending' ? `<div class="data-row"><span class="data-label">Impact</span><span class="data-value ${valClass(e.market_impact)}">${(e.market_impact || '').toUpperCase()}</span></div>` : ''}
+            </div>`;
+        });
+        (data.warnings || []).forEach(w => { html += `<div class="stale-warning">${w}</div>`; });
+        return html;
+    }
+
+    function renderInstitutional(data) {
+        if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
+        let html = data.status === 'stale' ? '<div class="stale-warning">⚠️ Stale data</div>' : '';
+        const nq = data.nq_futures || {};
+        const es = data.es_futures || {};
+        html += `
+            <div class="data-row"><span class="data-label">NQ Direction</span><span class="data-value ${valClass(nq.direction)}">${(nq.direction || 'N/A').toUpperCase()}</span></div>
+            <div class="data-row"><span class="data-label">NQ Net Position</span><span class="data-value">${(nq.net || 0).toLocaleString()} (${nq.net_pct || 0}%)</span></div>
+            <div class="data-row"><span class="data-label">ES Direction</span><span class="data-value ${valClass(es.direction)}">${(es.direction || 'N/A').toUpperCase()}</span></div>
+            <div class="data-row"><span class="data-label">ES Net Position</span><span class="data-value">${(es.net || 0).toLocaleString()} (${es.net_pct || 0}%)</span></div>
+            <div class="data-row"><span class="data-label">Updates</span><span class="data-value" style="color:#7a8fa8">${data.update_frequency || 'Weekly'}</span></div>`;
+        return html;
+    }
+
+    function renderMacro(data) {
+        if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
+        let html = data.status === 'stale' ? '<div class="stale-warning">⚠️ Stale data</div>' : '';
+        const vix = data.vix || {};
+        const vxn = data.vxn || {};
+        const fg = data.fear_greed || {};
+        html += `
+            <div class="data-row"><span class="data-label">VIX</span><span class="data-value ${valClass(vix.signal)}">${vix.value || '--'} <small>(${vix.change >= 0 ? '+' : ''}${vix.change || 0})</small></span></div>
+            <div class="data-row"><span class="data-label">VXN</span><span class="data-value ${valClass(vxn.signal)}">${vxn.value || '--'} <small>(${vxn.change >= 0 ? '+' : ''}${vxn.change || 0})</small></span></div>
+            <div class="data-row"><span class="data-label">Fear & Greed</span><span class="data-value ${valClass(fg.signal)}">${fg.score || '--'} — ${fg.rating || 'N/A'}</span></div>`;
+        return html;
+    }
+
+    function renderGeopolitical(data) {
+        if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
+        let html = data.status === 'stale' ? '<div class="stale-warning">⚠️ Stale data</div>' : '';
+        const flags = data.active_flags || [];
+        if (!flags.length) return html + '<div class="data-row"><span class="data-label">No active flags</span></div>';
+        flags.forEach(flag => {
+            const sc = flag.status === 'Developing' ? 'status-developing' : flag.status === 'Awaiting Outcome' ? 'status-awaiting' : 'status-resolved';
+            html += `<div class="flag-item">
+                <div class="flag-title">${flag.title}</div>
+                <div class="flag-meta">
+                    <span class="flag-status ${sc}">${flag.status}</span>
+                    <span class="flag-source">${flag.source}</span>
+                    <span class="flag-source">${flag.date} ${flag.timestamp}</span>
+                </div>
+                <div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${valClass(flag.predicted_impact)}">${(flag.predicted_impact || '').toUpperCase()}</span></div>
+                ${flag.context ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${flag.context}</div>` : ''}
+                <div style="margin-top:8px"><a class="flag-link" href="${flag.link}" target="_blank">🔗 View Source →</a></div>
+            </div>`;
+        });
+        return html;
+    }
+
+    function renderNews(data) {
+        if (!data || !data.analysis) return '<div class="stale-warning">⚠️ Data unavailable</div>';
+        let html = data.status === 'stale' ? '<div class="stale-warning">⚠️ Stale data</div>' : '';
+        const a = data.analysis;
+        html += `
+            <div class="data-row"><span class="data-label">Overall Sentiment</span><span class="data-value ${valClass(a.overall_sentiment)}">${(a.overall_sentiment || '').toUpperCase()}</span></div>
+            <div class="data-row"><span class="data-label">Bullish / Neutral / Bearish</span><span class="data-value">${a.bullish_pct}% / ${a.neutral_pct}% / ${a.bearish_pct}%</span></div>
+            <div class="data-row"><span class="data-label">Headlines Analyzed</span><span class="data-value">${a.total_headlines}</span></div>
+            <div style="margin-top:10px;font-size:12px;color:#7a8fa8;line-height:1.5"><strong style="color:#8aa8c8">Theme:</strong> ${a.dominant_theme}</div>`;
+        return html;
+    }
+
+    function generateWhyToday(snapshot) {
+        if (!snapshot) return 'Analyzing current market regime...';
+        const bias = snapshot.bias || {};
+        const pillars = snapshot.pillars || {};
+        const econScore = pillars.economic?.pillar_score || 0;
+        const geoScore = pillars.geopolitical?.pillar_score || 0;
+        const dominant = econScore !== 0 ? 'Economic Calendar' : geoScore !== 0 ? 'Geopolitical landscape' : 'Institutional positioning';
+        const direction = bias.bias || 'Neutral';
+        const confidence = bias.confidence || 0;
+        const color = direction === 'Bullish' ? '#2ecc71' : direction === 'Bearish' ? '#e74c3c' : '#f39c12';
+        return `Today's bias is <strong style="color:${color}">${direction}</strong> with ${confidence}% confidence. ${dominant} is the primary driver. Monitor active geopolitical flags and upcoming red folder events before sizing into positions.`;
+    }
+
+    function updateDashboard(snapshot) {
+        if (!snapshot) return;
+        const bias = snapshot.bias || {};
+        const pillars = snapshot.pillars || {};
+        setGauge(bias.gauge_value || 50);
+        const biasLabel = document.getElementById('bias-label');
+        biasLabel.textContent = `${bias.bias_emoji || ''} ${bias.bias || 'Neutral'}`;
+        biasLabel.className = `gauge-label ${(bias.bias || 'neutral').toLowerCase()}`;
+        document.getElementById('confidence-text').textContent = `Confidence: ${bias.confidence || 0}%`;
+        document.getElementById('last-updated-text').textContent = `Last updated: ${new Date(snapshot.timestamp).toLocaleTimeString('en-US', {timeZone: 'America/New_York'})} EST`;
+        document.getElementById('why-today-text').innerHTML = generateWhyToday(snapshot);
+        const econ = pillars.economic || {};
+        document.getElementById('econ-score-badge').textContent = scoreLabel(econ.pillar_score || 0);
+        document.getElementById('econ-score-badge').className = `pillar-score ${scoreClass(econ.pillar_score || 0)}`;
+        document.getElementById('econ-content').innerHTML = renderEconomic(econ);
+        const inst = pillars.institutional || {};
+        document.getElementById('inst-score-badge').textContent = scoreLabel(inst.pillar_score || 0);
+        document.getElementById('inst-score-badge').className = `pillar-score ${scoreClass(inst.pillar_score || 0)}`;
+        document.getElementById('inst-content').innerHTML = renderInstitutional(inst);
+        const macro = pillars.macro || {};
+        document.getElementById('macro-score-badge').textContent = scoreLabel(macro.pillar_score || 0);
+        document.getElementById('macro-score-badge').className = `pillar-score ${scoreClass(macro.pillar_score || 0)}`;
+        document.getElementById('macro-content').innerHTML = renderMacro(macro);
+        const geo = pillars.geopolitical || {};
+        document.getElementById('geo-score-badge').textContent = scoreLabel(geo.pillar_score || 0);
+        document.getElementById('geo-score-badge').className = `pillar-score ${scoreClass(geo.pillar_score || 0)}`;
+        document.getElementById('geo-content').innerHTML = renderGeopolitical(geo);
+        const news = pillars.news || {};
+        document.getElementById('news-score-badge').textContent = scoreLabel(news.pillar_score || 0);
+        document.getElementById('news-score-badge').className = `pillar-score ${scoreClass(news.pillar_score || 0)}`;
+        document.getElementById('news-content').innerHTML = renderNews(news);
+        document.getElementById('share-btn').href = `/snapshot/${snapshot.id}`;
+    }
+
+    function copySnapshot() {
+        const url = window.location.origin + document.getElementById('share-btn').getAttribute('href');
+        navigator.clipboard.writeText(url).then(() => alert('Snapshot link copied!'));
+        return false;
+    }
+
+    async function fetchData() {
+        try {
+            const response = await fetch('/api/latest');
+            const data = await response.json();
+            updateDashboard(data);
+        } catch(e) { console.error('Fetch failed:', e); }
+    }
+
+    fetchData();
+    setInterval(fetchData, 5 * 60 * 1000);
+</script>
+</body>
+</html>
