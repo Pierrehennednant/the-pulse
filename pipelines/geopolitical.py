@@ -162,6 +162,12 @@ class GeopoliticalPipeline:
 
     def fetch(self):
         try:
+            if not cache.is_stale(self.cache_key, 30):
+                pulse_logger.log("↺ Geopolitical — using cache (NewsAPI refresh every 30min)")
+                cached = cache.load(self.cache_key)
+                if cached:
+                    return cached['data']
+
             items = self.fetch_news()
             flags = self.identify_flags(items)
             score = self.calculate_score(items, flags)

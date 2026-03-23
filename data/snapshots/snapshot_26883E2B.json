@@ -1,6 +1,6 @@
 {
-  "id": "165E1E4B",
-  "timestamp": "2026-03-23T09:31:20.018047-04:00",
+  "id": "26883E2B",
+  "timestamp": "2026-03-23T09:34:54.526822-04:00",
   "bias": {
     "final_score": -0.763,
     "bias": "Bearish",
@@ -38,7 +38,7 @@
   "pillars": {
     "macro": {
       "pillar": "macro_sentiment",
-      "timestamp": "2026-03-23T09:31:17.381860-04:00",
+      "timestamp": "2026-03-23T09:34:50.544799-04:00",
       "vix": {
         "value": 24.06,
         "previous": 25.09,
@@ -64,7 +64,7 @@
     },
     "economic": {
       "pillar": "economic_calendar",
-      "timestamp": "2026-03-23T09:31:17.463081-04:00",
+      "timestamp": "2026-03-23T09:34:50.632532-04:00",
       "events": [
         {
           "title": "Flash Manufacturing PMI",
@@ -128,7 +128,7 @@
     },
     "institutional": {
       "pillar": "institutional",
-      "timestamp": "2026-03-23T09:31:18.012889-04:00",
+      "timestamp": "2026-03-23T09:34:50.863287-04:00",
       "nq_futures": {
         "direction": "unknown",
         "score": 0
@@ -144,7 +144,7 @@
     },
     "geopolitical": {
       "pillar": "geopolitical",
-      "timestamp": "2026-03-23T09:31:20.016057-04:00",
+      "timestamp": "2026-03-23T09:34:54.525790-04:00",
       "news_items": [
         {
           "headline": "Trump Threatens to Flood US Airports With ICE as Senate GOP Blocks Dem Bill to Pay TSA",
@@ -307,7 +307,7 @@
     },
     "news": {
       "pillar": "news_sentiment",
-      "timestamp": "2026-03-23T09:31:20.016885-04:00",
+      "timestamp": "2026-03-23T09:34:54.526511-04:00",
       "analysis": null,
       "pillar_score": 0,
       "status": "live"
