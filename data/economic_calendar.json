@@ -1,11 +1,73 @@
 {
   "data": {
     "pillar": "economic_calendar",
-    "timestamp": "2026-03-23T08:45:07.954136-04:00",
-    "events": [],
-    "pillar_score": 0.0,
-    "warnings": [],
+    "timestamp": "2026-03-23T08:48:42.159453-04:00",
+    "events": [
+      {
+        "title": "Flash Manufacturing PMI",
+        "time_est": "09:45 AM EST",
+        "forecast": "N/A",
+        "previous": "51.2",
+        "actual": "Pending",
+        "impact": "High",
+        "result": "pending",
+        "market_impact": "unknown",
+        "reason": "Flash Manufacturing PMI not yet released"
+      },
+      {
+        "title": "Flash Services PMI",
+        "time_est": "09:45 AM EST",
+        "forecast": "N/A",
+        "previous": "52.3",
+        "actual": "Pending",
+        "impact": "High",
+        "result": "pending",
+        "market_impact": "unknown",
+        "reason": "Flash Services PMI not yet released"
+      },
+      {
+        "title": "Richmond Manufacturing Index",
+        "time_est": "10:00 AM EST",
+        "forecast": "-5",
+        "previous": "-10",
+        "actual": "Pending",
+        "impact": "Medium",
+        "result": "pending",
+        "market_impact": "unknown",
+        "reason": "Richmond Manufacturing Index not yet released"
+      },
+      {
+        "title": "Unemployment Claims",
+        "time_est": "08:30 AM EST",
+        "forecast": "211K",
+        "previous": "205K",
+        "actual": "Pending",
+        "impact": "High",
+        "result": "pending",
+        "market_impact": "unknown",
+        "reason": "Unemployment Claims not yet released"
+      },
+      {
+        "title": "Revised UoM Consumer Sentiment",
+        "time_est": "10:00 AM EST",
+        "forecast": "N/A",
+        "previous": "55.5",
+        "actual": "Pending",
+        "impact": "Medium",
+        "result": "pending",
+        "market_impact": "unknown",
+        "reason": "Revised UoM Consumer Sentiment not yet released"
+      }
+    ],
+    "pillar_score": -1.5,
+    "warnings": [
+      "\u26a0\ufe0f Flash Manufacturing PMI at 09:45 AM EST \u2014 Flash Manufacturing PMI not yet released",
+      "\u26a0\ufe0f Flash Services PMI at 09:45 AM EST \u2014 Flash Services PMI not yet released",
+      "\u26a0\ufe0f Richmond Manufacturing Index at 10:00 AM EST \u2014 Richmond Manufacturing Index not yet released",
+      "\u26a0\ufe0f Unemployment Claims at 08:30 AM EST \u2014 Unemployment Claims not yet released",
+      "\u26a0\ufe0f Revised UoM Consumer Sentiment at 10:00 AM EST \u2014 Revised UoM Consumer Sentiment not yet released"
+    ],
     "status": "live"
   },
-  "timestamp": "2026-03-23T12:45:07.954177"
+  "timestamp": "2026-03-23T12:48:42.159483"
 }

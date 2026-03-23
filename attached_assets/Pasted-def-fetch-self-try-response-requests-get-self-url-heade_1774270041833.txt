@@ -1,0 +1,48 @@
+def fetch(self):
+    try:
+        response = requests.get(self.url, headers=self.headers, timeout=15)
+        raw_events = response.json()
+        events = []
+        for event in raw_events:
+            if not self.is_market_moving(event):
+                continue
+            title = event.get('title', '')
+            actual = event.get('actual', '')
+            forecast = event.get('forecast', '')
+            previous = event.get('previous', '')
+            date_str = event.get('date', '')
+            result, market_impact, reason = self.get_market_implication(title, actual, forecast, previous)
+            events.append({
+                'title': title,
+                'time_est': self.convert_to_est(date_str),
+                'forecast': forecast or 'N/A',
+                'previous': previous or 'N/A',
+                'actual': actual or 'Pending',
+                'impact': event.get('impact', ''),
+                'result': result,
+                'market_impact': market_impact,
+                'reason': reason
+            })
+        score = self.calculate_score(events)
+        warnings = []
+        for event in events:
+            if event['result'] == 'pending':
+                warnings.append(f"⚠️ {event['title']} at {event['time_est']} — {event['reason']}")
+        result_data = {
+            'pillar': 'economic_calendar',
+            'timestamp': datetime.now(self.timezone).isoformat(),
+            'events': events,
+            'pillar_score': score,
+            'warnings': warnings,
+            'status': 'live'
+        }
+        cache.save(self.cache_key, result_data)
+        pulse_logger.log(f"✓ Economic Calendar updated | {len(events)} USD high/medium impact events | Score: {score}")
+        return result_data
+    except Exception as e:
+        error_handler.handle(e, "Economic Calendar")
+        cached = cache.load(self.cache_key)
+        if cached:
+            cached['data']['status'] = 'stale'
+            return cached['data']
+        return None

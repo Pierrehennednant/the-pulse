@@ -1,5 +1,4 @@
 import requests
-from bs4 import BeautifulSoup
 from datetime import datetime
 import pytz
 from config import TIMEZONE, STALE_THRESHOLDS
@@ -11,7 +10,7 @@ class EconomicCalendarPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "economic_calendar"
-        self.url = "https://www.forexfactory.com/calendar"
+        self.url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
@@ -24,72 +23,40 @@ class EconomicCalendarPipeline:
             return False
         return True
 
-    def fetch_events(self):
+    def convert_to_est(self, date_str):
         try:
-            response = requests.get(self.url, headers=self.headers, timeout=15)
-            soup = BeautifulSoup(response.content, 'html.parser')
-            events = []
-            
-            calendar_table = soup.find('table', class_='calendar__table')
-            if not calendar_table:
-                return []
-            
-            rows = calendar_table.find_all('tr', class_='calendar__row')
-            
-            for row in rows:
-                impact = row.find('td', class_='calendar__impact')
-                if not impact:
-                    continue
-                
-                impact_icon = impact.find('span')
-                if not impact_icon or 'high' not in str(impact_icon).lower():
-                    continue
-                
-                title_td = row.find('td', class_='calendar__event')
-                time_td = row.find('td', class_='calendar__time')
-                forecast_td = row.find('td', class_='calendar__forecast')
-                previous_td = row.find('td', class_='calendar__previous')
-                actual_td = row.find('td', class_='calendar__actual')
-                
-                if not title_td:
-                    continue
-                
-                event = {
-                    'title': title_td.get_text(strip=True),
-                    'time_est': time_td.get_text(strip=True) if time_td else 'TBD',
-                    'forecast': forecast_td.get_text(strip=True) if forecast_td else 'N/A',
-                    'previous': previous_td.get_text(strip=True) if previous_td else 'N/A',
-                    'actual': actual_td.get_text(strip=True) if actual_td else 'Pending',
-                    'impact': 'red'
-                }
-                
-                if event['actual'] != 'Pending' and event['forecast'] != 'N/A':
-                    try:
-                        actual_val = float(event['actual'].replace('%', '').replace('K', ''))
-                        forecast_val = float(event['forecast'].replace('%', '').replace('K', ''))
-                        if actual_val > forecast_val:
-                            event['result'] = 'beat'
-                            event['market_impact'] = 'bullish'
-                        elif actual_val < forecast_val:
-                            event['result'] = 'miss'
-                            event['market_impact'] = 'bearish'
-                        else:
-                            event['result'] = 'inline'
-                            event['market_impact'] = 'neutral'
-                    except:
-                        event['result'] = 'pending'
-                        event['market_impact'] = 'unknown'
-                else:
-                    event['result'] = 'pending'
-                    event['market_impact'] = 'unknown'
-                
-                events.append(event)
-            
-            return events
-        except Exception as e:
-            error_handler.handle(e, "Economic Calendar Scraper")
-            return []
-    
+            dt = datetime.fromisoformat(date_str)
+            est = dt.astimezone(self.timezone)
+            return est.strftime('%I:%M %p EST')
+        except:
+            return 'TBD'
+
+    def get_market_implication(self, title, actual, forecast, previous):
+        if not actual or actual == '':
+            return 'pending', 'unknown', f'{title} not yet released'
+        try:
+            actual_val = float(actual.replace('%', '').replace('K', '').replace('M', '').replace('B', '').replace('T', ''))
+            forecast_val = float(forecast.replace('%', '').replace('K', '').replace('M', '').replace('B', '').replace('T', '')) if forecast else None
+            previous_val = float(previous.replace('%', '').replace('K', '').replace('M', '').replace('B', '').replace('T', '')) if previous else None
+        except:
+            return 'pending', 'unknown', f'{title} — cannot parse values'
+
+        if forecast_val is not None:
+            if actual_val > forecast_val:
+                return 'beat', 'bullish', f'{title} beat forecast ({actual} vs {forecast})'
+            elif actual_val < forecast_val:
+                return 'miss', 'bearish', f'{title} missed forecast ({actual} vs {forecast})'
+            else:
+                return 'inline', 'neutral', f'{title} inline with forecast ({actual})'
+        elif previous_val is not None:
+            if actual_val > previous_val:
+                return 'improved', 'bullish', f'{title} improved from previous ({actual} vs {previous})'
+            elif actual_val < previous_val:
+                return 'declined', 'bearish', f'{title} declined from previous ({actual} vs {previous})'
+            else:
+                return 'unchanged', 'neutral', f'{title} unchanged from previous ({actual})'
+        return 'pending', 'unknown', f'{title} — no comparison available'
+
     def calculate_score(self, events):
         if not events:
             return 0.0
@@ -109,20 +76,37 @@ class EconomicCalendarPipeline:
         
         return round(score / max(count, 1), 2)
     
-    def get_upcoming_warning(self, events):
-        warnings = []
-        for event in events:
-            if event['result'] == 'pending':
-                warnings.append(f"⚠️ {event['title']} at {event['time_est']} EST — be cautious until release")
-        return warnings
-    
     def fetch(self):
         try:
-            events = self.fetch_events()
+            response = requests.get(self.url, headers=self.headers, timeout=15)
+            raw_events = response.json()
+            events = []
+            for event in raw_events:
+                if not self.is_market_moving(event):
+                    continue
+                title = event.get('title', '')
+                actual = event.get('actual', '')
+                forecast = event.get('forecast', '')
+                previous = event.get('previous', '')
+                date_str = event.get('date', '')
+                result, market_impact, reason = self.get_market_implication(title, actual, forecast, previous)
+                events.append({
+                    'title': title,
+                    'time_est': self.convert_to_est(date_str),
+                    'forecast': forecast or 'N/A',
+                    'previous': previous or 'N/A',
+                    'actual': actual or 'Pending',
+                    'impact': event.get('impact', ''),
+                    'result': result,
+                    'market_impact': market_impact,
+                    'reason': reason
+                })
             score = self.calculate_score(events)
-            warnings = self.get_upcoming_warning(events)
-            
-            result = {
+            warnings = []
+            for event in events:
+                if event['result'] == 'pending':
+                    warnings.append(f"⚠️ {event['title']} at {event['time_est']} — {event['reason']}")
+            result_data = {
                 'pillar': 'economic_calendar',
                 'timestamp': datetime.now(self.timezone).isoformat(),
                 'events': events,
@@ -130,9 +114,9 @@ class EconomicCalendarPipeline:
                 'warnings': warnings,
                 'status': 'live'
             }
-            cache.save(self.cache_key, result)
-            pulse_logger.log(f"✓ Economic Calendar updated | {len(events)} red folder events | Score: {score}")
-            return result
+            cache.save(self.cache_key, result_data)
+            pulse_logger.log(f"✓ Economic Calendar updated | {len(events)} USD high/medium impact events | Score: {score}")
+            return result_data
         except Exception as e:
             error_handler.handle(e, "Economic Calendar")
             cached = cache.load(self.cache_key)
