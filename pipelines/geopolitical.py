@@ -1,9 +1,8 @@
 import requests
-from bs4 import BeautifulSoup
 from datetime import datetime
 import pytz
-from transformers import pipeline
-from config import TIMEZONE, SENTIMENT_MODEL
+from transformers import pipeline as hf_pipeline
+from config import TIMEZONE, SENTIMENT_MODEL, NEWS_API_KEY
 from utils.cache import cache
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
@@ -12,29 +11,24 @@ class GeopoliticalPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "geopolitical"
-        self.fj_url = "https://www.financialjuice.com/home"
-        self.un_url = "https://www.unbiasednetwork.com/episodes"
-        self.headers = {'User-Agent': 'Mozilla/5.0'}
-        self._sentiment_analyzer = None
+        self.sentiment_analyzer = hf_pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
         self.market_keywords = [
             'tariff', 'fed', 'fomc', 'rate', 'inflation', 'war', 'sanctions',
             'trade', 'gdp', 'jobs', 'unemployment', 'iran', 'china', 'russia',
             'nato', 'oil', 'shutdown', 'debt ceiling', 'trump', 'treasury',
             'recession', 'bank', 'default', 'nuclear', 'attack', 'strike',
-            'agreement', 'deal', 'ceasefire', 'escalation', 'tariffs'
+            'agreement', 'deal', 'ceasefire', 'escalation', 'tariffs', 'missile',
+            'federal reserve', 'interest rate', 'powell', 'yellen', 'congress',
+            'senate', 'budget', 'deficit', 'spy', 'conflict', 'troops'
         ]
         self.ignore_keywords = [
-            'constitutional', 'historical background', 'branches of government',
-            'amendment', '1979', 'legal analysis'
+            'sports', 'nba', 'nfl', 'celebrity', 'entertainment',
+            'weather', 'fashion', 'travel', 'food', 'recipe'
         ]
 
-    @property
-    def sentiment_analyzer(self):
-        if self._sentiment_analyzer is None:
-            self._sentiment_analyzer = pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
-        return self._sentiment_analyzer
-
     def is_market_relevant(self, text):
+        if not text:
+            return False
         text_lower = text.lower()
         for ignore in self.ignore_keywords:
             if ignore in text_lower:
@@ -52,99 +46,69 @@ class GeopoliticalPipeline:
         except:
             return 0.0
 
-    def scrape_financial_juice(self):
+    def fetch_news(self):
         try:
-            response = requests.get(self.fj_url, headers=self.headers, timeout=15)
-            soup = BeautifulSoup(response.content, 'html.parser')
-            items = []
-            news_items = soup.find_all(['div', 'article'], class_=lambda x: x and 'news' in x.lower())
-            for item in news_items[:20]:
-                text = item.get_text(strip=True)
-                if len(text) < 20:
-                    continue
-                if not self.is_market_relevant(text):
-                    continue
-                time_tag = item.find('time') or item.find(class_=lambda x: x and 'time' in str(x).lower())
-                timestamp = time_tag.get_text(strip=True) if time_tag else datetime.now(self.timezone).strftime('%H:%M EST')
-                link_tag = item.find('a', href=True)
-                link = link_tag['href'] if link_tag else self.fj_url
-                if link and not link.startswith('http'):
-                    link = 'https://www.financialjuice.com' + link
-                sentiment = self.get_sentiment_score(text)
-                items.append({
-                    'headline': text[:200],
-                    'source': 'Financial Juice',
-                    'timestamp': timestamp,
-                    'date': datetime.now(self.timezone).strftime('%Y-%m-%d'),
-                    'link': link,
-                    'sentiment_score': sentiment,
-                    'market_relevant': True
-                })
-            return items
-        except Exception as e:
-            error_handler.handle(e, "Financial Juice Scraper")
-            return []
-
-    def scrape_unbiased_network(self):
-        try:
-            response = requests.get(self.un_url, headers=self.headers, timeout=15)
-            soup = BeautifulSoup(response.content, 'html.parser')
-            items = []
-            episodes = soup.find_all(['div', 'article'], class_=lambda x: x and 'episode' in str(x).lower())
-            for episode in episodes[:10]:
-                title = episode.find(['h1', 'h2', 'h3', 'h4'])
-                description = episode.find('p')
-                link_tag = episode.find('a', href=True)
-                time_tag = episode.find('time')
-                if not title:
-                    continue
-                title_text = title.get_text(strip=True)
-                desc_text = description.get_text(strip=True) if description else ''
-                full_text = f"{title_text} {desc_text}"
-                if not self.is_market_relevant(full_text):
-                    continue
-                link = link_tag['href'] if link_tag else self.un_url
-                if link and not link.startswith('http'):
-                    link = 'https://www.unbiasednetwork.com' + link
-                timestamp = time_tag.get_text(strip=True) if time_tag else 'Recent'
-                sentiment = self.get_sentiment_score(full_text)
-                sources = self.get_episode_sources(link)
-                items.append({
-                    'headline': title_text,
-                    'description': desc_text[:300],
-                    'source': 'Unbiased Network',
-                    'timestamp': timestamp,
-                    'date': datetime.now(self.timezone).strftime('%Y-%m-%d'),
-                    'link': link,
-                    'underlying_sources': sources,
-                    'sentiment_score': sentiment,
-                    'market_relevant': True
-                })
-            return items
-        except Exception as e:
-            error_handler.handle(e, "Unbiased Network Scraper")
-            return []
-
-    def get_episode_sources(self, episode_url):
-        try:
-            response = requests.get(episode_url, headers=self.headers, timeout=10)
-            soup = BeautifulSoup(response.content, 'html.parser')
-            sources = []
-            links = soup.find_all('a', href=True)
-            trusted_domains = [
-                'nytimes.com', 'cbsnews.com', 'reuters.com', 'bloomberg.com',
-                'whitehouse.gov', 'cnn.com', 'bbc.com', 'wsj.com', 'factcheck.org'
+            queries = [
+                'federal reserve OR FOMC OR interest rate OR inflation',
+                'tariff OR trade war OR sanctions OR trump economy',
+                'war OR military OR nuclear OR geopolitical OR iran OR russia OR china',
+                'government shutdown OR debt ceiling OR congress budget',
+                'recession OR GDP OR unemployment OR jobs report'
             ]
-            for link in links:
-                href = link['href']
-                if any(domain in href for domain in trusted_domains):
-                    if self.is_market_relevant(link.get_text(strip=True) + href):
-                        sources.append({
-                            'url': href,
-                            'text': link.get_text(strip=True)[:100]
-                        })
-            return sources[:5]
-        except:
+            items = []
+            seen_titles = set()
+
+            for query in queries:
+                url = (
+                    f"https://newsapi.org/v2/everything"
+                    f"?q={requests.utils.quote(query)}"
+                    f"&language=en"
+                    f"&sortBy=publishedAt"
+                    f"&pageSize=10"
+                    f"&apiKey={NEWS_API_KEY}"
+                )
+                response = requests.get(url, timeout=10)
+                data = response.json()
+
+                if data.get('status') != 'ok':
+                    continue
+
+                for article in data.get('articles', []):
+                    title = article.get('title', '')
+                    if not title or title in seen_titles:
+                        continue
+                    if not self.is_market_relevant(title):
+                        continue
+
+                    seen_titles.add(title)
+                    description = article.get('description', '') or ''
+                    full_text = f"{title} {description}"
+                    sentiment = self.get_sentiment_score(full_text)
+                    published = article.get('publishedAt', '')
+
+                    try:
+                        dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
+                        est = dt.astimezone(pytz.timezone(TIMEZONE))
+                        timestamp = est.strftime('%b %d, %I:%M %p EST')
+                        date = est.strftime('%Y-%m-%d')
+                    except:
+                        timestamp = published
+                        date = datetime.now(self.timezone).strftime('%Y-%m-%d')
+
+                    items.append({
+                        'headline': title,
+                        'description': description[:300],
+                        'source': article.get('source', {}).get('name', 'NewsAPI'),
+                        'timestamp': timestamp,
+                        'date': date,
+                        'link': article.get('url', ''),
+                        'sentiment_score': sentiment,
+                        'market_relevant': True
+                    })
+
+            return items
+        except Exception as e:
+            error_handler.handle(e, "NewsAPI Fetcher")
             return []
 
     def identify_flags(self, items):
@@ -153,7 +117,9 @@ class GeopoliticalPipeline:
             'war': 90, 'attack': 85, 'bomb': 85, 'nuclear': 95,
             'tariff': 80, 'sanctions': 75, 'shutdown': 70,
             'fomc': 85, 'rate hike': 80, 'recession': 75,
-            'ceasefire': 70, 'deal': 65, 'agreement': 65
+            'ceasefire': 70, 'deal': 65, 'agreement': 65,
+            'missile': 88, 'troops': 78, 'invasion': 92,
+            'default': 85, 'debt ceiling': 80, 'powell': 75
         }
         for item in items:
             text = item['headline'].lower()
@@ -164,7 +130,7 @@ class GeopoliticalPipeline:
                     if score > priority:
                         priority = score
                         flag_type = keyword
-            if priority >= 70:
+            if priority >= 65:
                 flags.append({
                     'title': item['headline'],
                     'priority': priority,
@@ -192,23 +158,20 @@ class GeopoliticalPipeline:
                 flag_adjustment -= 0.2 * (flag['priority'] / 100)
             elif flag['predicted_impact'] == 'bullish':
                 flag_adjustment += 0.2 * (flag['priority'] / 100)
-        final_score = round(max(-2.0, min(2.0, base_score + flag_adjustment)), 2)
-        return final_score
+        return round(max(-2.0, min(2.0, base_score + flag_adjustment)), 2)
 
     def fetch(self):
         try:
-            fj_items = self.scrape_financial_juice()
-            un_items = self.scrape_unbiased_network()
-            all_items = fj_items + un_items
-            flags = self.identify_flags(all_items)
-            score = self.calculate_score(all_items, flags)
+            items = self.fetch_news()
+            flags = self.identify_flags(items)
+            score = self.calculate_score(items, flags)
             result = {
                 'pillar': 'geopolitical',
                 'timestamp': datetime.now(self.timezone).isoformat(),
-                'financial_juice_items': fj_items[:10],
-                'unbiased_network_items': un_items[:5],
+                'financial_juice_items': items[:10],
+                'unbiased_network_items': [],
                 'active_flags': flags,
-                'total_items': len(all_items),
+                'total_items': len(items),
                 'pillar_score': score,
                 'status': 'live'
             }

@@ -1,10 +1,19 @@
 {
   "data": {
     "pillar": "news_sentiment",
-    "timestamp": "2026-03-23T09:11:36.024126-04:00",
-    "analysis": null,
-    "pillar_score": 0,
+    "timestamp": "2026-03-23T09:23:16.804906-04:00",
+    "analysis": {
+      "average_score": -0.41,
+      "overall_sentiment": "bearish",
+      "bullish_pct": 30.0,
+      "bearish_pct": 70.0,
+      "neutral_pct": 0.0,
+      "total_headlines": 10,
+      "dominant_theme": "Tehran strikes near Israeli nuclear center as Trump threatens attacks on Iranian power plants (Leoni",
+      "pillar_score": -0.82
+    },
+    "pillar_score": -0.82,
     "status": "live"
   },
-  "timestamp": "2026-03-23T13:11:36.024157"
+  "timestamp": "2026-03-23T13:23:16.804934"
 }
