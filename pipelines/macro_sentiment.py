@@ -14,7 +14,10 @@ class MacroSentimentPipeline:
 
     def fetch_vix(self):
         try:
-            vix = yf.Ticker("^VIX")
+            import yfinance as yf
+            from curl_cffi import requests as curl_requests
+            session = curl_requests.Session(impersonate="chrome")
+            vix = yf.Ticker("^VIX", session=session)
             data = vix.history(period="5d")
             if data.empty or len(data) < 1:
                 raise ValueError("No VIX data returned")
@@ -35,7 +38,10 @@ class MacroSentimentPipeline:
 
     def fetch_vxn(self):
         try:
-            vxn = yf.Ticker("^VXN")
+            import yfinance as yf
+            from curl_cffi import requests as curl_requests
+            session = curl_requests.Session(impersonate="chrome")
+            vxn = yf.Ticker("^VXN", session=session)
             data = vxn.history(period="5d")
             if data.empty or len(data) < 1:
                 raise ValueError("No VXN data returned")
