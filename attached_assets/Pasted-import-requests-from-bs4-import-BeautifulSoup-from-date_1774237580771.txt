@@ -1,0 +1,220 @@
+import requests
+from bs4 import BeautifulSoup
+from datetime import datetime
+import pytz
+from transformers import pipeline
+from config import TIMEZONE, SENTIMENT_MODEL
+from utils.cache import cache
+from utils.logger import pulse_logger
+from utils.error_handler import error_handler
+
+class GeopoliticalPipeline:
+    def __init__(self):
+        self.timezone = pytz.timezone(TIMEZONE)
+        self.cache_key = "geopolitical"
+        self.fj_url = "https://www.financialjuice.com/home"
+        self.un_url = "https://www.unbiasednetwork.com/episodes"
+        self.headers = {'User-Agent': 'Mozilla/5.0'}
+        self.sentiment_analyzer = pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
+        self.market_keywords = [
+            'tariff', 'fed', 'fomc', 'rate', 'inflation', 'war', 'sanctions',
+            'trade', 'gdp', 'jobs', 'unemployment', 'iran', 'china', 'russia',
+            'nato', 'oil', 'shutdown', 'debt ceiling', 'trump', 'treasury',
+            'recession', 'bank', 'default', 'nuclear', 'attack', 'strike',
+            'agreement', 'deal', 'ceasefire', 'escalation', 'tariffs'
+        ]
+        self.ignore_keywords = [
+            'constitutional', 'historical background', 'branches of government',
+            'amendment', '1979', 'legal analysis'
+        ]
+
+    def is_market_relevant(self, text):
+        text_lower = text.lower()
+        for ignore in self.ignore_keywords:
+            if ignore in text_lower:
+                return False
+        for keyword in self.market_keywords:
+            if keyword in text_lower:
+                return True
+        return False
+
+    def get_sentiment_score(self, text):
+        try:
+            result = self.sentiment_analyzer(text[:512])[0]
+            score = result['score'] if result['label'] == 'POSITIVE' else -result['score']
+            return round(score, 3)
+        except:
+            return 0.0
+
+    def scrape_financial_juice(self):
+        try:
+            response = requests.get(self.fj_url, headers=self.headers, timeout=15)
+            soup = BeautifulSoup(response.content, 'html.parser')
+            items = []
+            news_items = soup.find_all(['div', 'article'], class_=lambda x: x and 'news' in x.lower())
+            for item in news_items[:20]:
+                text = item.get_text(strip=True)
+                if len(text) < 20:
+                    continue
+                if not self.is_market_relevant(text):
+                    continue
+                time_tag = item.find('time') or item.find(class_=lambda x: x and 'time' in str(x).lower())
+                timestamp = time_tag.get_text(strip=True) if time_tag else datetime.now(self.timezone).strftime('%H:%M EST')
+                link_tag = item.find('a', href=True)
+                link = link_tag['href'] if link_tag else self.fj_url
+                if link and not link.startswith('http'):
+                    link = 'https://www.financialjuice.com' + link
+                sentiment = self.get_sentiment_score(text)
+                items.append({
+                    'headline': text[:200],
+                    'source': 'Financial Juice',
+                    'timestamp': timestamp,
+                    'date': datetime.now(self.timezone).strftime('%Y-%m-%d'),
+                    'link': link,
+                    'sentiment_score': sentiment,
+                    'market_relevant': True
+                })
+            return items
+        except Exception as e:
+            error_handler.handle(e, "Financial Juice Scraper")
+            return []
+
+    def scrape_unbiased_network(self):
+        try:
+            response = requests.get(self.un_url, headers=self.headers, timeout=15)
+            soup = BeautifulSoup(response.content, 'html.parser')
+            items = []
+            episodes = soup.find_all(['div', 'article'], class_=lambda x: x and 'episode' in str(x).lower())
+            for episode in episodes[:10]:
+                title = episode.find(['h1', 'h2', 'h3', 'h4'])
+                description = episode.find('p')
+                link_tag = episode.find('a', href=True)
+                time_tag = episode.find('time')
+                if not title:
+                    continue
+                title_text = title.get_text(strip=True)
+                desc_text = description.get_text(strip=True) if description else ''
+                full_text = f"{title_text} {desc_text}"
+                if not self.is_market_relevant(full_text):
+                    continue
+                link = link_tag['href'] if link_tag else self.un_url
+                if link and not link.startswith('http'):
+                    link = 'https://www.unbiasednetwork.com' + link
+                timestamp = time_tag.get_text(strip=True) if time_tag else 'Recent'
+                sentiment = self.get_sentiment_score(full_text)
+                sources = self.get_episode_sources(link)
+                items.append({
+                    'headline': title_text,
+                    'description': desc_text[:300],
+                    'source': 'Unbiased Network',
+                    'timestamp': timestamp,
+                    'date': datetime.now(self.timezone).strftime('%Y-%m-%d'),
+                    'link': link,
+                    'underlying_sources': sources,
+                    'sentiment_score': sentiment,
+                    'market_relevant': True
+                })
+            return items
+        except Exception as e:
+            error_handler.handle(e, "Unbiased Network Scraper")
+            return []
+
+    def get_episode_sources(self, episode_url):
+        try:
+            response = requests.get(episode_url, headers=self.headers, timeout=10)
+            soup = BeautifulSoup(response.content, 'html.parser')
+            sources = []
+            links = soup.find_all('a', href=True)
+            trusted_domains = [
+                'nytimes.com', 'cbsnews.com', 'reuters.com', 'bloomberg.com',
+                'whitehouse.gov', 'cnn.com', 'bbc.com', 'wsj.com', 'factcheck.org'
+            ]
+            for link in links:
+                href = link['href']
+                if any(domain in href for domain in trusted_domains):
+                    if self.is_market_relevant(link.get_text(strip=True) + href):
+                        sources.append({
+                            'url': href,
+                            'text': link.get_text(strip=True)[:100]
+                        })
+            return sources[:5]
+        except:
+            return []
+
+    def identify_flags(self, items):
+        flags = []
+        high_impact_keywords = {
+            'war': 90, 'attack': 85, 'bomb': 85, 'nuclear': 95,
+            'tariff': 80, 'sanctions': 75, 'shutdown': 70,
+            'fomc': 85, 'rate hike': 80, 'recession': 75,
+            'ceasefire': 70, 'deal': 65, 'agreement': 65
+        }
+        for item in items:
+            text = item['headline'].lower()
+            priority = 0
+            flag_type = None
+            for keyword, score in high_impact_keywords.items():
+                if keyword in text:
+                    if score > priority:
+                        priority = score
+                        flag_type = keyword
+            if priority >= 70:
+                flags.append({
+                    'title': item['headline'],
+                    'priority': priority,
+                    'flag_type': flag_type,
+                    'status': 'Developing',
+                    'source': item['source'],
+                    'date': item['date'],
+                    'timestamp': item['timestamp'],
+                    'link': item['link'],
+                    'sentiment': item['sentiment_score'],
+                    'predicted_impact': 'bearish' if item['sentiment_score'] < -0.3 else 'bullish' if item['sentiment_score'] > 0.3 else 'neutral',
+                    'context': item.get('description', '')[:200]
+                })
+        flags.sort(key=lambda x: x['priority'], reverse=True)
+        return flags[:5]
+
+    def calculate_score(self, items, flags):
+        if not items:
+            return 0.0
+        scores = [item['sentiment_score'] for item in items]
+        base_score = sum(scores) / len(scores) if scores else 0
+        flag_adjustment = 0
+        for flag in flags:
+            if flag['predicted_impact'] == 'bearish':
+                flag_adjustment -= 0.2 * (flag['priority'] / 100)
+            elif flag['predicted_impact'] == 'bullish':
+                flag_adjustment += 0.2 * (flag['priority'] / 100)
+        final_score = round(max(-2.0, min(2.0, base_score + flag_adjustment)), 2)
+        return final_score
+
+    def fetch(self):
+        try:
+            fj_items = self.scrape_financial_juice()
+            un_items = self.scrape_unbiased_network()
+            all_items = fj_items + un_items
+            flags = self.identify_flags(all_items)
+            score = self.calculate_score(all_items, flags)
+            result = {
+                'pillar': 'geopolitical',
+                'timestamp': datetime.now(self.timezone).isoformat(),
+                'financial_juice_items': fj_items[:10],
+                'unbiased_network_items': un_items[:5],
+                'active_flags': flags,
+                'total_items': len(all_items),
+                'pillar_score': score,
+                'status': 'live'
+            }
+            cache.save(self.cache_key, result)
+            pulse_logger.log(f"✓ Geopolitical updated | {len(flags)} active flags | Score: {score}")
+            return result
+        except Exception as e:
+            error_handler.handle(e, "Geopolitical")
+            cached = cache.load(self.cache_key)
+            if cached:
+                cached['data']['status'] = 'stale'
+                return cached['data']
+            return None
+
+geopolitical_pipeline = GeopoliticalPipeline()
