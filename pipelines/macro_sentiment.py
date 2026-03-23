@@ -1,8 +1,7 @@
-import yfinance as yf
 import requests
 from datetime import datetime
 import pytz
-from config import TIMEZONE, STALE_THRESHOLDS
+from config import TIMEZONE, FRED_API_KEY
 from utils.cache import cache
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
@@ -14,15 +13,14 @@ class MacroSentimentPipeline:
 
     def fetch_vix(self):
         try:
-            import yfinance as yf
-            from curl_cffi import requests as curl_requests
-            session = curl_requests.Session(impersonate="chrome")
-            vix = yf.Ticker("^VIX", session=session)
-            data = vix.history(period="5d")
-            if data.empty or len(data) < 1:
-                raise ValueError("No VIX data returned")
-            current = round(float(data['Close'].iloc[-1]), 2)
-            previous = round(float(data['Close'].iloc[-2]), 2) if len(data) >= 2 else current
+            url = f"https://api.stlouisfed.org/fred/series/observations?series_id=VIXCLS&api_key={FRED_API_KEY}&sort_order=desc&limit=2&file_type=json"
+            response = requests.get(url, timeout=10)
+            data = response.json()
+            observations = [o for o in data.get('observations', []) if o['value'] != '.']
+            if not observations:
+                raise ValueError("No VIX data from FRED")
+            current = round(float(observations[0]['value']), 2)
+            previous = round(float(observations[1]['value']), 2) if len(observations) >= 2 else current
             change = round(current - previous, 2)
             change_pct = round((change / previous) * 100, 2) if previous else 0
             return {
@@ -38,15 +36,14 @@ class MacroSentimentPipeline:
 
     def fetch_vxn(self):
         try:
-            import yfinance as yf
-            from curl_cffi import requests as curl_requests
-            session = curl_requests.Session(impersonate="chrome")
-            vxn = yf.Ticker("^VXN", session=session)
-            data = vxn.history(period="5d")
-            if data.empty or len(data) < 1:
-                raise ValueError("No VXN data returned")
-            current = round(float(data['Close'].iloc[-1]), 2)
-            previous = round(float(data['Close'].iloc[-2]), 2) if len(data) >= 2 else current
+            url = f"https://api.stlouisfed.org/fred/series/observations?series_id=VXNCLS&api_key={FRED_API_KEY}&sort_order=desc&limit=2&file_type=json"
+            response = requests.get(url, timeout=10)
+            data = response.json()
+            observations = [o for o in data.get('observations', []) if o['value'] != '.']
+            if not observations:
+                raise ValueError("No VXN data from FRED")
+            current = round(float(observations[0]['value']), 2)
+            previous = round(float(observations[1]['value']), 2) if len(observations) >= 2 else current
             change = round(current - previous, 2)
             change_pct = round((change / previous) * 100, 2) if previous else 0
             return {
@@ -61,44 +58,18 @@ class MacroSentimentPipeline:
             return None
 
     def fetch_fear_greed(self):
-        endpoints = [
-            "https://production.dataviz.cnn.io/index/fearandgreed/graphdata",
-            "https://fear-and-greed-index.p.rapidapi.com/v1/fgi",
-            "https://api.alternative.me/fng/?limit=1"
-        ]
-        
         try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'application/json',
-                'Referer': 'https://www.cnn.com/markets/fear-and-greed'
+            url = "https://api.alternative.me/fng/?limit=1"
+            response = requests.get(url, timeout=10)
+            data = response.json()
+            score = int(data['data'][0]['value'])
+            rating = data['data'][0]['value_classification']
+            return {
+                'score': score,
+                'rating': rating,
+                'signal': 'bearish' if score < 40 else 'bullish' if score > 60 else 'neutral',
+                'source': 'Alternative.me'
             }
-            response = requests.get(endpoints[0], headers=headers, timeout=10)
-            if response.status_code == 200 and response.text:
-                data = response.json()
-                score = round(float(data['fear_and_greed']['score']), 1)
-                rating = data['fear_and_greed']['rating']
-                return {
-                    'score': score,
-                    'rating': rating,
-                    'signal': 'bearish' if score < 40 else 'bullish' if score > 60 else 'neutral',
-                    'source': 'CNN'
-                }
-        except:
-            pass
-
-        try:
-            response = requests.get(endpoints[2], timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                score = int(data['data'][0]['value'])
-                rating = data['data'][0]['value_classification']
-                return {
-                    'score': score,
-                    'rating': rating,
-                    'signal': 'bearish' if score < 40 else 'bullish' if score > 60 else 'neutral',
-                    'source': 'Alternative.me'
-                }
         except Exception as e:
             error_handler.handle(e, "Fear & Greed")
             return None

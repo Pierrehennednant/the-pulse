@@ -1,6 +1,8 @@
 # The Pulse Configuration
 
 # API Keys and Endpoints
+import os
+FRED_API_KEY = os.environ.get("FRED_API_KEY", "")
 YAHOO_FINANCE_API = "yfinance"
 CNN_FEAR_GREED_URL = "https://www.cnn.com/markets/fear-and-greed"
 CFTC_COT_URL = "https://www.cftc.gov/dea/futures/financial_lf.htm"
