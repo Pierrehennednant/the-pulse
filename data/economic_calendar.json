@@ -1,7 +1,7 @@
 {
   "data": {
     "pillar": "economic_calendar",
-    "timestamp": "2026-03-23T09:00:28.404845-04:00",
+    "timestamp": "2026-03-23T09:03:27.801613-04:00",
     "events": [
       {
         "title": "Flash Manufacturing PMI",
@@ -69,5 +69,5 @@
     ],
     "status": "live"
   },
-  "timestamp": "2026-03-23T13:00:28.404876"
+  "timestamp": "2026-03-23T13:03:27.801637"
 }
