@@ -1,0 +1,159 @@
+<div class="pillar-card" id="card-economic">
+        <div class="pillar-header">
+            <div class="pillar-title">📅 Economic Calendar</div>
+            <div class="pillar-score" id="econ-score-badge">--</div>
+        </div>
+        <div class="pillar-weight">Weight: 40% | Red Folder Events Only</div>
+        <div id="econ-content">Loading...</div>
+    </div>
+    <div class="pillar-card" id="card-institutional">
+        <div class="pillar-header">
+            <div class="pillar-title">🏦 Institutional Positioning</div>
+            <div class="pillar-score" id="inst-score-badge">--</div>
+        </div>
+        <div class="pillar-weight">Weight: 20% | COT Report (Updates Fridays)</div>
+        <div id="inst-content">Loading...</div>
+    </div>
+    <div class="pillar-card" id="card-macro">
+        <div class="pillar-header">
+            <div class="pillar-title">📊 Macro Sentiment</div>
+            <div class="pillar-score" id="macro-score-badge">--</div>
+        </div>
+        <div class="pillar-weight">Weight: 10% | VIX · VXN · Fear & Greed</div>
+        <div id="macro-content">Loading...</div>
+    </div>
+    <div class="pillar-card" id="card-geo">
+        <div class="pillar-header">
+            <div class="pillar-title">🌍 Political & Geopolitical</div>
+            <div class="pillar-score" id="geo-score-badge">--</div>
+        </div>
+        <div class="pillar-weight">Weight: 28% | Financial Juice · Unbiased Network</div>
+        <div id="geo-content">Loading...</div>
+    </div>
+    <div class="pillar-card" id="card-news">
+        <div class="pillar-header">
+            <div class="pillar-title">📰 News Sentiment</div>
+            <div class="pillar-score" id="news-score-badge">--</div>
+        </div>
+        <div class="pillar-weight">Weight: 2% | AI Synthesis Layer</div>
+        <div id="news-content">Loading...</div>
+    </div>
+    <div class="refresh-bar">
+        <span class="live-dot"></span> Auto-refreshes every 5 minutes
+    </div>
+</div>
+<script>
+    function updateTime() {
+        const now = new Date();
+        const est = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+        document.getElementById('datetime').textContent = est.toLocaleString('en-US', {
+            weekday: 'short', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            timeZoneName: 'short'
+        });
+    }
+    setInterval(updateTime, 1000);
+    updateTime();
+
+    function setGauge(gaugeValue) {
+        const rotation = (gaugeValue / 100) * 180 - 90;
+        document.getElementById('gauge-needle').setAttribute('transform', `rotate(${rotation}, 130, 140)`);
+        document.getElementById('gauge-score-text').textContent = gaugeValue;
+    }
+
+    function getScoreClass(score) {
+        if (score > 0.3) return 'bullish';
+        if (score < -0.3) return 'bearish';
+        return 'neutral';
+    }
+
+    function getBadgeClass(score) {
+        if (score > 0.3) return 'score-bullish';
+        if (score < -0.3) return 'score-bearish';
+        return 'score-neutral';
+    }
+
+    function renderEconomic(data) {
+        if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
+        let html = '';
+        if (data.status === 'stale') html += '<div class="stale-warning">⚠️ Stale data — last known values shown</div>';
+        const events = data.events || [];
+        if (events.length === 0) return html + '<div class="data-row"><span class="data-label">No red folder events today</span></div>';
+        events.forEach(event => {
+            const impactClass = event.market_impact === 'bullish' ? 'value-bullish' : event.market_impact === 'bearish' ? 'value-bearish' : 'value-neutral';
+            html += `
+                <div class="flag-item">
+                    <div class="flag-title">${event.title}</div>
+                    <div class="flag-meta">
+                        <span class="flag-status status-${event.result === 'pending' ? 'awaiting' : 'resolved'}">${event.result === 'pending' ? 'Pending' : event.result.toUpperCase()}</span>
+                        <span class="flag-source">${event.time_est} EST</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label">Expected</span>
+                        <span class="data-value">${event.forecast}</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label">Actual</span>
+                        <span class="data-value ${impactClass}">${event.actual}</span>
+                    </div>
+                    ${event.result !== 'pending' ? `<div class="data-row"><span class="data-label">Market Impact</span><span class="data-value ${impactClass}">${event.market_impact?.toUpperCase()}</span></div>` : ''}
+                </div>`;
+        });
+        (data.warnings || []).forEach(w => {
+            html += `<div class="stale-warning">${w}</div>`;
+        });
+        return html;
+    }
+
+    function renderInstitutional(data) {
+        if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
+        let html = '';
+        if (data.status === 'stale') html += '<div class="stale-warning">⚠️ Stale data</div>';
+        const nq = data.nq_futures || {};
+        const es = data.es_futures || {};
+        html += `
+            <div class="data-row">
+                <span class="data-label">NQ Direction</span>
+                <span class="data-value ${nq.direction === 'bullish' ? 'value-bullish' : 'value-bearish'}">${nq.direction?.toUpperCase() || 'N/A'}</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">NQ Net Position</span>
+                <span class="data-value">${nq.net?.toLocaleString() || 'N/A'} (${nq.net_pct || 0}%)</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">ES Direction</span>
+                <span class="data-value ${es.direction === 'bullish' ? 'value-bullish' : 'value-bearish'}">${es.direction?.toUpperCase() || 'N/A'}</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">ES Net Position</span>
+                <span class="data-value">${es.net?.toLocaleString() || 'N/A'} (${es.net_pct || 0}%)</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Last Updated</span>
+                <span class="data-value" style="color:#7a8fa8">${data.update_frequency || 'Weekly'}</span>
+            </div>`;
+        return html;
+    }
+
+    function renderMacro(data) {
+        if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
+        let html = '';
+        if (data.status === 'stale') html += '<div class="stale-warning">⚠️ Stale data</div>';
+        const vix = data.vix || {};
+        const vxn = data.vxn || {};
+        const fg = data.fear_greed || {};
+        html += `
+            <div class="data-row">
+                <span class="data-label">VIX</span>
+                <span class="data-value ${vix.signal === 'bullish' ? 'value-bullish' : vix.signal === 'bearish' ? 'value-bearish' : 'value-neutral'}">${vix.value || '--'} <small>(${vix.change >= 0 ? '+' : ''}${vix.change || 0})</small></span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">VXN</span>
+                <span class="data-value ${vxn.signal === 'bullish' ? 'value-bullish' : vxn.signal === 'bearish' ? 'value-bearish' : 'value-neutral'}">${vxn.value || '--'} <small>(${vxn.change >= 0 ? '+' : ''}${vxn.change || 0})</small></span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Fear & Greed</span>
+                <span class="data-value ${fg.signal === 'bullish' ? 'value-bullish' : fg.signal === 'bearish' ? 'value-bearish' : 'value-neutral'}">${fg.score || '--'} — ${fg.rating || 'N/A'}</span>
+            </div>`;
+        return html;
+    }
