@@ -1,7 +1,7 @@
 {
   "data": {
     "pillar": "geopolitical",
-    "timestamp": "2026-03-23T09:34:54.525790-04:00",
+    "timestamp": "2026-03-23T09:42:53.395931-04:00",
     "news_items": [
       {
         "headline": "Trump Threatens to Flood US Airports With ICE as Senate GOP Blocks Dem Bill to Pay TSA",
@@ -11,26 +11,6 @@
         "date": "2026-03-22",
         "link": "https://www.commondreams.org/news/trump-tsa",
         "sentiment_score": -0.998,
-        "market_relevant": true
-      },
-      {
-        "headline": "Sunday Summary: War, Oil Blockades, Interest Rates \u2014 Oh My!",
-        "description": "As of yesterday, the United States and Israel entered week four of their conflict with Iran \u2014 and there are a lot of nervous people watching and waiting. On a purely self-interested level, we have to wonder what a global shock like a war and the subsequent cl\u2026",
-        "source": "Commercial Observer",
-        "timestamp": "Mar 22, 09:00 AM EST",
-        "date": "2026-03-22",
-        "link": "http://commercialobserver.com/2026/03/sunday-summary-war-oil-blockades-interest-rates-oh-my/",
-        "sentiment_score": 0.832,
-        "market_relevant": true
-      },
-      {
-        "headline": "California bets on an obscure tool to replace clean air authority Trump revoked",
-        "description": "The rules would hold pollution magnets like warehouses, ports and railyards accountable for the trucks and ships they attract.",
-        "source": "Grist",
-        "timestamp": "Mar 22, 09:00 AM EST",
-        "date": "2026-03-22",
-        "link": "https://grist.org/regulation/california-bets-on-an-obscure-tool-to-replace-clean-air-authority-trump-revoked/",
-        "sentiment_score": -0.999,
         "market_relevant": true
       },
       {
@@ -64,86 +44,57 @@
         "market_relevant": true
       },
       {
-        "headline": "10 Rising AI-Related Jobs Transforming Australia's Workforce in 2026",
-        "description": "Artificial intelligence is reshaping Australia's job market at an unprecedented pace, with technical and strategic AI roles leading the charge as the fastest-growing opportunities in 2026.",
-        "source": "Ibtimes.com.au",
-        "timestamp": "Mar 22, 09:05 AM EST",
+        "headline": "Iran says will hit region\u2019s energy sites if US, Israel target power plants",
+        "description": "Iran warns of 'irreversibly' destroying vital infrastructure across region after Trump threatens to bomb power plants.",
+        "source": "Al Jazeera English",
+        "timestamp": "Mar 22, 09:42 AM EST",
         "date": "2026-03-22",
-        "link": "https://www.ibtimes.com.au/10-rising-ai-related-jobs-transforming-australias-workforce-2026-1864029",
-        "sentiment_score": 0.999,
-        "market_relevant": true
-      },
-      {
-        "headline": "\u2018Trump is cooked\u2019: Fears of \u2018collapse\u2019 spread as war sparks shortage of critical resource",
-        "description": "The United States\u2019 war against Iran has triggered a shortage\r\n of a critical resource, one so crucial to the economy that one expert predicted a \u201chorrendous\u201d and imminent \u201ccollapse,\u201d while another said that President Donald Trump would bear the blame.That res\u2026",
-        "source": "Raw Story",
-        "timestamp": "Mar 22, 09:05 AM EST",
-        "date": "2026-03-22",
-        "link": "https://www.rawstory.com/iran-war-2676572005/",
+        "link": "https://www.aljazeera.com/news/2026/3/22/iran-says-will-hit-regions-energy-sites-if-us-israel-target-power-plants",
         "sentiment_score": -0.997,
         "market_relevant": true
       },
       {
-        "headline": "Trump Declares \u2018The Death of Iran\u2019 \u2014 Then Brands Democratic Party America\u2019s \u2018Greatest Enemy\u2019 in Stunning Post",
-        "description": "Trump proclaimed \"the death of Iran\" \u2014 and subsequently branded the Democratic party America's \"greatest enemy\" in a stunning Truth Social post Sunday.\nThe post Trump Declares \u2018The Death of Iran\u2019 \u2014 Then Brands Democratic Party America\u2019s \u2018Greatest Enemy\u2019 in St\u2026",
-        "source": "Mediaite",
-        "timestamp": "Mar 22, 09:28 AM EST",
+        "headline": "'Normal' Lyrics: BTS Reflect on Fame on 'ARIRANG' Album Track",
+        "description": "BTS is back, and they\u2019re reflecting on their massive superstardom and how their life is now. The K-pop boy band just released ARIRANG on March 20, their long awaited comeback album after each member served their required military service in South Korea. One o\u2026",
+        "source": "Just Jared",
+        "timestamp": "Mar 22, 09:41 AM EST",
         "date": "2026-03-22",
-        "link": "https://www.mediaite.com/media/news/trump-declares-the-death-of-iran-then-brands-democratic-party-americas-greatest-enemy-in-stunning-post/",
-        "sentiment_score": 0.926,
+        "link": "https://www.justjared.com/2026/03/22/bts-normal-lyrics-arirang-album-meaning/",
+        "sentiment_score": 0.996,
         "market_relevant": true
       },
       {
-        "headline": "Bitcoin Drops Below $69,000 as War Fears Weigh on Crypto Markets",
-        "description": "Bitcoin and other cryptocurrencies declined anew as the US, Israel and Iran traded fresh threats and attacks.",
-        "source": "Financial Post",
-        "timestamp": "Mar 22, 09:27 AM EST",
+        "headline": "Myanmar\u2019s Elections and the Future of India\u2019s Act East Strategy",
+        "description": "Myanmar held its first nationwide elections since the February 2021 military coup on January 25, 2026. Despite ongoing conflict and a boycott campaign led by the National Unity Government (NUG) and allied armed groups, voting was conducted in 265 of the count\u2026",
+        "source": "Fair Observer",
+        "timestamp": "Mar 22, 09:39 AM EST",
         "date": "2026-03-22",
-        "link": "https://financialpost.com/pmn/business-pmn/bitcoin-drops-below-69000-as-war-fears-weigh-on-crypto-markets",
-        "sentiment_score": -0.999,
+        "link": "https://www.fairobserver.com/election-news/myanmars-elections-and-the-future-of-indias-act-east-strategy/",
+        "sentiment_score": 0.993,
+        "market_relevant": true
+      },
+      {
+        "headline": "Apple CEO praises China partners as Beijing applies pressure",
+        "description": "Cook, speaking at the China Development Forum in Beijing on Sunday, praised the innovations of Chinese developers and the automation at the country\u2019s manufacturing facilities. He said Apple and China share common goals, including in green development and carb\u2026",
+        "source": "The Times of India",
+        "timestamp": "Mar 22, 09:38 AM EST",
+        "date": "2026-03-22",
+        "link": "https://economictimes.indiatimes.com/tech/technology/apple-ceo-praises-china-partners-as-beijing-applies-pressure/articleshow/129733725.cms",
+        "sentiment_score": 0.998,
+        "market_relevant": true
+      },
+      {
+        "headline": "Govt may consider OFS option for raising public float in IDBI Bank",
+        "description": "The government may consider selling a stake in IDBI Bank through the Offer-for-Sale (OFS) route to increase public shareholding, after the unsuccessful attempt to divest stake in the LIC-controlled lender, sources said.",
+        "source": "The Times of India",
+        "timestamp": "Mar 22, 07:20 AM EST",
+        "date": "2026-03-22",
+        "link": "https://economictimes.indiatimes.com/markets/stocks/news/govt-may-consider-ofs-option-for-raising-public-float-in-idbi-bank/articleshow/129732323.cms",
+        "sentiment_score": -0.983,
         "market_relevant": true
       }
     ],
     "active_flags": [
-      {
-        "title": "Sunday Summary: War, Oil Blockades, Interest Rates \u2014 Oh My!",
-        "priority": 90,
-        "flag_type": "war",
-        "status": "Developing",
-        "source": "Commercial Observer",
-        "date": "2026-03-22",
-        "timestamp": "Mar 22, 09:00 AM EST",
-        "link": "http://commercialobserver.com/2026/03/sunday-summary-war-oil-blockades-interest-rates-oh-my/",
-        "sentiment": 0.832,
-        "predicted_impact": "bullish",
-        "context": "As of yesterday, the United States and Israel entered week four of their conflict with Iran \u2014 and there are a lot of nervous people watching and waiting. On a purely self-interested level, we have to "
-      },
-      {
-        "title": "\u2018Trump is cooked\u2019: Fears of \u2018collapse\u2019 spread as war sparks shortage of critical resource",
-        "priority": 90,
-        "flag_type": "war",
-        "status": "Developing",
-        "source": "Raw Story",
-        "date": "2026-03-22",
-        "timestamp": "Mar 22, 09:05 AM EST",
-        "link": "https://www.rawstory.com/iran-war-2676572005/",
-        "sentiment": -0.997,
-        "predicted_impact": "bearish",
-        "context": "The United States\u2019 war against Iran has triggered a shortage\r\n of a critical resource, one so crucial to the economy that one expert predicted a \u201chorrendous\u201d and imminent \u201ccollapse,\u201d while another sai"
-      },
-      {
-        "title": "Bitcoin Drops Below $69,000 as War Fears Weigh on Crypto Markets",
-        "priority": 90,
-        "flag_type": "war",
-        "status": "Developing",
-        "source": "Financial Post",
-        "date": "2026-03-22",
-        "timestamp": "Mar 22, 09:27 AM EST",
-        "link": "https://financialpost.com/pmn/business-pmn/bitcoin-drops-below-69000-as-war-fears-weigh-on-crypto-markets",
-        "sentiment": -0.999,
-        "predicted_impact": "bearish",
-        "context": "Bitcoin and other cryptocurrencies declined anew as the US, Israel and Iran traded fresh threats and attacks."
-      },
       {
         "title": "From Iran to Cuba, Trump\u2019s Sanctions Have Hurt People More Than Governments",
         "priority": 75,
@@ -158,9 +109,9 @@
         "context": "The US says \u201csanctions\u201d are about regime change, but in practice they are economic warfare against entire populations."
       }
     ],
-    "total_items": 13,
-    "pillar_score": -0.7,
+    "total_items": 9,
+    "pillar_score": -0.45,
     "status": "live"
   },
-  "timestamp": "2026-03-23T13:34:54.525824"
+  "timestamp": "2026-03-23T13:42:53.395975"
 }

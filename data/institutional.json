@@ -1,7 +1,7 @@
 {
   "data": {
     "pillar": "institutional",
-    "timestamp": "2026-03-23T09:34:50.863287-04:00",
+    "timestamp": "2026-03-23T09:42:48.489084-04:00",
     "nq_futures": {
       "direction": "unknown",
       "score": 0
@@ -15,5 +15,5 @@
     "next_update": "Next Friday",
     "status": "live"
   },
-  "timestamp": "2026-03-23T13:34:50.863327"
+  "timestamp": "2026-03-23T13:42:48.489121"
 }

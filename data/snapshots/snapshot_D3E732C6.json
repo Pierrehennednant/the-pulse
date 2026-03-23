@@ -1,0 +1,213 @@
+{
+  "id": "D3E732C6",
+  "timestamp": "2026-03-23T09:42:53.397287-04:00",
+  "bias": {
+    "final_score": -0.226,
+    "bias": "Neutral",
+    "bias_emoji": "\ud83d\udfe1",
+    "confidence": 11,
+    "pillar_contributions": {
+      "economic_calendar": {
+        "raw_score": 0,
+        "weight": 40,
+        "contribution": 0.0
+      },
+      "geopolitical": {
+        "raw_score": -0.45,
+        "weight": 28,
+        "contribution": -0.126
+      },
+      "institutional": {
+        "raw_score": 0,
+        "weight": 20,
+        "contribution": 0.0
+      },
+      "macro_sentiment": {
+        "raw_score": -1.0,
+        "weight": 10,
+        "contribution": -0.1
+      },
+      "news_sentiment": {
+        "raw_score": 0,
+        "weight": 2,
+        "contribution": 0.0
+      }
+    },
+    "gauge_value": 44
+  },
+  "pillars": {
+    "macro": {
+      "pillar": "macro_sentiment",
+      "timestamp": "2026-03-23T09:42:47.692070-04:00",
+      "vix": {
+        "value": 26.78,
+        "previous": 24.06,
+        "change": 2.72,
+        "change_pct": 11.31,
+        "signal": "bearish"
+      },
+      "vxn": {
+        "value": 29.2,
+        "previous": 26.9,
+        "change": 2.3,
+        "change_pct": 8.55,
+        "signal": "bearish"
+      },
+      "fear_greed": {
+        "score": 8,
+        "rating": "Extreme Fear",
+        "signal": "bearish",
+        "source": "Alternative.me"
+      },
+      "pillar_score": -1.0,
+      "status": "live"
+    },
+    "economic": {
+      "pillar": "economic_calendar",
+      "timestamp": "2026-03-23T09:42:47.752780-04:00",
+      "events": [],
+      "pillar_score": 0,
+      "warnings": [
+        "\u26a0\ufe0f Economic calendar temporarily unavailable \u2014 rate limited"
+      ],
+      "status": "stale"
+    },
+    "institutional": {
+      "pillar": "institutional",
+      "timestamp": "2026-03-23T09:42:48.489084-04:00",
+      "nq_futures": {
+        "direction": "unknown",
+        "score": 0
+      },
+      "es_futures": {
+        "direction": "unknown",
+        "score": 0
+      },
+      "pillar_score": 0,
+      "update_frequency": "Weekly (Fridays)",
+      "next_update": "Next Friday",
+      "status": "live"
+    },
+    "geopolitical": {
+      "pillar": "geopolitical",
+      "timestamp": "2026-03-23T09:42:53.395931-04:00",
+      "news_items": [
+        {
+          "headline": "Trump Threatens to Flood US Airports With ICE as Senate GOP Blocks Dem Bill to Pay TSA",
+          "description": "As Senate Republicans on Saturday voted against advancing a Democratic bill to pay Transportation Security Administration workers during talks over Department of Homeland Security funding, GOP President Donald Trump tried to pin the blame for the partial DHS \u2026",
+          "source": "Common Dreams",
+          "timestamp": "Mar 22, 09:20 AM EST",
+          "date": "2026-03-22",
+          "link": "https://www.commondreams.org/news/trump-tsa",
+          "sentiment_score": -0.998,
+          "market_relevant": true
+        },
+        {
+          "headline": "Cuba Says Its Military Is Prepared as Trump\u2019s Threats Multiply",
+          "description": "A senior Cuban official said the country is preparing for a possible military assault as President Donald Trump increases economic pressure on the government in Havana and suggests it could be the next US target after Venezuela and Iran.",
+          "source": "Financial Post",
+          "timestamp": "Mar 22, 09:17 AM EST",
+          "date": "2026-03-22",
+          "link": "https://financialpost.com/pmn/business-pmn/cuba-says-its-military-is-prepared-as-trumps-threats-multiply",
+          "sentiment_score": -0.991,
+          "market_relevant": true
+        },
+        {
+          "headline": "From Iran to Cuba, Trump\u2019s Sanctions Have Hurt People More Than Governments",
+          "description": "The US says \u201csanctions\u201d are about regime change, but in practice they are economic warfare against entire populations.",
+          "source": "Truthout",
+          "timestamp": "Mar 22, 09:17 AM EST",
+          "date": "2026-03-22",
+          "link": "https://truthout.org/articles/from-iran-to-cuba-trumps-sanctions-have-hurt-people-more-than-governments/",
+          "sentiment_score": -0.971,
+          "market_relevant": true
+        },
+        {
+          "headline": "China touts itself as \u2018harbour of stability\u2019 to global CEOs - Financial Times",
+          "description": "China touts itself as \u2018harbour of stability\u2019 to global CEOsFinancial Times China\u2019s Premier Vows to Back Balanced Trade as Exports SurgeBloomberg.com China pledges more balanced trade and further opening of the economy after record surplusReuters Premier Li Qi\u2026",
+          "source": "Slashdot.org",
+          "timestamp": "Mar 22, 09:12 AM EST",
+          "date": "2026-03-22",
+          "link": "https://slashdot.org/firehose.pl?op=view&amp;id=181077180",
+          "sentiment_score": -0.747,
+          "market_relevant": true
+        },
+        {
+          "headline": "Iran says will hit region\u2019s energy sites if US, Israel target power plants",
+          "description": "Iran warns of 'irreversibly' destroying vital infrastructure across region after Trump threatens to bomb power plants.",
+          "source": "Al Jazeera English",
+          "timestamp": "Mar 22, 09:42 AM EST",
+          "date": "2026-03-22",
+          "link": "https://www.aljazeera.com/news/2026/3/22/iran-says-will-hit-regions-energy-sites-if-us-israel-target-power-plants",
+          "sentiment_score": -0.997,
+          "market_relevant": true
+        },
+        {
+          "headline": "'Normal' Lyrics: BTS Reflect on Fame on 'ARIRANG' Album Track",
+          "description": "BTS is back, and they\u2019re reflecting on their massive superstardom and how their life is now. The K-pop boy band just released ARIRANG on March 20, their long awaited comeback album after each member served their required military service in South Korea. One o\u2026",
+          "source": "Just Jared",
+          "timestamp": "Mar 22, 09:41 AM EST",
+          "date": "2026-03-22",
+          "link": "https://www.justjared.com/2026/03/22/bts-normal-lyrics-arirang-album-meaning/",
+          "sentiment_score": 0.996,
+          "market_relevant": true
+        },
+        {
+          "headline": "Myanmar\u2019s Elections and the Future of India\u2019s Act East Strategy",
+          "description": "Myanmar held its first nationwide elections since the February 2021 military coup on January 25, 2026. Despite ongoing conflict and a boycott campaign led by the National Unity Government (NUG) and allied armed groups, voting was conducted in 265 of the count\u2026",
+          "source": "Fair Observer",
+          "timestamp": "Mar 22, 09:39 AM EST",
+          "date": "2026-03-22",
+          "link": "https://www.fairobserver.com/election-news/myanmars-elections-and-the-future-of-indias-act-east-strategy/",
+          "sentiment_score": 0.993,
+          "market_relevant": true
+        },
+        {
+          "headline": "Apple CEO praises China partners as Beijing applies pressure",
+          "description": "Cook, speaking at the China Development Forum in Beijing on Sunday, praised the innovations of Chinese developers and the automation at the country\u2019s manufacturing facilities. He said Apple and China share common goals, including in green development and carb\u2026",
+          "source": "The Times of India",
+          "timestamp": "Mar 22, 09:38 AM EST",
+          "date": "2026-03-22",
+          "link": "https://economictimes.indiatimes.com/tech/technology/apple-ceo-praises-china-partners-as-beijing-applies-pressure/articleshow/129733725.cms",
+          "sentiment_score": 0.998,
+          "market_relevant": true
+        },
+        {
+          "headline": "Govt may consider OFS option for raising public float in IDBI Bank",
+          "description": "The government may consider selling a stake in IDBI Bank through the Offer-for-Sale (OFS) route to increase public shareholding, after the unsuccessful attempt to divest stake in the LIC-controlled lender, sources said.",
+          "source": "The Times of India",
+          "timestamp": "Mar 22, 07:20 AM EST",
+          "date": "2026-03-22",
+          "link": "https://economictimes.indiatimes.com/markets/stocks/news/govt-may-consider-ofs-option-for-raising-public-float-in-idbi-bank/articleshow/129732323.cms",
+          "sentiment_score": -0.983,
+          "market_relevant": true
+        }
+      ],
+      "active_flags": [
+        {
+          "title": "From Iran to Cuba, Trump\u2019s Sanctions Have Hurt People More Than Governments",
+          "priority": 75,
+          "flag_type": "sanctions",
+          "status": "Developing",
+          "source": "Truthout",
+          "date": "2026-03-22",
+          "timestamp": "Mar 22, 09:17 AM EST",
+          "link": "https://truthout.org/articles/from-iran-to-cuba-trumps-sanctions-have-hurt-people-more-than-governments/",
+          "sentiment": -0.971,
+          "predicted_impact": "bearish",
+          "context": "The US says \u201csanctions\u201d are about regime change, but in practice they are economic warfare against entire populations."
+        }
+      ],
+      "total_items": 9,
+      "pillar_score": -0.45,
+      "status": "live"
+    },
+    "news": {
+      "pillar": "news_sentiment",
+      "timestamp": "2026-03-23T09:42:53.396826-04:00",
+      "analysis": null,
+      "pillar_score": 0,
+      "status": "live"
+    }
+  }
+}

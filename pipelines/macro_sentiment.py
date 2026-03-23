@@ -79,10 +79,10 @@ class MacroSentimentPipeline:
         count = 0
         signal_map = {'bearish': -1, 'neutral': 0, 'bullish': 1}
         if vix:
-            score += signal_map.get(vix['signal'], 0) * -1
+            score += signal_map.get(vix['signal'], 0)
             count += 1
         if vxn:
-            score += signal_map.get(vxn['signal'], 0) * -1
+            score += signal_map.get(vxn['signal'], 0)
             count += 1
         if fear_greed:
             score += signal_map.get(fear_greed['signal'], 0)
