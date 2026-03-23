@@ -19,28 +19,29 @@ class InstitutionalPipeline:
 
     def parse_positions(self, text, instrument):
         try:
+            import re
             idx = text.upper().find(instrument.upper())
             if idx == -1:
                 return None
-            section = text[idx:idx+600]
+            section = text[idx:idx+800]
             lines = section.split('\n')
-            positions = {}
-            for line in lines:
-                line = line.strip()
-                if line.startswith('Asset Mgr:') or line.startswith('Asset Manager:'):
-                    parts = line.replace('Asset Mgr:', '').replace('Asset Manager:', '').strip()
-                    nums = [int(x.strip().replace(',', '')) for x in parts.split() if x.strip().replace(',', '').isdigit()]
-                    if len(nums) >= 2:
-                        positions['asset_mgr_long'] = nums[0]
-                        positions['asset_mgr_short'] = nums[1]
-                elif line.startswith('Leveraged:'):
-                    parts = line.replace('Leveraged:', '').strip()
-                    nums = [int(x.strip().replace(',', '')) for x in parts.split() if x.strip().replace(',', '').isdigit()]
-                    if len(nums) >= 2:
-                        positions['leveraged_long'] = nums[0]
-                        positions['leveraged_short'] = nums[1]
-            if not positions:
+            positions_line = None
+            for i, line in enumerate(lines):
+                if line.strip() == 'Positions':
+                    if i + 1 < len(lines):
+                        positions_line = lines[i + 1]
+                    break
+            if not positions_line:
                 return None
+            nums = [int(x.replace(',', '')) for x in re.findall(r'[\d,]+', positions_line)]
+            if len(nums) < 14:
+                return None
+            positions = {
+                'asset_mgr_long': nums[3],
+                'asset_mgr_short': nums[4],
+                'leveraged_long': nums[6],
+                'leveraged_short': nums[7],
+            }
             asset_mgr_net = positions.get('asset_mgr_long', 0) - positions.get('asset_mgr_short', 0)
             leveraged_net = positions.get('leveraged_long', 0) - positions.get('leveraged_short', 0)
             combined_long = positions.get('asset_mgr_long', 0) + positions.get('leveraged_long', 0)

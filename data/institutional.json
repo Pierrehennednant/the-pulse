@@ -1,19 +1,35 @@
 {
   "data": {
     "pillar": "institutional",
-    "timestamp": "2026-03-23T09:50:20.295196-04:00",
+    "timestamp": "2026-03-23T09:52:25.752511-04:00",
     "nq_futures": {
-      "direction": "unknown",
-      "score": 0
+      "asset_mgr_long": 97885,
+      "asset_mgr_short": 36494,
+      "asset_mgr_net": 61391,
+      "leveraged_long": 44996,
+      "leveraged_short": 86037,
+      "leveraged_net": -41041,
+      "combined_net": 20350,
+      "net_pct": 7.67,
+      "direction": "bullish",
+      "score": 0.5
     },
     "es_futures": {
-      "direction": "unknown",
-      "score": 0
+      "asset_mgr_long": 1089306,
+      "asset_mgr_short": 199864,
+      "asset_mgr_net": 889442,
+      "leveraged_long": 145042,
+      "leveraged_short": 492619,
+      "leveraged_net": -347577,
+      "combined_net": 541865,
+      "net_pct": 28.12,
+      "direction": "bullish",
+      "score": 1.0
     },
-    "pillar_score": 0,
+    "pillar_score": 0.75,
     "update_frequency": "Weekly (Fridays)",
     "next_update": "Next Friday",
     "status": "live"
   },
-  "timestamp": "2026-03-23T13:50:20.295258"
+  "timestamp": "2026-03-23T13:52:25.752546"
 }

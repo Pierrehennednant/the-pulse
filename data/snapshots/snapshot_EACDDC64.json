@@ -1,11 +1,11 @@
 {
-  "id": "B5F1F05F",
-  "timestamp": "2026-03-23T09:50:21.574937-04:00",
+  "id": "EACDDC64",
+  "timestamp": "2026-03-23T09:52:26.911017-04:00",
   "bias": {
-    "final_score": -1.196,
+    "final_score": -1.046,
     "bias": "Bearish",
     "bias_emoji": "\ud83d\udd34",
-    "confidence": 59,
+    "confidence": 52,
     "pillar_contributions": {
       "economic_calendar": {
         "raw_score": -1.5,
@@ -18,9 +18,9 @@
         "contribution": -0.456
       },
       "institutional": {
-        "raw_score": 0,
+        "raw_score": 0.75,
         "weight": 20,
-        "contribution": 0.0
+        "contribution": 0.15
       },
       "macro_sentiment": {
         "raw_score": -1.0,
@@ -33,12 +33,12 @@
         "contribution": -0.039
       }
     },
-    "gauge_value": 20
+    "gauge_value": 23
   },
   "pillars": {
     "macro": {
       "pillar": "macro_sentiment",
-      "timestamp": "2026-03-23T09:50:19.828871-04:00",
+      "timestamp": "2026-03-23T09:52:25.594045-04:00",
       "vix": {
         "value": 26.78,
         "previous": 24.06,
@@ -64,7 +64,7 @@
     },
     "economic": {
       "pillar": "economic_calendar",
-      "timestamp": "2026-03-23T09:50:19.877924-04:00",
+      "timestamp": "2026-03-23T09:52:25.667715-04:00",
       "events": [
         {
           "title": "Flash Manufacturing PMI",
@@ -128,23 +128,39 @@
     },
     "institutional": {
       "pillar": "institutional",
-      "timestamp": "2026-03-23T09:50:20.295196-04:00",
+      "timestamp": "2026-03-23T09:52:25.752511-04:00",
       "nq_futures": {
-        "direction": "unknown",
-        "score": 0
+        "asset_mgr_long": 97885,
+        "asset_mgr_short": 36494,
+        "asset_mgr_net": 61391,
+        "leveraged_long": 44996,
+        "leveraged_short": 86037,
+        "leveraged_net": -41041,
+        "combined_net": 20350,
+        "net_pct": 7.67,
+        "direction": "bullish",
+        "score": 0.5
       },
       "es_futures": {
-        "direction": "unknown",
-        "score": 0
+        "asset_mgr_long": 1089306,
+        "asset_mgr_short": 199864,
+        "asset_mgr_net": 889442,
+        "leveraged_long": 145042,
+        "leveraged_short": 492619,
+        "leveraged_net": -347577,
+        "combined_net": 541865,
+        "net_pct": 28.12,
+        "direction": "bullish",
+        "score": 1.0
       },
-      "pillar_score": 0,
+      "pillar_score": 0.75,
       "update_frequency": "Weekly (Fridays)",
       "next_update": "Next Friday",
       "status": "live"
     },
     "geopolitical": {
       "pillar": "geopolitical",
-      "timestamp": "2026-03-23T09:50:21.573888-04:00",
+      "timestamp": "2026-03-23T09:52:26.910041-04:00",
       "news_items": [
         {
           "headline": "ICE Officers Soon Will Help With Airport Security Unless Democrats End Shutdown, Trump Says",
@@ -287,7 +303,7 @@
     },
     "news": {
       "pillar": "news_sentiment",
-      "timestamp": "2026-03-23T09:50:21.574601-04:00",
+      "timestamp": "2026-03-23T09:52:26.910707-04:00",
       "analysis": {
         "average_score": -0.982,
         "overall_sentiment": "bearish",
