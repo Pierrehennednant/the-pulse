@@ -1,0 +1,156 @@
+Please create a new file pipelines/manual_input.py with this content:"
+pythonimport json
+import os
+from datetime import datetime
+import pytz
+from config import TIMEZONE
+from utils.cache import cache
+from utils.logger import pulse_logger
+from utils.error_handler import error_handler
+import requests
+from bs4 import BeautifulSoup
+
+class ManualInputPipeline:
+    def __init__(self):
+        self.timezone = pytz.timezone(TIMEZONE)
+        self.cache_key = "manual_inputs"
+        self.headers = {'User-Agent': 'Mozilla/5.0'}
+
+    def save_actual(self, event_title, actual_value, story_url=None):
+        try:
+            existing = cache.load(self.cache_key)
+            inputs = existing['data'] if existing else {}
+
+            # Fetch story context if URL provided
+            story_context = None
+            if story_url:
+                story_context = self.fetch_story_context(story_url)
+
+            inputs[event_title] = {
+                'actual': actual_value,
+                'story_url': story_url,
+                'story_context': story_context,
+                'timestamp': datetime.now(self.timezone).isoformat()
+            }
+
+            cache.save(self.cache_key, inputs)
+            pulse_logger.log(f"✓ Manual input saved | {event_title}: {actual_value}")
+            return True
+        except Exception as e:
+            error_handler.handle(e, "Manual Input")
+            return False
+
+    def fetch_story_context(self, url):
+        try:
+            response = requests.get(url, headers=self.headers, timeout=10)
+            soup = BeautifulSoup(response.content, 'html.parser')
+            # Get main article text
+            paragraphs = soup.find_all('p')
+            text = ' '.join([p.get_text(strip=True) for p in paragraphs[:5]])
+            return text[:500] if text else None
+        except Exception as e:
+            error_handler.handle(e, "Story Context Fetcher")
+            return None
+
+    def get_inputs(self):
+        existing = cache.load(self.cache_key)
+        return existing['data'] if existing else {}
+
+    def clear_old_inputs(self):
+        # Clear inputs older than 24 hours
+        try:
+            existing = cache.load(self.cache_key)
+            if not existing:
+                return
+            inputs = existing['data']
+            now = datetime.now(self.timezone)
+            fresh = {}
+            for title, data in inputs.items():
+                try:
+                    ts = datetime.fromisoformat(data['timestamp'])
+                    if (now - ts).total_seconds() < 86400:
+                        fresh[title] = data
+                except:
+                    pass
+            cache.save(self.cache_key, fresh)
+        except Exception as e:
+            error_handler.handle(e, "Manual Input Cleanup")
+
+manual_input_pipeline = ManualInputPipeline()
+Then in ui/dashboard.py replace the entire contents with this:
+pythonfrom flask import Flask, render_template, jsonify, request
+from processors.snapshot_generator import snapshot_generator
+from pipelines.manual_input import manual_input_pipeline
+
+app = Flask(__name__, template_folder='templates')
+
+@app.route('/')
+def home():
+    latest = snapshot_generator.get_latest()
+    return render_template('dashboard.html', snapshot=latest)
+
+@app.route('/api/latest')
+def api_latest():
+    latest = snapshot_generator.get_latest()
+    return jsonify(latest)
+
+@app.route('/snapshot/<snapshot_id>')
+def view_snapshot(snapshot_id):
+    snapshot = snapshot_generator.load(snapshot_id)
+    if not snapshot:
+        return "Snapshot not found", 404
+    return render_template('dashboard.html', snapshot=snapshot)
+
+@app.route('/api/snapshot/<snapshot_id>')
+def api_snapshot(snapshot_id):
+    snapshot = snapshot_generator.load(snapshot_id)
+    if not snapshot:
+        return jsonify({'error': 'Snapshot not found'}), 404
+    return jsonify(snapshot)
+
+@app.route('/api/manual_input', methods=['POST'])
+def manual_input():
+    try:
+        data = request.get_json()
+        event_title = data.get('event_title')
+        actual_value = data.get('actual_value')
+        story_url = data.get('story_url', None)
+        if not event_title or not actual_value:
+            return jsonify({'error': 'Missing event_title or actual_value'}), 400
+        success = manual_input_pipeline.save_actual(event_title, actual_value, story_url)
+        if success:
+            return jsonify({'status': 'saved', 'event': event_title, 'actual': actual_value})
+        return jsonify({'error': 'Failed to save'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/manual_inputs')
+def get_manual_inputs():
+    inputs = manual_input_pipeline.get_inputs()
+    return jsonify(inputs)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080, debug=False)
+Then in pipelines/economic_calendar.py in the fetch method, after fetching events add this logic to merge manual inputs:
+Find this line:
+pythonscore = self.calculate_score(events)
+Replace with:
+python# Merge manual inputs
+from pipelines.manual_input import manual_input_pipeline
+manual_inputs = manual_input_pipeline.get_inputs()
+for event in events:
+    if event['title'] in manual_inputs:
+        manual = manual_inputs[event['title']]
+        event['actual'] = manual['actual']
+        event['story_url'] = manual.get('story_url')
+        event['story_context'] = manual.get('story_context')
+        # Recalculate impact with actual value
+        result, market_impact, reason = self.get_market_implication(
+            event['title'], manual['actual'], event['forecast'], event['previous']
+        )
+        event['result'] = result
+        event['market_impact'] = market_impact
+        event['reason'] = reason
+
+score = self.calculate_score(events)
+Then delete all cache and snapshots, restart the app and confirm it's running.

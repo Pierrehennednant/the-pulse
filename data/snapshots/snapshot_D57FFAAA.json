@@ -1,6 +1,6 @@
 {
-  "id": "C406D712",
-  "timestamp": "2026-03-24T10:46:13.503242-04:00",
+  "id": "D57FFAAA",
+  "timestamp": "2026-03-24T11:09:43.232272-04:00",
   "bias": {
     "final_score": -0.844,
     "bias": "Bearish",
@@ -54,7 +54,7 @@
   "pillars": {
     "macro": {
       "pillar": "macro_sentiment",
-      "timestamp": "2026-03-24T10:46:10.521255-04:00",
+      "timestamp": "2026-03-24T11:09:38.942197-04:00",
       "vix": {
         "value": 26.15,
         "previous": 26.78,
@@ -80,7 +80,7 @@
     },
     "economic": {
       "pillar": "economic_calendar",
-      "timestamp": "2026-03-24T10:46:10.639175-04:00",
+      "timestamp": "2026-03-24T11:09:39.040971-04:00",
       "events": [
         {
           "title": "Flash Manufacturing PMI",
@@ -144,7 +144,7 @@
     },
     "institutional": {
       "pillar": "institutional",
-      "timestamp": "2026-03-24T10:46:11.132467-04:00",
+      "timestamp": "2026-03-24T11:09:39.543862-04:00",
       "nq_futures": {
         "asset_mgr_long": 97885,
         "asset_mgr_short": 36494,
@@ -176,7 +176,7 @@
     },
     "geopolitical": {
       "pillar": "geopolitical",
-      "timestamp": "2026-03-24T10:46:13.501432-04:00",
+      "timestamp": "2026-03-24T11:09:43.229550-04:00",
       "news_items": [
         {
           "headline": "U.S.-Iran talks, ICE in airports, gemstone investing and more in Morning Squawk",
@@ -352,7 +352,7 @@
     },
     "news": {
       "pillar": "news_sentiment",
-      "timestamp": "2026-03-24T10:46:13.502502-04:00",
+      "timestamp": "2026-03-24T11:09:43.231593-04:00",
       "analysis": {
         "average_score": -0.361,
         "overall_sentiment": "bearish",
@@ -419,9 +419,9 @@
   },
   "weekly_summary": {
     "pillar": "weekly_summary",
-    "timestamp": "2026-03-24T10:46:13.503033-04:00",
+    "timestamp": "2026-03-24T11:09:43.232086-04:00",
     "summary": {
-      "generated_at": "2026-03-24T10:46:13.503002-04:00",
+      "generated_at": "2026-03-24T11:09:43.232056-04:00",
       "overall": "Overall regime entering this week: Bearish with 64% confidence (Moderate Confidence). Lean short on rallies, avoid aggressive longs until conditions improve.",
       "economic": "This week has 5 key USD events including Flash Manufacturing PMI, Flash Services PMI, Richmond Manufacturing Index.",
       "institutional": "Big money is net bullish on NQ (7.67%) and bullish on ES (28.12%).",

@@ -121,6 +121,22 @@ class EconomicCalendarPipeline:
                     'reason': reason
                 })
 
+            # Merge manual inputs
+            from pipelines.manual_input import manual_input_pipeline
+            manual_inputs = manual_input_pipeline.get_inputs()
+            for event in events:
+                if event['title'] in manual_inputs:
+                    manual = manual_inputs[event['title']]
+                    event['actual'] = manual['actual']
+                    event['story_url'] = manual.get('story_url')
+                    event['story_context'] = manual.get('story_context')
+                    result, market_impact, reason = self.get_market_implication(
+                        event['title'], manual['actual'], event['forecast'], event['previous']
+                    )
+                    event['result'] = result
+                    event['market_impact'] = market_impact
+                    event['reason'] = reason
+
             score = self.calculate_score(events)
             warnings = []
 
