@@ -1,9 +1,9 @@
 {
   "data": {
     "pillar": "weekly_summary",
-    "timestamp": "2026-03-24T11:09:43.232086-04:00",
+    "timestamp": "2026-03-24T11:12:08.557640-04:00",
     "summary": {
-      "generated_at": "2026-03-24T11:09:43.232056-04:00",
+      "generated_at": "2026-03-24T11:12:08.557605-04:00",
       "overall": "Overall regime entering this week: Bearish with 64% confidence (Moderate Confidence). Lean short on rallies, avoid aggressive longs until conditions improve.",
       "economic": "This week has 5 key USD events including Flash Manufacturing PMI, Flash Services PMI, Richmond Manufacturing Index.",
       "institutional": "Big money is net bullish on NQ (7.67%) and bullish on ES (28.12%).",
@@ -13,5 +13,5 @@
     },
     "status": "live"
   },
-  "timestamp": "2026-03-24T15:09:43.232096"
+  "timestamp": "2026-03-24T15:12:08.557656"
 }

@@ -1,0 +1,90 @@
+Now let's add the manual input UI to the dashboard. Tell Replit AI:
+
+"In ui/templates/dashboard.html find the renderEconomic function and replace the entire function with this:"
+javascriptfunction renderEconomic(data) {
+    if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
+    let html = data.status === 'stale' ? '<div class="stale-warning">⚠️ Stale data</div>' : '';
+    const events = data.events || [];
+    if (!events.length) return html + '<div class="data-row"><span class="data-label">No red folder events today</span></div>';
+    
+    events.forEach(e => {
+        const isPending = e.result === 'pending';
+        const statusClass = isPending ? 'status-awaiting' : 'status-resolved';
+        const impactClass = valClass(e.market_impact);
+        const eventId = e.title.replace(/[^a-zA-Z0-9]/g, '_');
+        
+        html += `<div class="flag-item">
+            <div class="flag-title">${e.title}</div>
+            <div class="flag-meta">
+                <span class="flag-status ${statusClass}">${isPending ? 'Pending' : e.result.toUpperCase()}</span>
+                <span class="flag-source">${e.time_est}</span>
+            </div>
+            <div class="data-row"><span class="data-label">Previous</span><span class="data-value">${e.previous}</span></div>
+            <div class="data-row"><span class="data-label">Expected</span><span class="data-value">${e.forecast}</span></div>
+            <div class="data-row">
+                <span class="data-label">Actual</span>
+                <span class="data-value ${impactClass}">${e.actual}</span>
+            </div>
+            ${!isPending ? `<div class="data-row"><span class="data-label">Impact</span><span class="data-value ${impactClass}">${(e.market_impact || '').toUpperCase()}</span></div>` : ''}
+            ${e.reason ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${e.reason}</div>` : ''}
+            ${e.story_context ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4;border-top:1px solid #1e2d4a;padding-top:6px"><strong style="color:#4a9eff">Context:</strong> ${e.story_context}</div>` : ''}
+            
+            ${isPending ? `
+            <div style="margin-top:10px;padding-top:10px;border-top:1px solid #1e2d4a">
+                <div style="font-size:11px;color:#4a9eff;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">📝 Enter Actual</div>
+                <div style="display:flex;gap:6px;margin-bottom:6px">
+                    <input type="text" id="actual_${eventId}" placeholder="e.g. 52.4" 
+                        style="flex:1;background:#0a0e1a;border:1px solid #2a4a7a;border-radius:6px;padding:6px 10px;color:#e0e6f0;font-size:13px;outline:none"/>
+                    <button onclick="submitActual('${e.title}', '${eventId}')" 
+                        style="background:#1a3a6a;color:#4a9eff;border:1px solid #2a4a7a;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer">
+                        Submit
+                    </button>
+                </div>
+                <input type="text" id="story_${eventId}" placeholder="Paste Forex Factory story URL (optional)" 
+                    style="width:100%;background:#0a0e1a;border:1px solid #1e2d4a;border-radius:6px;padding:6px 10px;color:#7a8fa8;font-size:11px;outline:none;box-sizing:border-box"/>
+            </div>` : ''}
+        </div>`;
+    });
+    
+    return html;
+}
+Then add this JavaScript function before the fetchData function:
+javascriptasync function submitActual(eventTitle, eventId) {
+    const actualInput = document.getElementById('actual_' + eventId);
+    const storyInput = document.getElementById('story_' + eventId);
+    const actual = actualInput ? actualInput.value.trim() : '';
+    const storyUrl = storyInput ? storyInput.value.trim() : '';
+    
+    if (!actual) {
+        alert('Please enter the actual value first.');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/manual_input', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                event_title: eventTitle,
+                actual_value: actual,
+                story_url: storyUrl || null
+            })
+        });
+        
+        const result = await response.json();
+        if (result.status === 'saved') {
+            // Visual feedback
+            actualInput.style.borderColor = '#2ecc71';
+            actualInput.value = '✓ ' + actual + ' saved';
+            actualInput.disabled = true;
+            if (storyInput) storyInput.disabled = true;
+            // Refresh dashboard after 1 second
+            setTimeout(() => fetchData(), 1000);
+        } else {
+            alert('Failed to save. Try again.');
+        }
+    } catch(e) {
+        alert('Error: ' + e.message);
+    }
+}
+Then delete all cache and snapshots, restart the app
