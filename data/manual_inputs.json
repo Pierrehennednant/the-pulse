@@ -1,10 +1,10 @@
 {
   "data": {
     "Flash Manufacturing PMI": {
-      "actual": "\u2713 52.4 saved",
-      "story_url": "https://www.pmi.spglobal.com/Public/Home/PressRelease/adc91b5cf42442cbb220d5b66b64ec7d",
+      "actual": "52.4",
+      "story_url": null,
       "story_context": null,
-      "timestamp": "2026-03-24T11:20:44.392573-04:00"
+      "timestamp": "2026-03-24T11:30:17.338205-04:00"
     },
     "Flash Services PMI": {
       "actual": "51.1",
@@ -19,5 +19,5 @@
       "timestamp": "2026-03-24T11:20:54.884192-04:00"
     }
   },
-  "timestamp": "2026-03-24T15:20:54.884242"
+  "timestamp": "2026-03-24T15:30:17.338242"
 }

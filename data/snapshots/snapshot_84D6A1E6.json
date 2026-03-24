@@ -1,0 +1,390 @@
+{
+  "id": "84D6A1E6",
+  "timestamp": "2026-03-24T11:25:25.645981-04:00",
+  "bias": {
+    "final_score": -0.424,
+    "bias": "Neutral",
+    "bias_emoji": "\ud83d\udfe1",
+    "confidence": 8,
+    "confidence_label": "Very Low Confidence",
+    "confidence_color": "red",
+    "threshold_warning": "\ud83d\udeab Very low confidence (8%) \u2014 pillars are conflicting. Avoid trading until regime clarifies.",
+    "active_pillars": 5,
+    "pillar_signals": [
+      "bearish",
+      "bearish",
+      "bullish",
+      "bearish",
+      "bearish"
+    ],
+    "pillar_contributions": {
+      "economic_calendar": {
+        "raw_score": -0.45,
+        "weight": 40,
+        "contribution": -0.18,
+        "status": "stale"
+      },
+      "geopolitical": {
+        "raw_score": -1.0,
+        "weight": 28,
+        "contribution": -0.28,
+        "status": "live"
+      },
+      "institutional": {
+        "raw_score": 0.75,
+        "weight": 20,
+        "contribution": 0.15,
+        "status": "live"
+      },
+      "macro_sentiment": {
+        "raw_score": -1.0,
+        "weight": 10,
+        "contribution": -0.1,
+        "status": "live"
+      },
+      "news_sentiment": {
+        "raw_score": -0.72,
+        "weight": 2,
+        "contribution": -0.014,
+        "status": "live"
+      }
+    },
+    "gauge_value": 39
+  },
+  "pillars": {
+    "macro": {
+      "pillar": "macro_sentiment",
+      "timestamp": "2026-03-24T11:25:25.545576-04:00",
+      "vix": {
+        "value": 26.15,
+        "previous": 26.78,
+        "change": -0.63,
+        "change_pct": -2.35,
+        "signal": "bearish"
+      },
+      "vxn": {
+        "value": 27.98,
+        "previous": 29.2,
+        "change": -1.22,
+        "change_pct": -4.18,
+        "signal": "bearish"
+      },
+      "fear_greed": {
+        "score": 11,
+        "rating": "Extreme Fear",
+        "signal": "bearish",
+        "source": "Alternative.me"
+      },
+      "pillar_score": -1.0,
+      "status": "live"
+    },
+    "economic": {
+      "pillar": "economic_calendar",
+      "timestamp": "2026-03-24T11:23:28.782972-04:00",
+      "events": [
+        {
+          "title": "Flash Manufacturing PMI",
+          "time_est": "Tue Mar 24, 09:45 AM EST",
+          "forecast": "51.5",
+          "previous": "51.2",
+          "actual": "\u2713 52.4 saved",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Flash Manufacturing PMI \u2014 cannot parse values",
+          "story_url": "https://www.pmi.spglobal.com/Public/Home/PressRelease/adc91b5cf42442cbb220d5b66b64ec7d",
+          "story_context": null
+        },
+        {
+          "title": "Flash Services PMI",
+          "time_est": "Tue Mar 24, 09:45 AM EST",
+          "forecast": "52.0",
+          "previous": "52.3",
+          "actual": "51.1",
+          "impact": "High",
+          "result": "miss",
+          "market_impact": "bearish",
+          "reason": "Flash Services PMI missed forecast (51.1 vs 52.0)",
+          "story_url": "https://www.pmi.spglobal.com/Public/Home/PressRelease/adc91b5cf42442cbb220d5b66b64ec7d",
+          "story_context": null
+        },
+        {
+          "title": "Richmond Manufacturing Index",
+          "time_est": "Tue Mar 24, 10:00 AM EST",
+          "forecast": "-8",
+          "previous": "-10",
+          "actual": "0",
+          "impact": "Medium",
+          "result": "beat",
+          "market_impact": "bullish",
+          "reason": "Richmond Manufacturing Index beat forecast (0 vs -8)",
+          "story_url": "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/manufacturing/2026/pdf/mfg_03_24_26.pdf",
+          "story_context": null
+        },
+        {
+          "title": "Unemployment Claims",
+          "time_est": "Thu Mar 26, 08:30 AM EST",
+          "forecast": "211K",
+          "previous": "205K",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Unemployment Claims not yet released"
+        },
+        {
+          "title": "Revised UoM Consumer Sentiment",
+          "time_est": "Fri Mar 27, 10:00 AM EST",
+          "forecast": "53.9",
+          "previous": "55.5",
+          "actual": "Pending",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Revised UoM Consumer Sentiment not yet released"
+        }
+      ],
+      "pillar_score": -0.45,
+      "warnings": [],
+      "status": "stale"
+    },
+    "institutional": {
+      "pillar": "institutional",
+      "timestamp": "2026-03-24T11:12:06.623992-04:00",
+      "nq_futures": {
+        "asset_mgr_long": 97885,
+        "asset_mgr_short": 36494,
+        "asset_mgr_net": 61391,
+        "leveraged_long": 44996,
+        "leveraged_short": 86037,
+        "leveraged_net": -41041,
+        "combined_net": 20350,
+        "net_pct": 7.67,
+        "direction": "bullish",
+        "score": 0.5
+      },
+      "es_futures": {
+        "asset_mgr_long": 1089306,
+        "asset_mgr_short": 199864,
+        "asset_mgr_net": 889442,
+        "leveraged_long": 145042,
+        "leveraged_short": 492619,
+        "leveraged_net": -347577,
+        "combined_net": 541865,
+        "net_pct": 28.12,
+        "direction": "bullish",
+        "score": 1.0
+      },
+      "pillar_score": 0.75,
+      "update_frequency": "Weekly (Fridays)",
+      "next_update": "Next Friday",
+      "status": "live"
+    },
+    "geopolitical": {
+      "pillar": "geopolitical",
+      "timestamp": "2026-03-24T11:12:08.556233-04:00",
+      "news_items": [
+        {
+          "headline": "U.S.-Iran talks, ICE in airports, gemstone investing and more in Morning Squawk",
+          "description": "Here are five key things investors need to know to start the trading day.",
+          "source": "CNBC",
+          "timestamp": "Mar 23, 08:33 AM EST",
+          "date": "2026-03-23",
+          "link": "https://www.cnbc.com/2026/03/23/5-things-to-know-before-the-market-opens.html",
+          "sentiment_score": 0.944,
+          "market_relevant": true
+        },
+        {
+          "headline": "The uneven cost of tariffs: Why some households will pay more than others",
+          "description": "Households experience the financial cost of tariffs differently based on factors such as household size and consumption, economists said.",
+          "source": "CNBC",
+          "timestamp": "Mar 23, 08:15 AM EST",
+          "date": "2026-03-23",
+          "link": "https://www.cnbc.com/2026/03/23/household-tariff-costs.html",
+          "sentiment_score": -0.992,
+          "market_relevant": true
+        },
+        {
+          "headline": "'This is insane.' Long lines plague U.S. airports as TSA officers face second missed paycheck in shutdown",
+          "description": "The Trump administration said it plans to send ICE officers to help ease airport congestion amid TSA officer absences as they face second missed full paycheck.",
+          "source": "CNBC",
+          "timestamp": "Mar 23, 07:41 AM EST",
+          "date": "2026-03-23",
+          "link": "https://www.cnbc.com/2026/03/23/airport-lines-government-shutdown-tsa.html",
+          "sentiment_score": -0.999,
+          "market_relevant": true
+        },
+        {
+          "headline": "Bank of Korea's newly appointed chief pledges 'balanced' policy",
+          "description": "Shin faces immediate challenges from Middle East-driven inflation and uneven growth.",
+          "source": "CNBC",
+          "timestamp": "Mar 22, 10:04 PM EST",
+          "date": "2026-03-22",
+          "link": "https://www.cnbc.com/2026/03/23/bank-of-koreas-newly-appointed-chief-pledges-balanced-policy.html",
+          "sentiment_score": -0.987,
+          "market_relevant": true
+        },
+        {
+          "headline": "Trump threatens to deploy ICE agents to airports if DHS shutdown doesn't end, while Elon Musk offers to cover TSA agents' pay",
+          "description": "President Trump claimed ICE agents handling airport security would arrest immigrants who are in the U.S. illegally.",
+          "source": "CNBC",
+          "timestamp": "Mar 21, 02:31 PM EST",
+          "date": "2026-03-21",
+          "link": "https://www.cnbc.com/2026/03/21/trump-ice-tsa-dhs.html",
+          "sentiment_score": -0.993,
+          "market_relevant": true
+        },
+        {
+          "headline": "U.S. executives, from Apple to Eli Lilly, revamp their push into the world's second-largest economy at the China Development Forum",
+          "description": "More than 80 global executives traveled to Beijing this weekend for the state-organized China Development Forum.",
+          "source": "CNBC",
+          "timestamp": "Mar 23, 10:05 AM EST",
+          "date": "2026-03-23",
+          "link": "https://www.cnbc.com/2026/03/23/apple-eli-lilly-us-china-market-push-trade-truce.html",
+          "sentiment_score": 0.995,
+          "market_relevant": true
+        },
+        {
+          "headline": "CNBC Daily Open: Trump issues Strait of Hormuz ultimatum",
+          "description": "U.S.-Iran threats over Hormuz rattle markets as oil risk lingers and missiles hit Israel, raising fears of a prolonged conflict.",
+          "source": "CNBC",
+          "timestamp": "Mar 22, 09:17 PM EST",
+          "date": "2026-03-22",
+          "link": "https://www.cnbc.com/2026/03/23/cnbc-daily-open-us-iran-hormuz-threats-oil-markets-trump.html",
+          "sentiment_score": 0.915,
+          "market_relevant": true
+        },
+        {
+          "headline": "Not just buying 'things': Why China's emotional economy is on the rise",
+          "description": "Amid a prolonged economic slowdown, one segment of the world's second-largest economy is growing quicker than the rest: China's so-called emotional economy.",
+          "source": "CNBC",
+          "timestamp": "Mar 22, 06:58 PM EST",
+          "date": "2026-03-22",
+          "link": "https://www.cnbc.com/2026/03/23/chinas-emotional-economy-is-on-the-rise.html",
+          "sentiment_score": -0.515,
+          "market_relevant": true
+        },
+        {
+          "headline": "Iran war energy crisis is a renewable energy wake-up call",
+          "description": "The Iran war is exposing how much the global economy still depends on fragile fossil fuel supplies. The conflict has virtually choked off the Strait of Hormuz, a vital shipping lane for a fifth of the world\u2019s oil and liquefied natural gas. That's shaking up m\u2026",
+          "source": "Associated Press",
+          "timestamp": "Mar 22, 06:01 PM EST",
+          "date": "2026-03-22",
+          "link": "https://apnews.com/article/middle-east-wars-renewable-energy-asia-4b5fe0693ce5816472c905db85f7da6e",
+          "sentiment_score": -0.981,
+          "market_relevant": true
+        },
+        {
+          "headline": "The economy has a Strait of Hormuz deadline for Trump: Two weeks",
+          "description": "Corporate executives are not panicking over a short-term increase in oil prices and Strait of Hormuz closure, but patience may wear thin in a matter of weeks.",
+          "source": "CNBC",
+          "timestamp": "Mar 22, 11:48 AM EST",
+          "date": "2026-03-22",
+          "link": "https://www.cnbc.com/2026/03/22/iran-war-strait-of-hormuz-trump-oil-prices-economy.html",
+          "sentiment_score": -0.994,
+          "market_relevant": true
+        }
+      ],
+      "active_flags": [
+        {
+          "title": "Iran war energy crisis is a renewable energy wake-up call",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "Associated Press",
+          "date": "2026-03-22",
+          "timestamp": "Mar 22, 06:01 PM EST",
+          "link": "https://apnews.com/article/middle-east-wars-renewable-energy-asia-4b5fe0693ce5816472c905db85f7da6e",
+          "sentiment": -0.981,
+          "predicted_impact": "bearish",
+          "context": "The Iran war is exposing how much the global economy still depends on fragile fossil fuel supplies. The conflict has virtually choked off the Strait of Hormuz, a vital shipping lane for a fifth of the"
+        },
+        {
+          "title": "BlackRock\u2019s Larry Fink warns against market timing, says missing best days can halve returns",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "CNBC",
+          "date": "2026-03-23",
+          "timestamp": "Mar 23, 10:06 AM EST",
+          "link": "https://www.cnbc.com/2026/03/23/blackrocks-larry-fink-warns-against-trying-to-time-the-market-.html",
+          "sentiment": 0.981,
+          "predicted_impact": "bullish",
+          "context": "BlackRock CEO Larry Fink said staying invested through periods of turmoil has historically delivered far stronger returns."
+        },
+        {
+          "title": "Watch Energy Secretary Wright discuss Iran war after Trump postpones power plant strikes",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "CNBC",
+          "date": "2026-03-23",
+          "timestamp": "Mar 23, 09:19 AM EST",
+          "link": "https://www.cnbc.com/2026/03/23/energy-secretary-chris-wright-iran-war-oil-price.html",
+          "sentiment": -0.552,
+          "predicted_impact": "bearish",
+          "context": "Wright's comments Monday come after Trump threatened to bomb Iran's power plants if the Islamic Republic's leaders do not fully open the Strait of Hormuz."
+        },
+        {
+          "title": "Sen. Warren questions DOD about Anthropic blacklist that 'appears to be retaliation'",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "CNBC",
+          "date": "2026-03-23",
+          "timestamp": "Mar 23, 08:10 AM EST",
+          "link": "https://www.cnbc.com/2026/03/23/sen-warren-dod-anthropic-blacklist-hegseth.html",
+          "sentiment": -0.991,
+          "predicted_impact": "bearish",
+          "context": "Warren sent letters to Pete Hegseth and Sam Altman, asking for additional details of OpenAI's contract with the defense department and Anthropic's blacklisting."
+        },
+        {
+          "title": "Government bonds face \u2018perfect storm\u2019 as Iran war rattles Europe's central banks",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "CNBC",
+          "date": "2026-03-19",
+          "timestamp": "Mar 19, 12:07 PM EST",
+          "link": "https://www.cnbc.com/2026/03/19/interest-rates-bonds-bank-of-england-european-central-bank-investors-iran-war-ecb-inflation.html",
+          "sentiment": -0.934,
+          "predicted_impact": "bearish",
+          "context": "Bond yields have surged as Europe's central banks grapple with new inflation fears."
+        }
+      ],
+      "total_items": 20,
+      "pillar_score": -1.0,
+      "status": "live"
+    },
+    "news": {
+      "pillar": "news_sentiment",
+      "timestamp": "2026-03-24T11:25:25.645297-04:00",
+      "analysis": {
+        "average_score": -0.361,
+        "overall_sentiment": "bearish",
+        "bullish_pct": 30.0,
+        "bearish_pct": 70.0,
+        "neutral_pct": 0.0,
+        "total_headlines": 10,
+        "dominant_theme": "Iran war energy crisis is a renewable energy wake-up call",
+        "pillar_score": -0.72
+      },
+      "pillar_score": -0.72,
+      "status": "live"
+    }
+  },
+  "weekly_summary": {
+    "pillar": "weekly_summary",
+    "timestamp": "2026-03-24T11:12:08.557640-04:00",
+    "summary": {
+      "generated_at": "2026-03-24T11:12:08.557605-04:00",
+      "overall": "Overall regime entering this week: Bearish with 64% confidence (Moderate Confidence). Lean short on rallies, avoid aggressive longs until conditions improve.",
+      "economic": "This week has 5 key USD events including Flash Manufacturing PMI, Flash Services PMI, Richmond Manufacturing Index.",
+      "institutional": "Big money is net bullish on NQ (7.67%) and bullish on ES (28.12%).",
+      "macro": "VIX at 26.15 with Fear & Greed at 11 (Extreme Fear).",
+      "geopolitical": "Active geopolitical risks: Iran war energy crisis is a renewable energy wake-up call | BlackRock\u2019s Larry Fink warns against market timing, says mis.",
+      "week_of": "March 24, 2026"
+    },
+    "status": "live"
+  }
+}

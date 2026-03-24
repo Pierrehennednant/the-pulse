@@ -76,6 +76,23 @@ class EconomicCalendarPipeline:
         
         return round(score / max(count, 1), 2)
     
+    def apply_manual_inputs(self, events):
+        from pipelines.manual_input import manual_input_pipeline
+        manual_inputs = manual_input_pipeline.get_inputs()
+        for event in events:
+            if event['title'] in manual_inputs:
+                manual = manual_inputs[event['title']]
+                event['actual'] = manual['actual']
+                event['story_url'] = manual.get('story_url')
+                event['story_context'] = manual.get('story_context')
+                result, market_impact, reason = self.get_market_implication(
+                    event['title'], manual['actual'], event['forecast'], event['previous']
+                )
+                event['result'] = result
+                event['market_impact'] = market_impact
+                event['reason'] = reason
+        return events
+
     def fetch(self):
         try:
             response = requests.get(self.url, headers=self.headers, timeout=15)
@@ -84,6 +101,7 @@ class EconomicCalendarPipeline:
                 pulse_logger.log("⚠️ Forex Factory rate limited — using cached data", level="WARNING")
                 cached = cache.load(self.cache_key)
                 if cached:
+                    cached['data']['events'] = self.apply_manual_inputs(cached['data'].get('events', []))
                     cached['data']['status'] = 'stale'
                     return cached['data']
                 return {
@@ -121,22 +139,7 @@ class EconomicCalendarPipeline:
                     'reason': reason
                 })
 
-            # Merge manual inputs
-            from pipelines.manual_input import manual_input_pipeline
-            manual_inputs = manual_input_pipeline.get_inputs()
-            for event in events:
-                if event['title'] in manual_inputs:
-                    manual = manual_inputs[event['title']]
-                    event['actual'] = manual['actual']
-                    event['story_url'] = manual.get('story_url')
-                    event['story_context'] = manual.get('story_context')
-                    result, market_impact, reason = self.get_market_implication(
-                        event['title'], manual['actual'], event['forecast'], event['previous']
-                    )
-                    event['result'] = result
-                    event['market_impact'] = market_impact
-                    event['reason'] = reason
-
+            events = self.apply_manual_inputs(events)
             score = self.calculate_score(events)
             warnings = []
 
@@ -156,6 +159,7 @@ class EconomicCalendarPipeline:
             error_handler.handle(e, "Economic Calendar")
             cached = cache.load(self.cache_key)
             if cached:
+                cached['data']['events'] = self.apply_manual_inputs(cached['data'].get('events', []))
                 cached['data']['status'] = 'stale'
                 return cached['data']
             return {
