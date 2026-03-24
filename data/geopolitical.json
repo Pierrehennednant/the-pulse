@@ -1,7 +1,7 @@
 {
   "data": {
     "pillar": "geopolitical",
-    "timestamp": "2026-03-24T19:51:59.510279-04:00",
+    "timestamp": "2026-03-24T19:55:25.850288-04:00",
     "news_items": [
       {
         "headline": "Trump says U.S. and Iran are 'in negotiations right now,' Tehran is 'talking sense'",
@@ -74,6 +74,16 @@
         "market_relevant": true
       },
       {
+        "headline": "Senate rejects latest push to rein in Trump's powers in Iran as war's off-ramp unclear",
+        "description": "Democrats have vowed to keep forcing votes on the issue as they seek public testimony from administration officials.",
+        "source": "cbsnews.com",
+        "timestamp": "Mar 24, 07:43 PM EST",
+        "date": "2026-03-24",
+        "link": "https://www.cbsnews.com/news/senate-iran-war-powers-resolution-vote-trump/",
+        "sentiment_score": -0.977,
+        "market_relevant": true
+      },
+      {
         "headline": "Trump says Iran gave U.S. \"a very big present\" related to oil and gas",
         "description": "Even as Iran launched missiles towards Israel and other Gulf nations, President Trump claimed the regime is so near defeat that it has no choice but to negotiat...",
         "source": "cbsnews.com",
@@ -91,16 +101,6 @@
         "date": "2026-03-24",
         "link": "https://www.cbsnews.com/video/us-expected-deploy-troops-82nd-airborne-division-middle-east/",
         "sentiment_score": -0.99,
-        "market_relevant": true
-      },
-      {
-        "headline": "Is the Senate heading toward a compromise on DHS funding?",
-        "description": "Senate leaders and the White House are working on a deal to end the partial government shutdown as travelers face chaos at airports. Political strategists Hyma ...",
-        "source": "cbsnews.com",
-        "timestamp": "Mar 24, 06:36 PM EST",
-        "date": "2026-03-24",
-        "link": "https://www.cbsnews.com/video/is-senate-heading-toward-compromise-dhs-funding/",
-        "sentiment_score": -0.997,
         "market_relevant": true
       }
     ],
@@ -176,6 +176,16 @@
         "market_relevant": true
       },
       {
+        "headline": "Senate rejects latest push to rein in Trump's powers in Iran as war's off-ramp unclear",
+        "description": "Democrats have vowed to keep forcing votes on the issue as they seek public testimony from administration officials.",
+        "source": "cbsnews.com",
+        "timestamp": "Mar 24, 07:43 PM EST",
+        "date": "2026-03-24",
+        "link": "https://www.cbsnews.com/news/senate-iran-war-powers-resolution-vote-trump/",
+        "sentiment_score": -0.977,
+        "market_relevant": true
+      },
+      {
         "headline": "Trump says Iran gave U.S. \"a very big present\" related to oil and gas",
         "description": "Even as Iran launched missiles towards Israel and other Gulf nations, President Trump claimed the regime is so near defeat that it has no choice but to negotiat...",
         "source": "cbsnews.com",
@@ -193,16 +203,6 @@
         "date": "2026-03-24",
         "link": "https://www.cbsnews.com/video/us-expected-deploy-troops-82nd-airborne-division-middle-east/",
         "sentiment_score": -0.99,
-        "market_relevant": true
-      },
-      {
-        "headline": "Is the Senate heading toward a compromise on DHS funding?",
-        "description": "Senate leaders and the White House are working on a deal to end the partial government shutdown as travelers face chaos at airports. Political strategists Hyma ...",
-        "source": "cbsnews.com",
-        "timestamp": "Mar 24, 06:36 PM EST",
-        "date": "2026-03-24",
-        "link": "https://www.cbsnews.com/video/is-senate-heading-toward-compromise-dhs-funding/",
-        "sentiment_score": -0.997,
         "market_relevant": true
       }
     ],
@@ -248,35 +248,35 @@
         "context": "With airfares and gas prices spiking, some lawmakers are warning of the potential for price gouging, even as experts point to extreme supply shocks."
       },
       {
-        "title": "President Trump on nuclear testing, the government shutdown, immigration, tariffs and U.S.-China relations",
-        "priority": 95,
-        "flag_type": "nuclear",
-        "status": "Developing",
-        "source": "cbsnews.com",
-        "date": "2025-11-02",
-        "timestamp": "Nov 02, 07:34 PM EST",
-        "link": "https://www.cbsnews.com/news/trump-on-nuclear-testing-government-shutdown-immigration-tariffs-china-60-minutes-transcript/",
-        "sentiment": -0.932,
-        "predicted_impact": "bearish",
-        "context": "Watch as President Trump discusses testing nuclear weapons, U.S.-China relations, Israel, the government shutdown, immigration, tariffs, and whether he'll try t..."
-      },
-      {
-        "title": "Fewer burritos, more bargains: Consumers flash holiday warning signs",
-        "priority": 95,
+        "title": "Senate rejects latest push to rein in Trump's powers in Iran as war's off-ramp unclear",
+        "priority": 90,
         "flag_type": "war",
         "status": "Developing",
-        "source": "cnbc.com",
-        "date": "2025-11-14",
-        "timestamp": "Nov 14, 07:00 AM EST",
-        "link": "https://www.cnbc.com/2025/11/14/fewer-burritos-more-bargains-consumers-flash-holiday-warning-signs.html",
-        "sentiment": -0.988,
+        "source": "cbsnews.com",
+        "date": "2026-03-24",
+        "timestamp": "Mar 24, 07:43 PM EST",
+        "link": "https://www.cbsnews.com/news/senate-iran-war-powers-resolution-vote-trump/",
+        "sentiment": -0.977,
         "predicted_impact": "bearish",
-        "context": "In the coming week, some of the biggest names in retail, including Walmart, Target, Gap and Home Depot will report their latest earnings."
+        "context": "Democrats have vowed to keep forcing votes on the issue as they seek public testimony from administration officials."
+      },
+      {
+        "title": "Is the Senate heading toward a compromise on DHS funding?",
+        "priority": 90,
+        "flag_type": "war",
+        "status": "Developing",
+        "source": "cbsnews.com",
+        "date": "2026-03-24",
+        "timestamp": "Mar 24, 06:36 PM EST",
+        "link": "https://www.cbsnews.com/video/is-senate-heading-toward-compromise-dhs-funding/",
+        "sentiment": -0.997,
+        "predicted_impact": "bearish",
+        "context": "Senate leaders and the White House are working on a deal to end the partial government shutdown as travelers face chaos at airports. Political strategists Hyma ..."
       }
     ],
-    "total_items": 79,
-    "pillar_score": -1.0,
+    "total_items": 24,
+    "pillar_score": -0.82,
     "status": "live"
   },
-  "timestamp": "2026-03-24T23:51:59.510313"
+  "timestamp": "2026-03-24T23:55:25.850318"
 }

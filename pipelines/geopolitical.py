@@ -34,7 +34,10 @@ class GeopoliticalPipeline:
             'tax resistance', 'irs penalties', 'ice protests',
             'constitutional', 'historical background', 'legal analysis',
             'fashion', 'travel', 'food', 'recipe', 'weather',
-            'bitcoin drops', 'crypto crash', 'nft', 'dogecoin', 'altcoin'
+            'bitcoin drops', 'crypto crash', 'nft', 'dogecoin', 'altcoin',
+            'burritos', 'retail earnings', 'walmart', 'target earnings',
+            'gap earnings', 'home depot earnings', 'consumer spending tips',
+            'holiday shopping', 'flash holiday'
         ]
 
     def is_market_relevant(self, text):
@@ -103,6 +106,14 @@ class GeopoliticalPipeline:
                         timestamp = published
                         date = datetime.now(self.timezone).strftime('%Y-%m-%d')
 
+                    try:
+                        dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
+                        age_days = (datetime.now(pytz.UTC) - dt.replace(tzinfo=pytz.UTC) if dt.tzinfo is None else datetime.now(pytz.UTC) - dt).days
+                        if age_days > 7:
+                            continue
+                    except:
+                        pass
+
                     items.append({
                         'headline': title,
                         'description': ' '.join(description[:300].split()),
@@ -147,6 +158,14 @@ class GeopoliticalPipeline:
                     except:
                         timestamp = published
                         date = datetime.now(self.timezone).strftime('%Y-%m-%d')
+
+                    try:
+                        dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
+                        age_days = (datetime.now(pytz.UTC) - dt.replace(tzinfo=pytz.UTC) if dt.tzinfo is None else datetime.now(pytz.UTC) - dt).days
+                        if age_days > 7:
+                            continue
+                    except:
+                        pass
 
                     items.append({
                         'headline': title,
