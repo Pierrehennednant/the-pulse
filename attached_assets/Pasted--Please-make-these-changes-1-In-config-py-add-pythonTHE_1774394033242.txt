@@ -1,4 +1,9 @@
-import requests
+"Please make these changes:
+1. In config.py add:
+pythonTHENEWS_API_KEY = "m7Cao53wbd59FtTP3BCrUE2fo4NYynpfCqiOR8Dg"
+GEO_REFRESH_INTERVAL_MINUTES = 3
+2. Replace the entire contents of pipelines/geopolitical.py with this:
+pythonimport requests
 from datetime import datetime
 import pytz
 from transformers import pipeline as hf_pipeline
@@ -13,13 +18,16 @@ class GeopoliticalPipeline:
         self.cache_key = "geopolitical"
         self.sentiment_analyzer = hf_pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
         self.market_keywords = [
+            # Tier 1 — Direct market movers
             'federal reserve', 'fomc', 'interest rate', 'rate hike', 'rate cut',
             'powell', 'inflation', 'cpi', 'ppi', 'gdp', 'jobs report', 'nonfarm',
             'tariff', 'trade war', 'sanctions', 'debt ceiling', 'government shutdown',
             'treasury', 'federal budget', 'deficit',
+            # Tier 2 — Geopolitical market movers
             'war', 'military', 'nuclear', 'attack', 'missile', 'troops', 'invasion',
             'ceasefire', 'peace deal', 'escalation', 'strait of hormuz',
             'iran', 'russia', 'china', 'nato', 'israel', 'ukraine',
+            # Tier 3 — Economic indicators
             'recession', 'unemployment', 'oil price', 'energy crisis',
             'supply chain', 'bank failure', 'default', 'currency crisis',
             'stock market', 'market crash', 'bear market', 'bull market'
@@ -70,6 +78,7 @@ class GeopoliticalPipeline:
             items = []
             seen_titles = set()
 
+            # Category based fetch
             for category in categories:
                 url = (
                     f"https://api.thenewsapi.com/v1/news/top"
@@ -113,6 +122,7 @@ class GeopoliticalPipeline:
                         'market_relevant': True
                     })
 
+            # Search based fetch for specific market topics
             for query in search_queries:
                 url = (
                     f"https://api.thenewsapi.com/v1/news/all"
@@ -264,3 +274,8 @@ class GeopoliticalPipeline:
             return None
 
 geopolitical_pipeline = GeopoliticalPipeline()
+3. In ui/templates/dashboard.html find this line:
+javascriptWeight: 28% | Reuters · AP · CNBC · MarketWatch via NewsAPI
+Replace with:
+javascriptWeight: 28% | Real-time via TheNewsAPI · Updates every 3min
+Then delete all cache and snapshots, restart the app and show me the log output.

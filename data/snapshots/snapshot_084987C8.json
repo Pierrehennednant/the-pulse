@@ -1,0 +1,537 @@
+{
+  "id": "084987C8",
+  "timestamp": "2026-03-24T19:16:10.196512-04:00",
+  "bias": {
+    "final_score": -0.588,
+    "bias": "Bearish",
+    "bias_emoji": "\ud83d\udd34",
+    "confidence": 47,
+    "confidence_label": "Moderate Confidence",
+    "confidence_color": "yellow",
+    "threshold_warning": null,
+    "active_pillars": 5,
+    "pillar_signals": [
+      "bearish",
+      "neutral",
+      "bullish",
+      "bearish",
+      "bearish"
+    ],
+    "pillar_contributions": {
+      "economic_calendar": {
+        "raw_score": -1.5,
+        "weight": 40,
+        "contribution": -0.6,
+        "status": "live"
+      },
+      "geopolitical": {
+        "raw_score": -0.11,
+        "weight": 28,
+        "contribution": -0.031,
+        "status": "live"
+      },
+      "institutional": {
+        "raw_score": 0.75,
+        "weight": 20,
+        "contribution": 0.15,
+        "status": "live"
+      },
+      "macro_sentiment": {
+        "raw_score": -1.0,
+        "weight": 10,
+        "contribution": -0.1,
+        "status": "live"
+      },
+      "news_sentiment": {
+        "raw_score": -0.37,
+        "weight": 2,
+        "contribution": -0.007,
+        "status": "live"
+      }
+    },
+    "gauge_value": 35
+  },
+  "pillars": {
+    "macro": {
+      "pillar": "macro_sentiment",
+      "timestamp": "2026-03-24T19:15:58.181240-04:00",
+      "vix": {
+        "value": 26.15,
+        "previous": 26.78,
+        "change": -0.63,
+        "change_pct": -2.35,
+        "signal": "bearish"
+      },
+      "vxn": {
+        "value": 27.98,
+        "previous": 29.2,
+        "change": -1.22,
+        "change_pct": -4.18,
+        "signal": "bearish"
+      },
+      "fear_greed": {
+        "score": 11,
+        "rating": "Extreme Fear",
+        "signal": "bearish",
+        "source": "Alternative.me"
+      },
+      "pillar_score": -1.0,
+      "status": "live"
+    },
+    "economic": {
+      "pillar": "economic_calendar",
+      "timestamp": "2026-03-24T19:15:58.269095-04:00",
+      "events": [
+        {
+          "title": "Flash Manufacturing PMI",
+          "time_est": "Tue Mar 24, 09:45 AM EST",
+          "forecast": "51.5",
+          "previous": "51.2",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Flash Manufacturing PMI not yet released"
+        },
+        {
+          "title": "Flash Services PMI",
+          "time_est": "Tue Mar 24, 09:45 AM EST",
+          "forecast": "52.0",
+          "previous": "52.3",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Flash Services PMI not yet released"
+        },
+        {
+          "title": "Richmond Manufacturing Index",
+          "time_est": "Tue Mar 24, 10:00 AM EST",
+          "forecast": "-8",
+          "previous": "-10",
+          "actual": "Pending",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Richmond Manufacturing Index not yet released"
+        },
+        {
+          "title": "Unemployment Claims",
+          "time_est": "Thu Mar 26, 08:30 AM EST",
+          "forecast": "211K",
+          "previous": "205K",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Unemployment Claims not yet released"
+        },
+        {
+          "title": "Revised UoM Consumer Sentiment",
+          "time_est": "Fri Mar 27, 10:00 AM EST",
+          "forecast": "53.9",
+          "previous": "55.5",
+          "actual": "Pending",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Revised UoM Consumer Sentiment not yet released"
+        }
+      ],
+      "pillar_score": -1.5,
+      "warnings": [],
+      "status": "live"
+    },
+    "institutional": {
+      "pillar": "institutional",
+      "timestamp": "2026-03-24T19:15:58.699096-04:00",
+      "nq_futures": {
+        "asset_mgr_long": 97885,
+        "asset_mgr_short": 36494,
+        "asset_mgr_net": 61391,
+        "leveraged_long": 44996,
+        "leveraged_short": 86037,
+        "leveraged_net": -41041,
+        "combined_net": 20350,
+        "net_pct": 7.67,
+        "direction": "bullish",
+        "score": 0.5
+      },
+      "es_futures": {
+        "asset_mgr_long": 1089306,
+        "asset_mgr_short": 199864,
+        "asset_mgr_net": 889442,
+        "leveraged_long": 145042,
+        "leveraged_short": 492619,
+        "leveraged_net": -347577,
+        "combined_net": 541865,
+        "net_pct": 28.12,
+        "direction": "bullish",
+        "score": 1.0
+      },
+      "pillar_score": 0.75,
+      "update_frequency": "Weekly (Fridays)",
+      "next_update": "Next Friday",
+      "status": "live"
+    },
+    "geopolitical": {
+      "pillar": "geopolitical",
+      "timestamp": "2026-03-24T19:16:10.195132-04:00",
+      "news_items": [
+        {
+          "headline": "EU shelves Russian oil ban as Iran war rattles energy markets \u2014 RT Business News",
+          "description": "The EU has reportedly postponed a proposal to ban Russian oil imports, removing the draft from the agenda as the Iran war fuels energy price turmoil",
+          "source": "rt.com",
+          "timestamp": "Mar 24, 04:36 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.rt.com/business/636061-eu-russian-oil-ban-proposal/",
+          "sentiment_score": -0.998,
+          "market_relevant": true
+        },
+        {
+          "headline": "Trump says U.S. and Iran are 'in negotiations right now,' Tehran is 'talking sense'",
+          "description": "",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 03:56 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/24/trump-iran-war-negotiations.html",
+          "sentiment_score": 0.885,
+          "market_relevant": true
+        },
+        {
+          "headline": "Is East Asia entering a missile age? Japan, South Korea, and Taiwan rearm \u2014 RT World News",
+          "description": "Facing pressure from China and North Korea, Japan, South Korea, and Taiwan are building distinct missile strategies in a rapidly shifting security landscape",
+          "source": "rt.com",
+          "timestamp": "Mar 24, 07:07 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.rt.com/news/636070-east-asia-entering-missile-age/",
+          "sentiment_score": 0.849,
+          "market_relevant": true
+        },
+        {
+          "headline": "How far can Iran\u2019s ballistic missiles reach? A defense expert explains how the missiles work, and what Iran can and can\u2019t hit",
+          "description": "News that Iran had fired ballistic missiles at a US military base in the Indian Ocean was startling, but how much of a threat does the development represent?",
+          "source": "theconversation.com",
+          "timestamp": "Mar 24, 06:39 PM EST",
+          "date": "2026-03-24",
+          "link": "https://theconversation.com/how-far-can-irans-ballistic-missiles-reach-a-defense-expert-explains-how-the-missiles-work-and-what-iran-can-and-cant-hit-279072",
+          "sentiment_score": -0.984,
+          "market_relevant": true
+        },
+        {
+          "headline": "U.S. expected to deploy troops from 82nd Airborne Division to Middle East",
+          "description": "President Trump claimed Tuesday that the U.S. is already in direct negotiations with Iran and that the country has agreed never to have a nuclear weapon. Meanwh...",
+          "source": "cbsnews.com",
+          "timestamp": "Mar 24, 06:38 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cbsnews.com/video/us-expected-deploy-troops-82nd-airborne-division-middle-east/",
+          "sentiment_score": -0.99,
+          "market_relevant": true
+        },
+        {
+          "headline": "Is the Senate heading toward a compromise on DHS funding?",
+          "description": "Senate leaders and the White House are working on a deal to end the partial government shutdown as travelers face chaos at airports. Political strategists Hyma ...",
+          "source": "cbsnews.com",
+          "timestamp": "Mar 24, 06:36 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cbsnews.com/video/is-senate-heading-toward-compromise-dhs-funding/",
+          "sentiment_score": -0.997,
+          "market_relevant": true
+        },
+        {
+          "headline": "Battle for Hungary: how the Russiagate blueprint has been unleashed against Orban \u2014 RT World News",
+          "description": "The wiretapping of Peter Szijjarto has revealed a web of collusion between the EU and Hungarian opposition ahead of a crucial election for Viktor Orban",
+          "source": "rt.com",
+          "timestamp": "Mar 24, 06:30 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.rt.com/news/636072-szijjarto-wiretapping-hungary-election/",
+          "sentiment_score": -0.582,
+          "market_relevant": true
+        },
+        {
+          "headline": "Trump says Iran gave U.S. \"a very big present worth a tremendous amount of money\"",
+          "description": "President Trump on Tuesday told CBS News senior White House and political correspondent Ed O'Keefe that Iran",
+          "source": "cbsnews.com",
+          "timestamp": "Mar 24, 06:07 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cbsnews.com/video/trump-iran-present-worth-tremendous-amount-money/",
+          "sentiment_score": 0.996,
+          "market_relevant": true
+        },
+        {
+          "headline": "Rep. Nick LaLota on DHS stalemate: \"Funding the whole darn thing is the right way to move forward\"",
+          "description": "House Speaker Mike Johnson told CBS News that he prefers not to split off ICE from Homeland Security funding as the partial government shutdown continues. Repub...",
+          "source": "cbsnews.com",
+          "timestamp": "Mar 24, 06:03 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cbsnews.com/video/nick-lalota-dhs-stalemate-funding-whole-darn-thing-right-way-move-forward/",
+          "sentiment_score": 0.982,
+          "market_relevant": true
+        },
+        {
+          "headline": "NASA's Ignition Program: Skipping the Lunar Orbiter and Going Straight for a Moon Base",
+          "description": "The new initiative includes a base on the moon, a nuclear-powered flight to Mars and a replacement for the ISS.",
+          "source": "cnet.com",
+          "timestamp": "Mar 24, 05:52 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnet.com/science/space/nasas-ignition-program-skips-lunar-orbiter-goes-straight-for-moon-base/",
+          "sentiment_score": -0.999,
+          "market_relevant": true
+        }
+      ],
+      "financial_juice_items": [
+        {
+          "headline": "EU shelves Russian oil ban as Iran war rattles energy markets \u2014 RT Business News",
+          "description": "The EU has reportedly postponed a proposal to ban Russian oil imports, removing the draft from the agenda as the Iran war fuels energy price turmoil",
+          "source": "rt.com",
+          "timestamp": "Mar 24, 04:36 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.rt.com/business/636061-eu-russian-oil-ban-proposal/",
+          "sentiment_score": -0.998,
+          "market_relevant": true
+        },
+        {
+          "headline": "Trump says U.S. and Iran are 'in negotiations right now,' Tehran is 'talking sense'",
+          "description": "",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 03:56 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/24/trump-iran-war-negotiations.html",
+          "sentiment_score": 0.885,
+          "market_relevant": true
+        },
+        {
+          "headline": "Is East Asia entering a missile age? Japan, South Korea, and Taiwan rearm \u2014 RT World News",
+          "description": "Facing pressure from China and North Korea, Japan, South Korea, and Taiwan are building distinct missile strategies in a rapidly shifting security landscape",
+          "source": "rt.com",
+          "timestamp": "Mar 24, 07:07 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.rt.com/news/636070-east-asia-entering-missile-age/",
+          "sentiment_score": 0.849,
+          "market_relevant": true
+        },
+        {
+          "headline": "How far can Iran\u2019s ballistic missiles reach? A defense expert explains how the missiles work, and what Iran can and can\u2019t hit",
+          "description": "News that Iran had fired ballistic missiles at a US military base in the Indian Ocean was startling, but how much of a threat does the development represent?",
+          "source": "theconversation.com",
+          "timestamp": "Mar 24, 06:39 PM EST",
+          "date": "2026-03-24",
+          "link": "https://theconversation.com/how-far-can-irans-ballistic-missiles-reach-a-defense-expert-explains-how-the-missiles-work-and-what-iran-can-and-cant-hit-279072",
+          "sentiment_score": -0.984,
+          "market_relevant": true
+        },
+        {
+          "headline": "U.S. expected to deploy troops from 82nd Airborne Division to Middle East",
+          "description": "President Trump claimed Tuesday that the U.S. is already in direct negotiations with Iran and that the country has agreed never to have a nuclear weapon. Meanwh...",
+          "source": "cbsnews.com",
+          "timestamp": "Mar 24, 06:38 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cbsnews.com/video/us-expected-deploy-troops-82nd-airborne-division-middle-east/",
+          "sentiment_score": -0.99,
+          "market_relevant": true
+        },
+        {
+          "headline": "Is the Senate heading toward a compromise on DHS funding?",
+          "description": "Senate leaders and the White House are working on a deal to end the partial government shutdown as travelers face chaos at airports. Political strategists Hyma ...",
+          "source": "cbsnews.com",
+          "timestamp": "Mar 24, 06:36 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cbsnews.com/video/is-senate-heading-toward-compromise-dhs-funding/",
+          "sentiment_score": -0.997,
+          "market_relevant": true
+        },
+        {
+          "headline": "Battle for Hungary: how the Russiagate blueprint has been unleashed against Orban \u2014 RT World News",
+          "description": "The wiretapping of Peter Szijjarto has revealed a web of collusion between the EU and Hungarian opposition ahead of a crucial election for Viktor Orban",
+          "source": "rt.com",
+          "timestamp": "Mar 24, 06:30 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.rt.com/news/636072-szijjarto-wiretapping-hungary-election/",
+          "sentiment_score": -0.582,
+          "market_relevant": true
+        },
+        {
+          "headline": "Trump says Iran gave U.S. \"a very big present worth a tremendous amount of money\"",
+          "description": "President Trump on Tuesday told CBS News senior White House and political correspondent Ed O'Keefe that Iran",
+          "source": "cbsnews.com",
+          "timestamp": "Mar 24, 06:07 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cbsnews.com/video/trump-iran-present-worth-tremendous-amount-money/",
+          "sentiment_score": 0.996,
+          "market_relevant": true
+        },
+        {
+          "headline": "Rep. Nick LaLota on DHS stalemate: \"Funding the whole darn thing is the right way to move forward\"",
+          "description": "House Speaker Mike Johnson told CBS News that he prefers not to split off ICE from Homeland Security funding as the partial government shutdown continues. Repub...",
+          "source": "cbsnews.com",
+          "timestamp": "Mar 24, 06:03 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cbsnews.com/video/nick-lalota-dhs-stalemate-funding-whole-darn-thing-right-way-move-forward/",
+          "sentiment_score": 0.982,
+          "market_relevant": true
+        },
+        {
+          "headline": "NASA's Ignition Program: Skipping the Lunar Orbiter and Going Straight for a Moon Base",
+          "description": "The new initiative includes a base on the moon, a nuclear-powered flight to Mars and a replacement for the ISS.",
+          "source": "cnet.com",
+          "timestamp": "Mar 24, 05:52 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnet.com/science/space/nasas-ignition-program-skips-lunar-orbiter-goes-straight-for-moon-base/",
+          "sentiment_score": -0.999,
+          "market_relevant": true
+        }
+      ],
+      "unbiased_network_items": [],
+      "active_flags": [
+        {
+          "title": "War, Tariffs, and Indycars: The Art of the March Market Meltdown",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "thestockmarketwatch.com",
+          "date": "2026-03-15",
+          "timestamp": "Mar 15, 02:00 PM EST",
+          "link": "https://stockmarketwatch.com/stock-market-news/war-tariffs-and-indycars-the-art-of-the-march-market-meltdown/59797/",
+          "sentiment": 0.652,
+          "predicted_impact": "bullish",
+          "context": "Welcome to March 15, 2026, a day where the global economy feels less like a structured financial system and more like a high-stakes round of \"Spin the Bottle\""
+        },
+        {
+          "title": "Winning Wars and Losing Friends: The Trump Market Volatility Special",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "thestockmarketwatch.com",
+          "date": "2026-03-13",
+          "timestamp": "Mar 13, 02:00 AM EST",
+          "link": "https://stockmarketwatch.com/stock-market-news/winning-wars-and-losing-friends-the-trump-market-volatility-special/59727/",
+          "sentiment": 0.84,
+          "predicted_impact": "bullish",
+          "context": "Welcome to March 2026, where the geopolitical landscape changes faster than a day-trader\u2019s conviction and the \"Art of the Deal\" has apparently been replaced"
+        },
+        {
+          "title": "EU shelves Russian oil ban as Iran war rattles energy markets \u2014 RT Business News",
+          "priority": 90,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "rt.com",
+          "date": "2026-03-24",
+          "timestamp": "Mar 24, 04:36 PM EST",
+          "link": "https://www.rt.com/business/636061-eu-russian-oil-ban-proposal/",
+          "sentiment": -0.998,
+          "predicted_impact": "bearish",
+          "context": "The EU has reportedly postponed a proposal to ban Russian oil imports, removing the draft from the agenda as the Iran war fuels energy price turmoil"
+        },
+        {
+          "title": "Is the Senate heading toward a compromise on DHS funding?",
+          "priority": 90,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "cbsnews.com",
+          "date": "2026-03-24",
+          "timestamp": "Mar 24, 06:36 PM EST",
+          "link": "https://www.cbsnews.com/video/is-senate-heading-toward-compromise-dhs-funding/",
+          "sentiment": -0.997,
+          "predicted_impact": "bearish",
+          "context": "Senate leaders and the White House are working on a deal to end the partial government shutdown as travelers face chaos at airports. Political strategists Hyma ..."
+        },
+        {
+          "title": "Rep. Nick LaLota on DHS stalemate: \"Funding the whole darn thing is the right way to move forward\"",
+          "priority": 90,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "cbsnews.com",
+          "date": "2026-03-24",
+          "timestamp": "Mar 24, 06:03 PM EST",
+          "link": "https://www.cbsnews.com/video/nick-lalota-dhs-stalemate-funding-whole-darn-thing-right-way-move-forward/",
+          "sentiment": 0.982,
+          "predicted_impact": "bullish",
+          "context": "House Speaker Mike Johnson told CBS News that he prefers not to split off ICE from Homeland Security funding as the partial government shutdown continues. Repub..."
+        }
+      ],
+      "total_items": 56,
+      "pillar_score": -0.11,
+      "status": "live"
+    },
+    "news": {
+      "pillar": "news_sentiment",
+      "timestamp": "2026-03-24T19:16:10.196041-04:00",
+      "analysis": {
+        "average_score": -0.184,
+        "overall_sentiment": "neutral",
+        "bullish_pct": 40.0,
+        "bearish_pct": 60.0,
+        "neutral_pct": 0.0,
+        "total_headlines": 20,
+        "dominant_theme": "War, Tariffs, and Indycars: The Art of the March Market Meltdown",
+        "pillar_score": -0.37
+      },
+      "pillar_score": -0.37,
+      "status": "live"
+    },
+    "bias": {
+      "final_score": -0.588,
+      "bias": "Bearish",
+      "bias_emoji": "\ud83d\udd34",
+      "confidence": 47,
+      "confidence_label": "Moderate Confidence",
+      "confidence_color": "yellow",
+      "threshold_warning": null,
+      "active_pillars": 5,
+      "pillar_signals": [
+        "bearish",
+        "neutral",
+        "bullish",
+        "bearish",
+        "bearish"
+      ],
+      "pillar_contributions": {
+        "economic_calendar": {
+          "raw_score": -1.5,
+          "weight": 40,
+          "contribution": -0.6,
+          "status": "live"
+        },
+        "geopolitical": {
+          "raw_score": -0.11,
+          "weight": 28,
+          "contribution": -0.031,
+          "status": "live"
+        },
+        "institutional": {
+          "raw_score": 0.75,
+          "weight": 20,
+          "contribution": 0.15,
+          "status": "live"
+        },
+        "macro_sentiment": {
+          "raw_score": -1.0,
+          "weight": 10,
+          "contribution": -0.1,
+          "status": "live"
+        },
+        "news_sentiment": {
+          "raw_score": -0.37,
+          "weight": 2,
+          "contribution": -0.007,
+          "status": "live"
+        }
+      },
+      "gauge_value": 35
+    }
+  },
+  "weekly_summary": {
+    "pillar": "weekly_summary",
+    "timestamp": "2026-03-24T19:16:10.196371-04:00",
+    "summary": {
+      "generated_at": "2026-03-24T19:16:10.196351-04:00",
+      "overall": "Overall regime entering this week: Bearish with 47% confidence (Moderate Confidence). Lean short on rallies, avoid aggressive longs until conditions improve.",
+      "economic": "This week has 5 key USD events including Flash Manufacturing PMI, Flash Services PMI, Richmond Manufacturing Index.",
+      "institutional": "Big money is net bullish on NQ (7.67%) and bullish on ES (28.12%).",
+      "macro": "VIX at 26.15 with Fear & Greed at 11 (Extreme Fear).",
+      "geopolitical": "Active geopolitical risks: War, Tariffs, and Indycars: The Art of the March Market Melt | Winning Wars and Losing Friends: The Trump Market Volatility.",
+      "week_of": "March 24, 2026"
+    },
+    "status": "live"
+  }
+}
