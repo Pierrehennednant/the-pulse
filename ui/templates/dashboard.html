@@ -423,20 +423,32 @@
             : 'News sentiment analyzing.';
 
         const watchItems = [];
-        if (pendingEvents.length > 0) {
-            watchItems.push(`📅 ${pendingEvents[0].title} on ${pendingEvents[0].time_est} — ${pendingEvents[0].reason}`);
-        }
+
         if (flags.length > 0) {
-            watchItems.push(`🌍 Monitor: ${flags[0].title.substring(0,80)} — resolution could flip geopolitical bias.`);
+            const topFlag = flags.reduce((a, b) => a.priority > b.priority ? a : b);
+            const flipDirection = topFlag.predicted_impact === 'bearish' ? 'bullish relief rally' : 'bearish selloff';
+            watchItems.push(`🌍 <strong>${topFlag.source}:</strong> ${topFlag.title.substring(0, 80)} — if resolved, expect ${flipDirection}.`);
         }
+
+        if (pendingEvents.length > 0) {
+            const nextEvent = pendingEvents[0];
+            watchItems.push(`📅 <strong>${nextEvent.title}</strong> on ${nextEvent.time_est} — ${nextEvent.reason}`);
+        }
+
         if (vix.value > 25) {
-            watchItems.push(`📊 VIX above 25 — elevated volatility expected. Size down until fear subsides.`);
+            watchItems.push(`📊 VIX at ${vix.value} — elevated volatility. Size down until fear subsides below 20.`);
+        } else if (vix.value > 20) {
+            watchItems.push(`📊 VIX at ${vix.value} — mild elevated fear. Stay cautious on position sizing.`);
+        }
+
+        if (bias.threshold_warning) {
+            watchItems.unshift(`${bias.threshold_warning}`);
         }
 
         const watchSection = watchItems.length > 0
             ? `<div style="margin-top:12px;padding-top:10px;border-top:1px solid #1e2d4a">
                 <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#4a9eff;margin-bottom:8px">What To Watch</div>
-                ${watchItems.map(w => `<div style="font-size:12px;color:#b0c4d8;margin-bottom:6px;line-height:1.4">• ${w}</div>`).join('')}
+                ${watchItems.map(w => `<div style="font-size:12px;color:#b0c4d8;margin-bottom:8px;line-height:1.5">• ${w}</div>`).join('')}
                </div>`
             : '';
 

@@ -1,0 +1,370 @@
+{
+  "id": "68C64F29",
+  "timestamp": "2026-03-23T21:57:19.304956-04:00",
+  "bias": {
+    "final_score": -0.978,
+    "bias": "Bearish",
+    "bias_emoji": "\ud83d\udd34",
+    "confidence": 67,
+    "confidence_label": "Moderate Confidence",
+    "confidence_color": "yellow",
+    "threshold_warning": null,
+    "active_pillars": 5,
+    "pillar_signals": [
+      "bearish",
+      "bearish",
+      "bullish",
+      "bearish",
+      "bearish"
+    ],
+    "pillar_contributions": {
+      "economic_calendar": {
+        "raw_score": -1.5,
+        "weight": 40,
+        "contribution": -0.6,
+        "status": "live"
+      },
+      "geopolitical": {
+        "raw_score": -1.48,
+        "weight": 28,
+        "contribution": -0.414,
+        "status": "live"
+      },
+      "institutional": {
+        "raw_score": 0.75,
+        "weight": 20,
+        "contribution": 0.15,
+        "status": "live"
+      },
+      "macro_sentiment": {
+        "raw_score": -1.0,
+        "weight": 10,
+        "contribution": -0.1,
+        "status": "live"
+      },
+      "news_sentiment": {
+        "raw_score": -0.67,
+        "weight": 2,
+        "contribution": -0.013,
+        "status": "live"
+      }
+    },
+    "gauge_value": 25
+  },
+  "pillars": {
+    "macro": {
+      "pillar": "macro_sentiment",
+      "timestamp": "2026-03-23T21:57:19.249055-04:00",
+      "vix": {
+        "value": 26.78,
+        "previous": 24.06,
+        "change": 2.72,
+        "change_pct": 11.31,
+        "signal": "bearish"
+      },
+      "vxn": {
+        "value": 29.2,
+        "previous": 26.9,
+        "change": 2.3,
+        "change_pct": 8.55,
+        "signal": "bearish"
+      },
+      "fear_greed": {
+        "score": 11,
+        "rating": "Extreme Fear",
+        "signal": "bearish",
+        "source": "Alternative.me"
+      },
+      "pillar_score": -1.0,
+      "status": "live"
+    },
+    "economic": {
+      "pillar": "economic_calendar",
+      "timestamp": "2026-03-23T21:57:19.302383-04:00",
+      "events": [
+        {
+          "title": "Flash Manufacturing PMI",
+          "time_est": "Tue Mar 24, 09:45 AM EST",
+          "forecast": "51.5",
+          "previous": "51.2",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Flash Manufacturing PMI not yet released"
+        },
+        {
+          "title": "Flash Services PMI",
+          "time_est": "Tue Mar 24, 09:45 AM EST",
+          "forecast": "52.0",
+          "previous": "52.3",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Flash Services PMI not yet released"
+        },
+        {
+          "title": "Richmond Manufacturing Index",
+          "time_est": "Tue Mar 24, 10:00 AM EST",
+          "forecast": "-8",
+          "previous": "-10",
+          "actual": "Pending",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Richmond Manufacturing Index not yet released"
+        },
+        {
+          "title": "Unemployment Claims",
+          "time_est": "Thu Mar 26, 08:30 AM EST",
+          "forecast": "211K",
+          "previous": "205K",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Unemployment Claims not yet released"
+        },
+        {
+          "title": "Revised UoM Consumer Sentiment",
+          "time_est": "Fri Mar 27, 10:00 AM EST",
+          "forecast": "53.9",
+          "previous": "55.5",
+          "actual": "Pending",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Revised UoM Consumer Sentiment not yet released"
+        }
+      ],
+      "pillar_score": -1.5,
+      "warnings": [],
+      "status": "live"
+    },
+    "institutional": {
+      "pillar": "institutional",
+      "timestamp": "2026-03-23T21:55:06.344749-04:00",
+      "nq_futures": {
+        "asset_mgr_long": 97885,
+        "asset_mgr_short": 36494,
+        "asset_mgr_net": 61391,
+        "leveraged_long": 44996,
+        "leveraged_short": 86037,
+        "leveraged_net": -41041,
+        "combined_net": 20350,
+        "net_pct": 7.67,
+        "direction": "bullish",
+        "score": 0.5
+      },
+      "es_futures": {
+        "asset_mgr_long": 1089306,
+        "asset_mgr_short": 199864,
+        "asset_mgr_net": 889442,
+        "leveraged_long": 145042,
+        "leveraged_short": 492619,
+        "leveraged_net": -347577,
+        "combined_net": 541865,
+        "net_pct": 28.12,
+        "direction": "bullish",
+        "score": 1.0
+      },
+      "pillar_score": 0.75,
+      "update_frequency": "Weekly (Fridays)",
+      "next_update": "Next Friday",
+      "status": "live"
+    },
+    "geopolitical": {
+      "pillar": "geopolitical",
+      "timestamp": "2026-03-23T21:55:07.595165-04:00",
+      "news_items": [
+        {
+          "headline": "Trump threatens to deploy ICE agents to airports if DHS shutdown doesn't end, while Elon Musk offers to cover TSA agents' pay",
+          "description": "President Trump claimed ICE agents handling airport security would arrest immigrants who are in the U.S. illegally.",
+          "source": "CNBC",
+          "timestamp": "Mar 21, 02:31 PM EST",
+          "date": "2026-03-21",
+          "link": "https://www.cnbc.com/2026/03/21/trump-ice-tsa-dhs.html",
+          "sentiment_score": -0.993,
+          "market_relevant": true
+        },
+        {
+          "headline": "Elon Musk\u2019s bold move that could upend TSA workers\u2019 pay standoff amid DHS shutdown",
+          "description": "Elon Musk offered to cover the salaries of Transportation Security Administration (TSA) personnel during the ongoing government funding standoff.",
+          "source": "Fox Business",
+          "timestamp": "Mar 21, 09:45 AM EST",
+          "date": "2026-03-21",
+          "link": "https://www.foxbusiness.com/politics/elon-musk-offers-pay-tsa-workers-salaries-amid-dhs-budget-standoff",
+          "sentiment_score": 0.991,
+          "market_relevant": true
+        },
+        {
+          "headline": "\u2018Tax resistance\u2019 gains attention amid ICE protests, Iran war \u2014 and IRS penalties could follow",
+          "description": "Tax protesters often withhold taxes due to moral objections to certain government programs, such as the Iran war. But there can be IRS penalties, experts say.",
+          "source": "CNBC",
+          "timestamp": "Mar 21, 09:30 AM EST",
+          "date": "2026-03-21",
+          "link": "https://www.cnbc.com/2026/03/21/tax-protesters-iran-war-ice.html",
+          "sentiment_score": -0.975,
+          "market_relevant": true
+        },
+        {
+          "headline": "Analysis: Trump's unshackled presidency puts him at the center of the economy",
+          "description": "The president's unprecedented use of executive power has made him a driving force behind oil prices, the Federal Reserve's interest rates and more.",
+          "source": "CNBC",
+          "timestamp": "Mar 21, 08:00 AM EST",
+          "date": "2026-03-21",
+          "link": "https://www.cnbc.com/2026/03/21/trump-oil-fed-economy-iran-war.html",
+          "sentiment_score": 0.994,
+          "market_relevant": true
+        },
+        {
+          "headline": "CNBC Daily Open: Trump issues Strait of Hormuz ultimatum",
+          "description": "U.S.-Iran threats over Hormuz rattle markets as oil risk lingers and missiles hit Israel, raising fears of a prolonged conflict.",
+          "source": "CNBC",
+          "timestamp": "Mar 22, 09:17 PM EST",
+          "date": "2026-03-22",
+          "link": "https://www.cnbc.com/2026/03/23/cnbc-daily-open-us-iran-hormuz-threats-oil-markets-trump.html",
+          "sentiment_score": 0.915,
+          "market_relevant": true
+        },
+        {
+          "headline": "Not just buying 'things': Why China's emotional economy is on the rise",
+          "description": "Amid a prolonged economic slowdown, one segment of the world's second-largest economy is growing quicker than the rest: China's so-called emotional economy.",
+          "source": "CNBC",
+          "timestamp": "Mar 22, 06:58 PM EST",
+          "date": "2026-03-22",
+          "link": "https://www.cnbc.com/2026/03/23/chinas-emotional-economy-is-on-the-rise.html",
+          "sentiment_score": -0.515,
+          "market_relevant": true
+        },
+        {
+          "headline": "Iran war energy crisis is a renewable energy wake-up call",
+          "description": "The Iran war is exposing how much the global economy still depends on fragile fossil fuel supplies. The conflict has virtually choked off the Strait of Hormuz, a vital shipping lane for a fifth of the world\u2019s oil and liquefied natural gas. That's shaking up m\u2026",
+          "source": "Associated Press",
+          "timestamp": "Mar 22, 06:01 PM EST",
+          "date": "2026-03-22",
+          "link": "https://apnews.com/article/middle-east-wars-renewable-energy-asia-4b5fe0693ce5816472c905db85f7da6e",
+          "sentiment_score": -0.981,
+          "market_relevant": true
+        },
+        {
+          "headline": "The economy has a Strait of Hormuz deadline for Trump: Two weeks",
+          "description": "Corporate executives are not panicking over a short-term increase in oil prices and Strait of Hormuz closure, but patience may wear thin in a matter of weeks.",
+          "source": "CNBC",
+          "timestamp": "Mar 22, 11:48 AM EST",
+          "date": "2026-03-22",
+          "link": "https://www.cnbc.com/2026/03/22/iran-war-strait-of-hormuz-trump-oil-prices-economy.html",
+          "sentiment_score": -0.994,
+          "market_relevant": true
+        },
+        {
+          "headline": "China vows to continue opening its economy amid U.S. trade tensions",
+          "description": "China has reached a temporary truce with the U.S. on trade. The world's second-biggest economy reported a record $1.2 trillion trade surplus for 2025.",
+          "source": "CNBC",
+          "timestamp": "Mar 22, 08:47 AM EST",
+          "date": "2026-03-22",
+          "link": "https://www.cnbc.com/2026/03/22/china-vows-to-continue-opening-its-economy-amid-us-trade-tensions.html",
+          "sentiment_score": -0.807,
+          "market_relevant": true
+        },
+        {
+          "headline": "Iran and Hezbollah launch new attacks on Israel as war also threatens power plants",
+          "description": "The United States and Iran threatened to target critical infrastructure as the war in the Middle East, now in its fourth week, puts lives and livelihoods at risk throughout the region. Iran on Sunday warned it would close the Strait of Hormuz immediately if t\u2026",
+          "source": "Associated Press",
+          "timestamp": "Mar 22, 12:53 AM EST",
+          "date": "2026-03-22",
+          "link": "https://apnews.com/article/iran-us-israel-trump-lebanon-march-22-2026-16cc60862529b873666ce4c1f6529d78",
+          "sentiment_score": -0.992,
+          "market_relevant": true
+        }
+      ],
+      "active_flags": [
+        {
+          "title": "\u2018Tax resistance\u2019 gains attention amid ICE protests, Iran war \u2014 and IRS penalties could follow",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "CNBC",
+          "date": "2026-03-21",
+          "timestamp": "Mar 21, 09:30 AM EST",
+          "link": "https://www.cnbc.com/2026/03/21/tax-protesters-iran-war-ice.html",
+          "sentiment": -0.975,
+          "predicted_impact": "bearish",
+          "context": "Tax protesters often withhold taxes due to moral objections to certain government programs, such as the Iran war. But there can be IRS penalties, experts say."
+        },
+        {
+          "title": "Iran war energy crisis is a renewable energy wake-up call",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "Associated Press",
+          "date": "2026-03-22",
+          "timestamp": "Mar 22, 06:01 PM EST",
+          "link": "https://apnews.com/article/middle-east-wars-renewable-energy-asia-4b5fe0693ce5816472c905db85f7da6e",
+          "sentiment": -0.981,
+          "predicted_impact": "bearish",
+          "context": "The Iran war is exposing how much the global economy still depends on fragile fossil fuel supplies. The conflict has virtually choked off the Strait of Hormuz, a vital shipping lane for a fifth of the"
+        },
+        {
+          "title": "Iran and Hezbollah launch new attacks on Israel as war also threatens power plants",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "Associated Press",
+          "date": "2026-03-22",
+          "timestamp": "Mar 22, 12:53 AM EST",
+          "link": "https://apnews.com/article/iran-us-israel-trump-lebanon-march-22-2026-16cc60862529b873666ce4c1f6529d78",
+          "sentiment": -0.992,
+          "predicted_impact": "bearish",
+          "context": "The United States and Iran threatened to target critical infrastructure as the war in the Middle East, now in its fourth week, puts lives and livelihoods at risk throughout the region. Iran on Sunday "
+        },
+        {
+          "title": "Oil prices are set to rise further as war in the Middle East escalates",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "CNBC",
+          "date": "2026-03-22",
+          "timestamp": "Mar 22, 10:42 AM EST",
+          "link": "https://www.cnbc.com/2026/03/22/oil-prices-are-set-to-rise-further-as-war-in-the-middle-east-escalates.html",
+          "sentiment": -0.641,
+          "predicted_impact": "bearish",
+          "context": "Oil prices look set to rise on Monday after U.S. and \u200bIranian trade threats to target energy facilities, analysts said."
+        },
+        {
+          "title": "Government bonds face \u2018perfect storm\u2019 as Iran war rattles Europe's central banks",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "CNBC",
+          "date": "2026-03-19",
+          "timestamp": "Mar 19, 12:07 PM EST",
+          "link": "https://www.cnbc.com/2026/03/19/interest-rates-bonds-bank-of-england-european-central-bank-investors-iran-war-ecb-inflation.html",
+          "sentiment": -0.934,
+          "predicted_impact": "bearish",
+          "context": "Bond yields have surged as Europe's central banks grapple with new inflation fears."
+        }
+      ],
+      "total_items": 15,
+      "pillar_score": -1.48,
+      "status": "live"
+    },
+    "news": {
+      "pillar": "news_sentiment",
+      "timestamp": "2026-03-23T21:57:19.304626-04:00",
+      "analysis": {
+        "average_score": -0.336,
+        "overall_sentiment": "bearish",
+        "bullish_pct": 30.0,
+        "bearish_pct": 70.0,
+        "neutral_pct": 0.0,
+        "total_headlines": 10,
+        "dominant_theme": "\u2018Tax resistance\u2019 gains attention amid ICE protests, Iran war \u2014 and IRS penalties could follow",
+        "pillar_score": -0.67
+      },
+      "pillar_score": -0.67,
+      "status": "live"
+    }
+  }
+}
