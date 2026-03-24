@@ -1,18 +1,18 @@
 {
-  "id": "084987C8",
-  "timestamp": "2026-03-24T19:16:10.196512-04:00",
+  "id": "5B1C234C",
+  "timestamp": "2026-03-24T19:24:13.215146-04:00",
   "bias": {
-    "final_score": -0.588,
+    "final_score": -0.696,
     "bias": "Bearish",
     "bias_emoji": "\ud83d\udd34",
-    "confidence": 47,
+    "confidence": 61,
     "confidence_label": "Moderate Confidence",
     "confidence_color": "yellow",
     "threshold_warning": null,
     "active_pillars": 5,
     "pillar_signals": [
       "bearish",
-      "neutral",
+      "bearish",
       "bullish",
       "bearish",
       "bearish"
@@ -25,9 +25,9 @@
         "status": "live"
       },
       "geopolitical": {
-        "raw_score": -0.11,
+        "raw_score": -0.5,
         "weight": 28,
-        "contribution": -0.031,
+        "contribution": -0.14,
         "status": "live"
       },
       "institutional": {
@@ -43,18 +43,18 @@
         "status": "live"
       },
       "news_sentiment": {
-        "raw_score": -0.37,
+        "raw_score": -0.29,
         "weight": 2,
-        "contribution": -0.007,
+        "contribution": -0.006,
         "status": "live"
       }
     },
-    "gauge_value": 35
+    "gauge_value": 32
   },
   "pillars": {
     "macro": {
       "pillar": "macro_sentiment",
-      "timestamp": "2026-03-24T19:15:58.181240-04:00",
+      "timestamp": "2026-03-24T19:24:00.521410-04:00",
       "vix": {
         "value": 26.15,
         "previous": 26.78,
@@ -80,7 +80,7 @@
     },
     "economic": {
       "pillar": "economic_calendar",
-      "timestamp": "2026-03-24T19:15:58.269095-04:00",
+      "timestamp": "2026-03-24T19:24:00.580659-04:00",
       "events": [
         {
           "title": "Flash Manufacturing PMI",
@@ -144,7 +144,7 @@
     },
     "institutional": {
       "pillar": "institutional",
-      "timestamp": "2026-03-24T19:15:58.699096-04:00",
+      "timestamp": "2026-03-24T19:24:00.689770-04:00",
       "nq_futures": {
         "asset_mgr_long": 97885,
         "asset_mgr_short": 36494,
@@ -176,7 +176,7 @@
     },
     "geopolitical": {
       "pillar": "geopolitical",
-      "timestamp": "2026-03-24T19:16:10.195132-04:00",
+      "timestamp": "2026-03-24T19:24:13.213485-04:00",
       "news_items": [
         {
           "headline": "EU shelves Russian oil ban as Iran war rattles energy markets \u2014 RT Business News",
@@ -206,6 +206,16 @@
           "date": "2026-03-24",
           "link": "https://www.rt.com/news/636070-east-asia-entering-missile-age/",
           "sentiment_score": 0.849,
+          "market_relevant": true
+        },
+        {
+          "headline": "China's foreign minister urges early peace talks in call with Iranian counterpart",
+          "description": "BEIJING, March 24 (Reuters) - Chinese Foreign Minister Wang Yi called on Tuesday on parties to seize all opportunities to start peace talks as soon as possible ...",
+          "source": "al-monitor.com",
+          "timestamp": "Mar 24, 07:01 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.al-monitor.com/originals/2026/03/chinas-foreign-minister-urges-early-peace-talks-call-iranian-counterpart",
+          "sentiment_score": -0.596,
           "market_relevant": true
         },
         {
@@ -266,16 +276,6 @@
           "date": "2026-03-24",
           "link": "https://www.cbsnews.com/video/nick-lalota-dhs-stalemate-funding-whole-darn-thing-right-way-move-forward/",
           "sentiment_score": 0.982,
-          "market_relevant": true
-        },
-        {
-          "headline": "NASA's Ignition Program: Skipping the Lunar Orbiter and Going Straight for a Moon Base",
-          "description": "The new initiative includes a base on the moon, a nuclear-powered flight to Mars and a replacement for the ISS.",
-          "source": "cnet.com",
-          "timestamp": "Mar 24, 05:52 PM EST",
-          "date": "2026-03-24",
-          "link": "https://www.cnet.com/science/space/nasas-ignition-program-skips-lunar-orbiter-goes-straight-for-moon-base/",
-          "sentiment_score": -0.999,
           "market_relevant": true
         }
       ],
@@ -311,6 +311,16 @@
           "market_relevant": true
         },
         {
+          "headline": "China's foreign minister urges early peace talks in call with Iranian counterpart",
+          "description": "BEIJING, March 24 (Reuters) - Chinese Foreign Minister Wang Yi called on Tuesday on parties to seize all opportunities to start peace talks as soon as possible ...",
+          "source": "al-monitor.com",
+          "timestamp": "Mar 24, 07:01 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.al-monitor.com/originals/2026/03/chinas-foreign-minister-urges-early-peace-talks-call-iranian-counterpart",
+          "sentiment_score": -0.596,
+          "market_relevant": true
+        },
+        {
           "headline": "How far can Iran\u2019s ballistic missiles reach? A defense expert explains how the missiles work, and what Iran can and can\u2019t hit",
           "description": "News that Iran had fired ballistic missiles at a US military base in the Indian Ocean was startling, but how much of a threat does the development represent?",
           "source": "theconversation.com",
@@ -369,59 +379,10 @@
           "link": "https://www.cbsnews.com/video/nick-lalota-dhs-stalemate-funding-whole-darn-thing-right-way-move-forward/",
           "sentiment_score": 0.982,
           "market_relevant": true
-        },
-        {
-          "headline": "NASA's Ignition Program: Skipping the Lunar Orbiter and Going Straight for a Moon Base",
-          "description": "The new initiative includes a base on the moon, a nuclear-powered flight to Mars and a replacement for the ISS.",
-          "source": "cnet.com",
-          "timestamp": "Mar 24, 05:52 PM EST",
-          "date": "2026-03-24",
-          "link": "https://www.cnet.com/science/space/nasas-ignition-program-skips-lunar-orbiter-goes-straight-for-moon-base/",
-          "sentiment_score": -0.999,
-          "market_relevant": true
         }
       ],
       "unbiased_network_items": [],
       "active_flags": [
-        {
-          "title": "War, Tariffs, and Indycars: The Art of the March Market Meltdown",
-          "priority": 95,
-          "flag_type": "war",
-          "status": "Developing",
-          "source": "thestockmarketwatch.com",
-          "date": "2026-03-15",
-          "timestamp": "Mar 15, 02:00 PM EST",
-          "link": "https://stockmarketwatch.com/stock-market-news/war-tariffs-and-indycars-the-art-of-the-march-market-meltdown/59797/",
-          "sentiment": 0.652,
-          "predicted_impact": "bullish",
-          "context": "Welcome to March 15, 2026, a day where the global economy feels less like a structured financial system and more like a high-stakes round of \"Spin the Bottle\""
-        },
-        {
-          "title": "Winning Wars and Losing Friends: The Trump Market Volatility Special",
-          "priority": 95,
-          "flag_type": "war",
-          "status": "Developing",
-          "source": "thestockmarketwatch.com",
-          "date": "2026-03-13",
-          "timestamp": "Mar 13, 02:00 AM EST",
-          "link": "https://stockmarketwatch.com/stock-market-news/winning-wars-and-losing-friends-the-trump-market-volatility-special/59727/",
-          "sentiment": 0.84,
-          "predicted_impact": "bullish",
-          "context": "Welcome to March 2026, where the geopolitical landscape changes faster than a day-trader\u2019s conviction and the \"Art of the Deal\" has apparently been replaced"
-        },
-        {
-          "title": "EU shelves Russian oil ban as Iran war rattles energy markets \u2014 RT Business News",
-          "priority": 90,
-          "flag_type": "war",
-          "status": "Developing",
-          "source": "rt.com",
-          "date": "2026-03-24",
-          "timestamp": "Mar 24, 04:36 PM EST",
-          "link": "https://www.rt.com/business/636061-eu-russian-oil-ban-proposal/",
-          "sentiment": -0.998,
-          "predicted_impact": "bearish",
-          "context": "The EU has reportedly postponed a proposal to ban Russian oil imports, removing the draft from the agenda as the Iran war fuels energy price turmoil"
-        },
         {
           "title": "Is the Senate heading toward a compromise on DHS funding?",
           "priority": 90,
@@ -447,40 +408,79 @@
           "sentiment": 0.982,
           "predicted_impact": "bullish",
           "context": "House Speaker Mike Johnson told CBS News that he prefers not to split off ICE from Homeland Security funding as the partial government shutdown continues. Repub..."
+        },
+        {
+          "title": "Week Ahead: The War and Anticipated Policy Responses Drive the Capital Markets",
+          "priority": 90,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "investing.com",
+          "date": "2026-03-23",
+          "timestamp": "Mar 23, 01:12 AM EST",
+          "link": "https://www.investing.com/analysis/week-ahead-the-war-and-anticipated-policy-responses-drive-the-capital-markets-200677048",
+          "sentiment": 0.995,
+          "predicted_impact": "bullish",
+          "context": "Market Analysis by covering: Euro US Dollar, British Pound US Dollar, US Dollar Japanese Yen, Australian Dollar US Dollar. Read 's Market Analysis on Investing..."
+        },
+        {
+          "title": "As Iran war disrupts the Gulf, India's growth story faces new risks",
+          "priority": 90,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "economictimes.indiatimes.com",
+          "date": "2026-03-22",
+          "timestamp": "Mar 22, 12:53 AM EST",
+          "link": "https://economictimes.indiatimes.com/news/economy/indicators/as-iran-war-disrupts-the-gulf-indias-growth-story-faces-new-risks/articleshow/129728352.cms",
+          "sentiment": -0.974,
+          "predicted_impact": "bearish",
+          "context": "India's economy faces new challenges. Strong growth is threatened by rising energy prices and disrupted trade. The Middle East conflict impacts oil and gas su..."
+        },
+        {
+          "title": "'Not our war': Europe says no to Trump",
+          "priority": 90,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "asiaone.com",
+          "date": "2026-03-18",
+          "timestamp": "Mar 18, 08:29 PM EST",
+          "link": "https://www.asiaone.com/world/not-our-war-europe-says-no-trump",
+          "sentiment": -0.949,
+          "predicted_impact": "bearish",
+          "context": "BERLIN/PARIS - For a self-described Transatlanticist like German Chancellor Friedrich Merz, the language has been unusually blunt.When President Donald Trump as..."
         }
       ],
-      "total_items": 56,
-      "pillar_score": -0.11,
+      "total_items": 58,
+      "pillar_score": -0.5,
       "status": "live"
     },
     "news": {
       "pillar": "news_sentiment",
-      "timestamp": "2026-03-24T19:16:10.196041-04:00",
+      "timestamp": "2026-03-24T19:24:13.214388-04:00",
       "analysis": {
-        "average_score": -0.184,
+        "average_score": -0.144,
         "overall_sentiment": "neutral",
         "bullish_pct": 40.0,
         "bearish_pct": 60.0,
         "neutral_pct": 0.0,
         "total_headlines": 20,
-        "dominant_theme": "War, Tariffs, and Indycars: The Art of the March Market Meltdown",
-        "pillar_score": -0.37
+        "dominant_theme": "Is the Senate heading toward a compromise on DHS funding?",
+        "pillar_score": -0.29
       },
-      "pillar_score": -0.37,
+      "pillar_score": -0.29,
       "status": "live"
     },
     "bias": {
-      "final_score": -0.588,
+      "final_score": -0.696,
       "bias": "Bearish",
       "bias_emoji": "\ud83d\udd34",
-      "confidence": 47,
+      "confidence": 61,
       "confidence_label": "Moderate Confidence",
       "confidence_color": "yellow",
       "threshold_warning": null,
       "active_pillars": 5,
       "pillar_signals": [
         "bearish",
-        "neutral",
+        "bearish",
         "bullish",
         "bearish",
         "bearish"
@@ -493,9 +493,9 @@
           "status": "live"
         },
         "geopolitical": {
-          "raw_score": -0.11,
+          "raw_score": -0.5,
           "weight": 28,
-          "contribution": -0.031,
+          "contribution": -0.14,
           "status": "live"
         },
         "institutional": {
@@ -511,25 +511,25 @@
           "status": "live"
         },
         "news_sentiment": {
-          "raw_score": -0.37,
+          "raw_score": -0.29,
           "weight": 2,
-          "contribution": -0.007,
+          "contribution": -0.006,
           "status": "live"
         }
       },
-      "gauge_value": 35
+      "gauge_value": 32
     }
   },
   "weekly_summary": {
     "pillar": "weekly_summary",
-    "timestamp": "2026-03-24T19:16:10.196371-04:00",
+    "timestamp": "2026-03-24T19:24:13.214909-04:00",
     "summary": {
-      "generated_at": "2026-03-24T19:16:10.196351-04:00",
-      "overall": "Overall regime entering this week: Bearish with 47% confidence (Moderate Confidence). Lean short on rallies, avoid aggressive longs until conditions improve.",
+      "generated_at": "2026-03-24T19:24:13.214877-04:00",
+      "overall": "Overall regime entering this week: Bearish with 61% confidence (Moderate Confidence). Lean short on rallies, avoid aggressive longs until conditions improve.",
       "economic": "This week has 5 key USD events including Flash Manufacturing PMI, Flash Services PMI, Richmond Manufacturing Index.",
       "institutional": "Big money is net bullish on NQ (7.67%) and bullish on ES (28.12%).",
       "macro": "VIX at 26.15 with Fear & Greed at 11 (Extreme Fear).",
-      "geopolitical": "Active geopolitical risks: War, Tariffs, and Indycars: The Art of the March Market Melt | Winning Wars and Losing Friends: The Trump Market Volatility.",
+      "geopolitical": "Active geopolitical risks: Is the Senate heading toward a compromise on DHS funding? | Rep. Nick LaLota on DHS stalemate: \"Funding the whole darn t.",
       "week_of": "March 24, 2026"
     },
     "status": "live"

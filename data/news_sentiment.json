@@ -1,19 +1,19 @@
 {
   "data": {
     "pillar": "news_sentiment",
-    "timestamp": "2026-03-24T19:16:10.196041-04:00",
+    "timestamp": "2026-03-24T19:24:13.214388-04:00",
     "analysis": {
-      "average_score": -0.184,
+      "average_score": -0.144,
       "overall_sentiment": "neutral",
       "bullish_pct": 40.0,
       "bearish_pct": 60.0,
       "neutral_pct": 0.0,
       "total_headlines": 20,
-      "dominant_theme": "War, Tariffs, and Indycars: The Art of the March Market Meltdown",
-      "pillar_score": -0.37
+      "dominant_theme": "Is the Senate heading toward a compromise on DHS funding?",
+      "pillar_score": -0.29
     },
-    "pillar_score": -0.37,
+    "pillar_score": -0.29,
     "status": "live"
   },
-  "timestamp": "2026-03-24T23:16:10.196059"
+  "timestamp": "2026-03-24T23:24:13.214413"
 }

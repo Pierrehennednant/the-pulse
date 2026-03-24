@@ -403,7 +403,7 @@
                 <div class="flag-meta">
                     <span class="flag-status ${sc}">${flag.status}</span>
                     <span class="flag-source">${flag.source}</span>
-                    <span class="flag-source">${flag.date} ${flag.timestamp}</span>
+                    <span class="flag-source">${flag.timestamp}</span>
                 </div>
                 <div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${valClass(flag.predicted_impact)}">${(flag.predicted_impact || '').toUpperCase()}</span></div>
                 ${flag.context ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${flag.context}</div>` : ''}

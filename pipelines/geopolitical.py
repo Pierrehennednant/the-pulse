@@ -176,7 +176,8 @@ class GeopoliticalPipeline:
         }
         low_quality_sources = [
             'truthout', 'rawstory', 'mediaite', 'salon',
-            'huffpost', 'breitbart', 'dailykos', 'thegatewaypundit'
+            'huffpost', 'breitbart', 'dailykos', 'thegatewaypundit',
+            'thestockmarketwatch.com', 'rt.com', 'sputnik'
         ]
         trusted_sources = [
             'reuters', 'associated press', 'cnbc', 'bloomberg',
