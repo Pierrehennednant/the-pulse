@@ -1,7 +1,7 @@
 {
   "data": {
     "pillar": "geopolitical",
-    "timestamp": "2026-03-23T22:00:28.429710-04:00",
+    "timestamp": "2026-03-23T22:02:28.300873-04:00",
     "news_items": [
       {
         "headline": "Trump threatens to deploy ICE agents to airports if DHS shutdown doesn't end, while Elon Musk offers to cover TSA agents' pay",
@@ -175,5 +175,5 @@
     "pillar_score": -1.48,
     "status": "live"
   },
-  "timestamp": "2026-03-24T02:00:28.429743"
+  "timestamp": "2026-03-24T02:02:28.300907"
 }

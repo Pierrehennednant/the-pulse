@@ -1,0 +1,86 @@
+In pipelines/institutional.py replace the entire fetch method with this:"
+pythondef fetch(self):
+    try:
+        existing = cache.load(self.cache_key)
+        if not self.is_friday() and existing:
+            pulse_logger.log("↺ Institutional — using weekly COT cache (updates Fridays)")
+            return existing['data']
+
+        # Fetch fresh COT data
+        nq_data, es_data = self.fetch_cot()
+
+        # Get previous week's data for comparison
+        prev_nq_net = None
+        prev_es_net = None
+        if existing and existing.get('data'):
+            prev = existing['data']
+            prev_nq = prev.get('nq_futures', {})
+            prev_es = prev.get('es_futures', {})
+            prev_nq_net = prev_nq.get('combined_net')
+            prev_es_net = prev_es.get('combined_net')
+
+        # Calculate week-over-week changes
+        if nq_data and prev_nq_net is not None:
+            nq_data['prev_net'] = prev_nq_net
+            nq_data['wow_change'] = nq_data['combined_net'] - prev_nq_net
+            nq_data['wow_direction'] = 'increasing' if nq_data['wow_change'] > 0 else 'decreasing'
+
+        if es_data and prev_es_net is not None:
+            es_data['prev_net'] = prev_es_net
+            es_data['wow_change'] = es_data['combined_net'] - prev_es_net
+            es_data['wow_direction'] = 'increasing' if es_data['wow_change'] > 0 else 'decreasing'
+
+        scores = []
+        if nq_data and nq_data.get('score'):
+            scores.append(nq_data['score'])
+        if es_data and es_data.get('score'):
+            scores.append(es_data['score'])
+        pillar_score = round(sum(scores) / len(scores), 2) if scores else 0
+
+        result = {
+            'pillar': 'institutional',
+            'timestamp': datetime.now(pytz.timezone(TIMEZONE)).isoformat(),
+            'nq_futures': nq_data or {'direction': 'unknown', 'score': 0},
+            'es_futures': es_data or {'direction': 'unknown', 'score': 0},
+            'pillar_score': pillar_score,
+            'update_frequency': 'Weekly (Fridays)',
+            'next_update': 'Next Friday',
+            'status': 'live'
+        }
+        cache.save(self.cache_key, result)
+        pulse_logger.log(f"✓ Institutional COT updated | NQ: {nq_data['direction'] if nq_data else 'unknown'} | ES: {es_data['direction'] if es_data else 'unknown'} | Score: {pillar_score}")
+        return result
+    except Exception as e:
+        error_handler.handle(e, "Institutional")
+        cached = cache.load(self.cache_key)
+        if cached:
+            cached['data']['status'] = 'stale'
+            return cached['data']
+        return None
+Also in ui/templates/dashboard.html find the renderInstitutional function and replace it with this:
+javascriptfunction renderInstitutional(data) {
+    if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
+    let html = data.status === 'stale' ? '<div class="stale-warning">⚠️ Stale data</div>' : '';
+    const nq = data.nq_futures || {};
+    const es = data.es_futures || {};
+
+    const wowArrow = (change) => {
+        if (change === undefined || change === null) return '';
+        return change > 0 ? ' <span style="color:#2ecc71">▲</span>' : ' <span style="color:#e74c3c">▼</span>';
+    };
+
+    const wowText = (change) => {
+        if (change === undefined || change === null) return '';
+        const abs = Math.abs(change).toLocaleString();
+        return `<span style="font-size:11px;color:#7a8fa8"> (${change > 0 ? '+' : '-'}${abs} WoW)</span>`;
+    };
+
+    html += `
+        <div class="data-row"><span class="data-label">NQ Direction</span><span class="data-value ${valClass(nq.direction)}">${(nq.direction || 'N/A').toUpperCase()}</span></div>
+        <div class="data-row"><span class="data-label">NQ Net Position</span><span class="data-value">${(nq.combined_net || 0).toLocaleString()} (${nq.net_pct || 0}%)${wowArrow(nq.wow_change)}${wowText(nq.wow_change)}</span></div>
+        <div class="data-row"><span class="data-label">ES Direction</span><span class="data-value ${valClass(es.direction)}">${(es.direction || 'N/A').toUpperCase()}</span></div>
+        <div class="data-row"><span class="data-label">ES Net Position</span><span class="data-value">${(es.combined_net || 0).toLocaleString()} (${es.net_pct || 0}%)${wowArrow(es.wow_change)}${wowText(es.wow_change)}</span></div>
+        <div class="data-row"><span class="data-label">Updates</span><span class="data-value" style="color:#7a8fa8">${data.update_frequency || 'Weekly'}</span></div>`;
+    return html;
+}
+Then delete all cache and snapshots, restart the app and show me the log.

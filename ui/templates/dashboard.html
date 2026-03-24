@@ -321,11 +321,23 @@
         let html = data.status === 'stale' ? '<div class="stale-warning">⚠️ Stale data</div>' : '';
         const nq = data.nq_futures || {};
         const es = data.es_futures || {};
+
+        const wowArrow = (change) => {
+            if (change === undefined || change === null) return '';
+            return change > 0 ? ' <span style="color:#2ecc71">▲</span>' : ' <span style="color:#e74c3c">▼</span>';
+        };
+
+        const wowText = (change) => {
+            if (change === undefined || change === null) return '';
+            const abs = Math.abs(change).toLocaleString();
+            return `<span style="font-size:11px;color:#7a8fa8"> (${change > 0 ? '+' : '-'}${abs} WoW)</span>`;
+        };
+
         html += `
             <div class="data-row"><span class="data-label">NQ Direction</span><span class="data-value ${valClass(nq.direction)}">${(nq.direction || 'N/A').toUpperCase()}</span></div>
-            <div class="data-row"><span class="data-label">NQ Net Position</span><span class="data-value">${(nq.combined_net || nq.net || 0).toLocaleString()} (${nq.net_pct || 0}%)</span></div>
+            <div class="data-row"><span class="data-label">NQ Net Position</span><span class="data-value">${(nq.combined_net || 0).toLocaleString()} (${nq.net_pct || 0}%)${wowArrow(nq.wow_change)}${wowText(nq.wow_change)}</span></div>
             <div class="data-row"><span class="data-label">ES Direction</span><span class="data-value ${valClass(es.direction)}">${(es.direction || 'N/A').toUpperCase()}</span></div>
-            <div class="data-row"><span class="data-label">ES Net Position</span><span class="data-value">${(es.combined_net || es.net || 0).toLocaleString()} (${es.net_pct || 0}%)</span></div>
+            <div class="data-row"><span class="data-label">ES Net Position</span><span class="data-value">${(es.combined_net || 0).toLocaleString()} (${es.net_pct || 0}%)${wowArrow(es.wow_change)}${wowText(es.wow_change)}</span></div>
             <div class="data-row"><span class="data-label">Updates</span><span class="data-value" style="color:#7a8fa8">${data.update_frequency || 'Weekly'}</span></div>`;
         return html;
     }

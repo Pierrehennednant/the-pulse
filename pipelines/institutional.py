@@ -88,13 +88,35 @@ class InstitutionalPipeline:
             if not self.is_friday() and existing:
                 pulse_logger.log("↺ Institutional — using weekly COT cache (updates Fridays)")
                 return existing['data']
+
             nq_data, es_data = self.fetch_cot()
+
+            prev_nq_net = None
+            prev_es_net = None
+            if existing and existing.get('data'):
+                prev = existing['data']
+                prev_nq = prev.get('nq_futures', {})
+                prev_es = prev.get('es_futures', {})
+                prev_nq_net = prev_nq.get('combined_net')
+                prev_es_net = prev_es.get('combined_net')
+
+            if nq_data and prev_nq_net is not None:
+                nq_data['prev_net'] = prev_nq_net
+                nq_data['wow_change'] = nq_data['combined_net'] - prev_nq_net
+                nq_data['wow_direction'] = 'increasing' if nq_data['wow_change'] > 0 else 'decreasing'
+
+            if es_data and prev_es_net is not None:
+                es_data['prev_net'] = prev_es_net
+                es_data['wow_change'] = es_data['combined_net'] - prev_es_net
+                es_data['wow_direction'] = 'increasing' if es_data['wow_change'] > 0 else 'decreasing'
+
             scores = []
             if nq_data and nq_data.get('score'):
                 scores.append(nq_data['score'])
             if es_data and es_data.get('score'):
                 scores.append(es_data['score'])
             pillar_score = round(sum(scores) / len(scores), 2) if scores else 0
+
             result = {
                 'pillar': 'institutional',
                 'timestamp': datetime.now(pytz.timezone(TIMEZONE)).isoformat(),
