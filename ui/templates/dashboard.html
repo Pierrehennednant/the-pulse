@@ -225,6 +225,16 @@
         <div class="confidence" id="confidence-text"></div>
         <div class="last-updated"><span class="live-dot"></span><span id="last-updated-text">Fetching data...</span></div>
     </div>
+    <div id="weekly-summary-card" class="why-today" style="border-left-color: #9b59b6; display:none;">
+        <h3 style="color:#9b59b6">📋 Week of <span id="week-of"></span></h3>
+        <p id="weekly-overall" style="margin-bottom:10px;font-weight:600;color:#e0e6f0"></p>
+        <div style="font-size:12px;color:#7a8fa8;line-height:1.6">
+            <div id="weekly-econ" style="margin-bottom:6px"></div>
+            <div id="weekly-inst" style="margin-bottom:6px"></div>
+            <div id="weekly-macro" style="margin-bottom:6px"></div>
+            <div id="weekly-geo"></div>
+        </div>
+    </div>
     <div class="why-today">
         <h3>Why Today</h3>
         <p id="why-today-text">Analyzing current market regime...</p>
@@ -505,6 +515,17 @@
         document.getElementById('news-score-badge').className = `pillar-score ${scoreClass(news.pillar_score || 0)}`;
         document.getElementById('news-content').innerHTML = renderNews(news);
         document.getElementById('share-btn').href = `/snapshot/${snapshot.id}`;
+
+        const ws = snapshot.weekly_summary;
+        if (ws && ws.summary) {
+            document.getElementById('weekly-summary-card').style.display = 'block';
+            document.getElementById('week-of').textContent = ws.summary.week_of;
+            document.getElementById('weekly-overall').textContent = ws.summary.overall;
+            document.getElementById('weekly-econ').textContent = '📅 ' + ws.summary.economic;
+            document.getElementById('weekly-inst').textContent = '🏦 ' + ws.summary.institutional;
+            document.getElementById('weekly-macro').textContent = '📊 ' + ws.summary.macro;
+            document.getElementById('weekly-geo').textContent = '🌍 ' + ws.summary.geopolitical;
+        }
     }
 
     function copySnapshot() {

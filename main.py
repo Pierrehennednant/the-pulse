@@ -11,6 +11,7 @@ from pipelines.economic_calendar import economic_calendar_pipeline
 from pipelines.institutional import institutional_pipeline
 from pipelines.geopolitical import geopolitical_pipeline
 from pipelines.news_sentiment import news_sentiment_pipeline
+from pipelines.weekly_summary import weekly_summary_pipeline
 
 from processors.data_formatter import data_formatter
 from processors.bias_calculator import bias_calculator
@@ -39,6 +40,7 @@ def run_pulse():
         })
 
         bias_score = bias_calculator.compute(formatted_data)
+        weekly_summary_pipeline.fetch(formatted_data=formatted_data, bias=bias_score)
         snapshot_id = snapshot_generator.save(bias_score, formatted_data)
 
         pulse_logger.log(f"✅ Pulse updated | {bias_score['bias_emoji']} {bias_score['bias']} | Confidence: {bias_score['confidence']}% | Snapshot: {snapshot_id}")

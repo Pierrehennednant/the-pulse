@@ -1,6 +1,6 @@
 {
-  "id": "533C8A4C",
-  "timestamp": "2026-03-23T22:02:28.301890-04:00",
+  "id": "661B3A42",
+  "timestamp": "2026-03-23T22:06:32.128743-04:00",
   "bias": {
     "final_score": -0.378,
     "bias": "Neutral",
@@ -53,7 +53,7 @@
   "pillars": {
     "macro": {
       "pillar": "macro_sentiment",
-      "timestamp": "2026-03-23T22:02:26.372131-04:00",
+      "timestamp": "2026-03-23T22:06:30.712760-04:00",
       "vix": {
         "value": 26.78,
         "previous": 24.06,
@@ -79,7 +79,7 @@
     },
     "economic": {
       "pillar": "economic_calendar",
-      "timestamp": "2026-03-23T22:02:26.417671-04:00",
+      "timestamp": "2026-03-23T22:06:30.757068-04:00",
       "events": [],
       "pillar_score": 0,
       "warnings": [
@@ -89,7 +89,7 @@
     },
     "institutional": {
       "pillar": "institutional",
-      "timestamp": "2026-03-23T22:02:26.850246-04:00",
+      "timestamp": "2026-03-23T22:06:30.843265-04:00",
       "nq_futures": {
         "asset_mgr_long": 97885,
         "asset_mgr_short": 36494,
@@ -121,8 +121,18 @@
     },
     "geopolitical": {
       "pillar": "geopolitical",
-      "timestamp": "2026-03-23T22:02:28.300873-04:00",
+      "timestamp": "2026-03-23T22:06:32.127258-04:00",
       "news_items": [
+        {
+          "headline": "Bank of Korea's newly appointed chief pledges 'balanced' policy",
+          "description": "Shin faces immediate challenges from Middle East-driven inflation and uneven growth.",
+          "source": "CNBC",
+          "timestamp": "Mar 22, 10:04 PM EST",
+          "date": "2026-03-22",
+          "link": "https://www.cnbc.com/2026/03/23/bank-of-koreas-newly-appointed-chief-pledges-balanced-policy.html",
+          "sentiment_score": -0.987,
+          "market_relevant": true
+        },
         {
           "headline": "Trump threatens to deploy ICE agents to airports if DHS shutdown doesn't end, while Elon Musk offers to cover TSA agents' pay",
           "description": "President Trump claimed ICE agents handling airport security would arrest immigrants who are in the U.S. illegally.",
@@ -212,16 +222,6 @@
           "link": "https://www.cnbc.com/2026/03/22/china-vows-to-continue-opening-its-economy-amid-us-trade-tensions.html",
           "sentiment_score": -0.807,
           "market_relevant": true
-        },
-        {
-          "headline": "Iran and Hezbollah launch new attacks on Israel as war also threatens power plants",
-          "description": "The United States and Iran threatened to target critical infrastructure as the war in the Middle East, now in its fourth week, puts lives and livelihoods at risk throughout the region. Iran on Sunday warned it would close the Strait of Hormuz immediately if t\u2026",
-          "source": "Associated Press",
-          "timestamp": "Mar 22, 12:53 AM EST",
-          "date": "2026-03-22",
-          "link": "https://apnews.com/article/iran-us-israel-trump-lebanon-march-22-2026-16cc60862529b873666ce4c1f6529d78",
-          "sentiment_score": -0.992,
-          "market_relevant": true
         }
       ],
       "active_flags": [
@@ -297,9 +297,9 @@
     },
     "news": {
       "pillar": "news_sentiment",
-      "timestamp": "2026-03-23T22:02:28.301561-04:00",
+      "timestamp": "2026-03-23T22:06:32.127928-04:00",
       "analysis": {
-        "average_score": -0.336,
+        "average_score": -0.335,
         "overall_sentiment": "bearish",
         "bullish_pct": 30.0,
         "bearish_pct": 70.0,
@@ -310,6 +310,69 @@
       },
       "pillar_score": -0.67,
       "status": "live"
+    },
+    "bias": {
+      "final_score": -0.378,
+      "bias": "Neutral",
+      "bias_emoji": "\ud83d\udfe1",
+      "confidence": 7,
+      "confidence_label": "Very Low Confidence",
+      "confidence_color": "red",
+      "threshold_warning": "\ud83d\udeab Very low confidence (7%) \u2014 pillars are conflicting. Avoid trading until regime clarifies.",
+      "active_pillars": 4,
+      "pillar_signals": [
+        "bearish",
+        "bullish",
+        "bearish",
+        "bearish"
+      ],
+      "pillar_contributions": {
+        "economic_calendar": {
+          "raw_score": 0,
+          "weight": 40,
+          "contribution": 0.0,
+          "status": "stale"
+        },
+        "geopolitical": {
+          "raw_score": -1.48,
+          "weight": 28,
+          "contribution": -0.414,
+          "status": "live"
+        },
+        "institutional": {
+          "raw_score": 0.75,
+          "weight": 20,
+          "contribution": 0.15,
+          "status": "live"
+        },
+        "macro_sentiment": {
+          "raw_score": -1.0,
+          "weight": 10,
+          "contribution": -0.1,
+          "status": "live"
+        },
+        "news_sentiment": {
+          "raw_score": -0.67,
+          "weight": 2,
+          "contribution": -0.013,
+          "status": "live"
+        }
+      },
+      "gauge_value": 40
     }
+  },
+  "weekly_summary": {
+    "pillar": "weekly_summary",
+    "timestamp": "2026-03-23T22:06:32.128519-04:00",
+    "summary": {
+      "generated_at": "2026-03-23T22:06:32.128476-04:00",
+      "overall": "Overall regime entering this week: Neutral with 7% confidence (Very Low Confidence). Regime is unclear \u2014 reduce size and wait for confirmation.",
+      "economic": "This week has 0 key USD events.",
+      "institutional": "Big money is net bullish on NQ (7.67%) and bullish on ES (28.12%).",
+      "macro": "VIX at 26.78 with Fear & Greed at 11 (Extreme Fear).",
+      "geopolitical": "Active geopolitical risks: \u2018Tax resistance\u2019 gains attention amid ICE protests, Iran war | Iran war energy crisis is a renewable energy wake-up call.",
+      "week_of": "March 23, 2026"
+    },
+    "status": "live"
   }
 }

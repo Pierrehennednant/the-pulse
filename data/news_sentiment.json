@@ -1,9 +1,9 @@
 {
   "data": {
     "pillar": "news_sentiment",
-    "timestamp": "2026-03-23T22:02:28.301561-04:00",
+    "timestamp": "2026-03-23T22:06:32.127928-04:00",
     "analysis": {
-      "average_score": -0.336,
+      "average_score": -0.335,
       "overall_sentiment": "bearish",
       "bullish_pct": 30.0,
       "bearish_pct": 70.0,
@@ -15,5 +15,5 @@
     "pillar_score": -0.67,
     "status": "live"
   },
-  "timestamp": "2026-03-24T02:02:28.301582"
+  "timestamp": "2026-03-24T02:06:32.127954"
 }

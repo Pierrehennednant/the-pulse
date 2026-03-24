@@ -1,8 +1,18 @@
 {
   "data": {
     "pillar": "geopolitical",
-    "timestamp": "2026-03-23T22:02:28.300873-04:00",
+    "timestamp": "2026-03-23T22:06:32.127258-04:00",
     "news_items": [
+      {
+        "headline": "Bank of Korea's newly appointed chief pledges 'balanced' policy",
+        "description": "Shin faces immediate challenges from Middle East-driven inflation and uneven growth.",
+        "source": "CNBC",
+        "timestamp": "Mar 22, 10:04 PM EST",
+        "date": "2026-03-22",
+        "link": "https://www.cnbc.com/2026/03/23/bank-of-koreas-newly-appointed-chief-pledges-balanced-policy.html",
+        "sentiment_score": -0.987,
+        "market_relevant": true
+      },
       {
         "headline": "Trump threatens to deploy ICE agents to airports if DHS shutdown doesn't end, while Elon Musk offers to cover TSA agents' pay",
         "description": "President Trump claimed ICE agents handling airport security would arrest immigrants who are in the U.S. illegally.",
@@ -92,16 +102,6 @@
         "link": "https://www.cnbc.com/2026/03/22/china-vows-to-continue-opening-its-economy-amid-us-trade-tensions.html",
         "sentiment_score": -0.807,
         "market_relevant": true
-      },
-      {
-        "headline": "Iran and Hezbollah launch new attacks on Israel as war also threatens power plants",
-        "description": "The United States and Iran threatened to target critical infrastructure as the war in the Middle East, now in its fourth week, puts lives and livelihoods at risk throughout the region. Iran on Sunday warned it would close the Strait of Hormuz immediately if t\u2026",
-        "source": "Associated Press",
-        "timestamp": "Mar 22, 12:53 AM EST",
-        "date": "2026-03-22",
-        "link": "https://apnews.com/article/iran-us-israel-trump-lebanon-march-22-2026-16cc60862529b873666ce4c1f6529d78",
-        "sentiment_score": -0.992,
-        "market_relevant": true
       }
     ],
     "active_flags": [
@@ -175,5 +175,5 @@
     "pillar_score": -1.48,
     "status": "live"
   },
-  "timestamp": "2026-03-24T02:02:28.300907"
+  "timestamp": "2026-03-24T02:06:32.127302"
 }

@@ -5,6 +5,7 @@ from datetime import datetime
 import pytz
 from config import TIMEZONE
 from utils.logger import pulse_logger
+from utils.cache import cache
 
 class SnapshotGenerator:
     def __init__(self, snapshot_dir="./data/snapshots"):
@@ -22,11 +23,13 @@ class SnapshotGenerator:
     def save(self, bias_score, formatted_data):
         timestamp = datetime.now(self.timezone).isoformat()
         snapshot_id = self.generate_id(timestamp)
+        weekly = cache.load('weekly_summary')
         snapshot = {
             'id': snapshot_id,
             'timestamp': timestamp,
             'bias': bias_score,
-            'pillars': formatted_data
+            'pillars': formatted_data,
+            'weekly_summary': weekly['data'] if weekly else None
         }
         snapshot_file = os.path.join(self.snapshot_dir, f"snapshot_{snapshot_id}.json")
         with open(snapshot_file, 'w') as f:
