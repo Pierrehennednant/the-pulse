@@ -1,34 +1,5 @@
-from flask import Flask, render_template, jsonify, request
-from processors.snapshot_generator import snapshot_generator
-from pipelines.manual_input import manual_input_pipeline
-
-app = Flask(__name__, template_folder='templates')
-
-@app.route('/')
-def home():
-    latest = snapshot_generator.get_latest()
-    return render_template('dashboard.html', snapshot=latest)
-
-@app.route('/api/latest')
-def api_latest():
-    latest = snapshot_generator.get_latest()
-    return jsonify(latest)
-
-@app.route('/snapshot/<snapshot_id>')
-def view_snapshot(snapshot_id):
-    snapshot = snapshot_generator.load(snapshot_id)
-    if not snapshot:
-        return "Snapshot not found", 404
-    return render_template('dashboard.html', snapshot=snapshot)
-
-@app.route('/api/snapshot/<snapshot_id>')
-def api_snapshot(snapshot_id):
-    snapshot = snapshot_generator.load(snapshot_id)
-    if not snapshot:
-        return jsonify({'error': 'Snapshot not found'}), 404
-    return jsonify(snapshot)
-
-@app.route('/api/manual_input', methods=['POST'])
+In ui/dashboard.py add a new route that forces the economic calendar to re-fetch after a manual input is saved. Replace the manual_input route with this:"
+python@app.route('/api/manual_input', methods=['POST'])
 def manual_input():
     try:
         data = request.get_json()
@@ -37,23 +8,26 @@ def manual_input():
         story_url = data.get('story_url', None)
         if not event_title or not actual_value:
             return jsonify({'error': 'Missing event_title or actual_value'}), 400
-
+        
         success = manual_input_pipeline.save_actual(event_title, actual_value, story_url)
-
+        
         if success:
+            # Force immediate economic calendar re-fetch
             from pipelines.economic_calendar import economic_calendar_pipeline
             from processors.data_formatter import data_formatter
             from processors.bias_calculator import bias_calculator
             from processors.snapshot_generator import snapshot_generator
             from utils.cache import cache
-
+            
+            # Re-fetch economic calendar with manual input merged
             econ_data = economic_calendar_pipeline.fetch()
-
+            
+            # Load other cached pillars
             macro_cached = cache.load('macro_sentiment')
             inst_cached = cache.load('institutional')
             geo_cached = cache.load('geopolitical')
             news_cached = cache.load('news_sentiment')
-
+            
             formatted_data = data_formatter.standardize({
                 'macro': macro_cached['data'] if macro_cached else None,
                 'economic': econ_data,
@@ -61,20 +35,13 @@ def manual_input():
                 'geopolitical': geo_cached['data'] if geo_cached else None,
                 'news': news_cached['data'] if news_cached else None
             })
-
+            
             bias_score = bias_calculator.compute(formatted_data)
             snapshot_generator.save(bias_score, formatted_data)
-
+            
             return jsonify({'status': 'saved', 'event': event_title, 'actual': actual_value})
-
+        
         return jsonify({'error': 'Failed to save'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-@app.route('/api/manual_inputs')
-def get_manual_inputs():
-    inputs = manual_input_pipeline.get_inputs()
-    return jsonify(inputs)
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=False)
+Then restart the app — no need to delete cache this time.

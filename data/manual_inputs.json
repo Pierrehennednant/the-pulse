@@ -1,0 +1,23 @@
+{
+  "data": {
+    "Flash Manufacturing PMI": {
+      "actual": "\u2713 52.4 saved",
+      "story_url": "https://www.pmi.spglobal.com/Public/Home/PressRelease/adc91b5cf42442cbb220d5b66b64ec7d",
+      "story_context": null,
+      "timestamp": "2026-03-24T11:20:44.392573-04:00"
+    },
+    "Flash Services PMI": {
+      "actual": "51.1",
+      "story_url": "https://www.pmi.spglobal.com/Public/Home/PressRelease/adc91b5cf42442cbb220d5b66b64ec7d",
+      "story_context": null,
+      "timestamp": "2026-03-24T11:20:51.234495-04:00"
+    },
+    "Richmond Manufacturing Index": {
+      "actual": "0",
+      "story_url": "https://www.richmondfed.org/-/media/RichmondFedOrg/region_communities/regional_data_analysis/regional_economy/surveys_of_business_conditions/manufacturing/2026/pdf/mfg_03_24_26.pdf",
+      "story_context": null,
+      "timestamp": "2026-03-24T11:20:54.884192-04:00"
+    }
+  },
+  "timestamp": "2026-03-24T15:20:54.884242"
+}
