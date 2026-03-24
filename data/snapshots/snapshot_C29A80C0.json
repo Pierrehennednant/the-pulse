@@ -1,6 +1,6 @@
 {
-  "id": "68C64F29",
-  "timestamp": "2026-03-23T21:57:19.304956-04:00",
+  "id": "C29A80C0",
+  "timestamp": "2026-03-23T22:00:28.430863-04:00",
   "bias": {
     "final_score": -0.978,
     "bias": "Bearish",
@@ -54,7 +54,7 @@
   "pillars": {
     "macro": {
       "pillar": "macro_sentiment",
-      "timestamp": "2026-03-23T21:57:19.249055-04:00",
+      "timestamp": "2026-03-23T22:00:26.464041-04:00",
       "vix": {
         "value": 26.78,
         "previous": 24.06,
@@ -80,7 +80,7 @@
     },
     "economic": {
       "pillar": "economic_calendar",
-      "timestamp": "2026-03-23T21:57:19.302383-04:00",
+      "timestamp": "2026-03-23T22:00:26.533957-04:00",
       "events": [
         {
           "title": "Flash Manufacturing PMI",
@@ -144,7 +144,7 @@
     },
     "institutional": {
       "pillar": "institutional",
-      "timestamp": "2026-03-23T21:55:06.344749-04:00",
+      "timestamp": "2026-03-23T22:00:26.979085-04:00",
       "nq_futures": {
         "asset_mgr_long": 97885,
         "asset_mgr_short": 36494,
@@ -176,7 +176,7 @@
     },
     "geopolitical": {
       "pillar": "geopolitical",
-      "timestamp": "2026-03-23T21:55:07.595165-04:00",
+      "timestamp": "2026-03-23T22:00:28.429710-04:00",
       "news_items": [
         {
           "headline": "Trump threatens to deploy ICE agents to airports if DHS shutdown doesn't end, while Elon Musk offers to cover TSA agents' pay",
@@ -352,7 +352,7 @@
     },
     "news": {
       "pillar": "news_sentiment",
-      "timestamp": "2026-03-23T21:57:19.304626-04:00",
+      "timestamp": "2026-03-23T22:00:28.430389-04:00",
       "analysis": {
         "average_score": -0.336,
         "overall_sentiment": "bearish",
