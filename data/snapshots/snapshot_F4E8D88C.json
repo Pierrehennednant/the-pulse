@@ -1,8 +1,8 @@
 {
-  "id": "FBAAD231",
-  "timestamp": "2026-03-23T21:52:02.781872-04:00",
+  "id": "F4E8D88C",
+  "timestamp": "2026-03-23T21:55:07.596367-04:00",
   "bias": {
-    "final_score": -0.964,
+    "final_score": -0.978,
     "bias": "Bearish",
     "bias_emoji": "\ud83d\udd34",
     "confidence": 67,
@@ -25,9 +25,9 @@
         "status": "live"
       },
       "geopolitical": {
-        "raw_score": -1.43,
+        "raw_score": -1.48,
         "weight": 28,
-        "contribution": -0.4,
+        "contribution": -0.414,
         "status": "live"
       },
       "institutional": {
@@ -54,7 +54,7 @@
   "pillars": {
     "macro": {
       "pillar": "macro_sentiment",
-      "timestamp": "2026-03-23T21:52:00.737868-04:00",
+      "timestamp": "2026-03-23T21:55:05.845860-04:00",
       "vix": {
         "value": 26.78,
         "previous": 24.06,
@@ -80,7 +80,7 @@
     },
     "economic": {
       "pillar": "economic_calendar",
-      "timestamp": "2026-03-23T21:52:00.786236-04:00",
+      "timestamp": "2026-03-23T21:55:05.935664-04:00",
       "events": [
         {
           "title": "Flash Manufacturing PMI",
@@ -144,7 +144,7 @@
     },
     "institutional": {
       "pillar": "institutional",
-      "timestamp": "2026-03-23T21:52:01.183840-04:00",
+      "timestamp": "2026-03-23T21:55:06.344749-04:00",
       "nq_futures": {
         "asset_mgr_long": 97885,
         "asset_mgr_short": 36494,
@@ -176,7 +176,7 @@
     },
     "geopolitical": {
       "pillar": "geopolitical",
-      "timestamp": "2026-03-23T21:52:02.780792-04:00",
+      "timestamp": "2026-03-23T21:55:07.595165-04:00",
       "news_items": [
         {
           "headline": "Trump threatens to deploy ICE agents to airports if DHS shutdown doesn't end, while Elon Musk offers to cover TSA agents' pay",
@@ -282,7 +282,7 @@
       "active_flags": [
         {
           "title": "\u2018Tax resistance\u2019 gains attention amid ICE protests, Iran war \u2014 and IRS penalties could follow",
-          "priority": 90,
+          "priority": 95,
           "flag_type": "war",
           "status": "Developing",
           "source": "CNBC",
@@ -295,7 +295,7 @@
         },
         {
           "title": "Iran war energy crisis is a renewable energy wake-up call",
-          "priority": 90,
+          "priority": 95,
           "flag_type": "war",
           "status": "Developing",
           "source": "Associated Press",
@@ -308,7 +308,7 @@
         },
         {
           "title": "Iran and Hezbollah launch new attacks on Israel as war also threatens power plants",
-          "priority": 90,
+          "priority": 95,
           "flag_type": "war",
           "status": "Developing",
           "source": "Associated Press",
@@ -321,7 +321,7 @@
         },
         {
           "title": "Oil prices are set to rise further as war in the Middle East escalates",
-          "priority": 90,
+          "priority": 95,
           "flag_type": "war",
           "status": "Developing",
           "source": "CNBC",
@@ -334,7 +334,7 @@
         },
         {
           "title": "Government bonds face \u2018perfect storm\u2019 as Iran war rattles Europe's central banks",
-          "priority": 90,
+          "priority": 95,
           "flag_type": "war",
           "status": "Developing",
           "source": "CNBC",
@@ -347,12 +347,12 @@
         }
       ],
       "total_items": 15,
-      "pillar_score": -1.43,
+      "pillar_score": -1.48,
       "status": "live"
     },
     "news": {
       "pillar": "news_sentiment",
-      "timestamp": "2026-03-23T21:52:02.781460-04:00",
+      "timestamp": "2026-03-23T21:55:07.595998-04:00",
       "analysis": {
         "average_score": -0.336,
         "overall_sentiment": "bearish",

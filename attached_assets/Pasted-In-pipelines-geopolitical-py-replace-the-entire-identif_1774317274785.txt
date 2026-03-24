@@ -1,0 +1,66 @@
+In pipelines/geopolitical.py replace the entire identify_flags method with this:"
+pythondef identify_flags(self, items):
+    flags = []
+    
+    # Tiered impact keywords — higher score = more market moving
+    high_impact_keywords = {
+        # Tier 1 — Immediate market movers (90-95)
+        'nuclear': 95, 'war': 90, 'invasion': 92, 'missile': 88,
+        'attack': 85, 'bomb': 85, 'default': 85, 'fomc': 85,
+        # Tier 2 — Major market movers (75-84)
+        'rate hike': 80, 'rate cut': 80, 'powell': 78,
+        'federal reserve': 78, 'tariff': 80, 'debt ceiling': 80,
+        'shutdown': 75, 'sanctions': 75, 'troops': 78,
+        # Tier 3 — Significant movers (65-74)
+        'recession': 75, 'ceasefire': 70, 'deal': 65,
+        'agreement': 65, 'escalation': 72, 'inflation': 70,
+        'gdp': 68, 'jobs': 67
+    }
+
+    # Sources that should be deprioritized
+    low_quality_sources = [
+        'truthout', 'rawstory', 'mediaite', 'salon',
+        'huffpost', 'breitbart', 'dailykos', 'thegatewaypundit'
+    ]
+
+    for item in items:
+        text = item['headline'].lower()
+        source = item.get('source', '').lower()
+        priority = 0
+        flag_type = None
+
+        # Skip low quality sources
+        if any(lqs in source for lqs in low_quality_sources):
+            continue
+
+        for keyword, score in high_impact_keywords.items():
+            if keyword in text:
+                if score > priority:
+                    priority = score
+                    flag_type = keyword
+
+        if priority >= 65:
+            # Boost priority for trusted sources
+            trusted_boost = ['reuters', 'associated press', 'cnbc', 'bloomberg',
+                           'wall street journal', 'financial times', 'politico', 'axios']
+            if any(ts in source for ts in trusted_boost):
+                priority = min(priority + 5, 99)
+
+            flags.append({
+                'title': item['headline'],
+                'priority': priority,
+                'flag_type': flag_type,
+                'status': 'Developing',
+                'source': item['source'],
+                'date': item['date'],
+                'timestamp': item['timestamp'],
+                'link': item['link'],
+                'sentiment': item['sentiment_score'],
+                'predicted_impact': 'bearish' if item['sentiment_score'] < -0.3 else 'bullish' if item['sentiment_score'] > 0.3 else 'neutral',
+                'context': item.get('description', '')[:200]
+            })
+
+    # Sort by priority — highest first
+    flags.sort(key=lambda x: x['priority'], reverse=True)
+    return flags[:5]
+Then delete all cache and snapshots, restart the app and show me the log.

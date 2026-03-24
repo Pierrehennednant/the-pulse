@@ -117,24 +117,44 @@ class GeopoliticalPipeline:
 
     def identify_flags(self, items):
         flags = []
+
         high_impact_keywords = {
-            'war': 90, 'attack': 85, 'bomb': 85, 'nuclear': 95,
-            'tariff': 80, 'sanctions': 75, 'shutdown': 70,
-            'fomc': 85, 'rate hike': 80, 'recession': 75,
-            'ceasefire': 70, 'deal': 65, 'agreement': 65,
-            'missile': 88, 'troops': 78, 'invasion': 92,
-            'default': 85, 'debt ceiling': 80, 'powell': 75
+            'nuclear': 95, 'war': 90, 'invasion': 92, 'missile': 88,
+            'attack': 85, 'bomb': 85, 'default': 85, 'fomc': 85,
+            'rate hike': 80, 'rate cut': 80, 'powell': 78,
+            'federal reserve': 78, 'tariff': 80, 'debt ceiling': 80,
+            'shutdown': 75, 'sanctions': 75, 'troops': 78,
+            'recession': 75, 'ceasefire': 70, 'deal': 65,
+            'agreement': 65, 'escalation': 72, 'inflation': 70,
+            'gdp': 68, 'jobs': 67
         }
+
+        low_quality_sources = [
+            'truthout', 'rawstory', 'mediaite', 'salon',
+            'huffpost', 'breitbart', 'dailykos', 'thegatewaypundit'
+        ]
+
         for item in items:
             text = item['headline'].lower()
+            source = item.get('source', '').lower()
             priority = 0
             flag_type = None
+
+            if any(lqs in source for lqs in low_quality_sources):
+                continue
+
             for keyword, score in high_impact_keywords.items():
                 if keyword in text:
                     if score > priority:
                         priority = score
                         flag_type = keyword
+
             if priority >= 65:
+                trusted_boost = ['reuters', 'associated press', 'cnbc', 'bloomberg',
+                               'wall street journal', 'financial times', 'politico', 'axios']
+                if any(ts in source for ts in trusted_boost):
+                    priority = min(priority + 5, 99)
+
                 flags.append({
                     'title': item['headline'],
                     'priority': priority,
@@ -148,6 +168,7 @@ class GeopoliticalPipeline:
                     'predicted_impact': 'bearish' if item['sentiment_score'] < -0.3 else 'bullish' if item['sentiment_score'] > 0.3 else 'neutral',
                     'context': item.get('description', '')[:200]
                 })
+
         flags.sort(key=lambda x: x['priority'], reverse=True)
         return flags[:5]
 
