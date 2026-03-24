@@ -1,8 +1,38 @@
 {
   "data": {
     "pillar": "geopolitical",
-    "timestamp": "2026-03-23T22:06:32.127258-04:00",
+    "timestamp": "2026-03-24T10:46:13.501432-04:00",
     "news_items": [
+      {
+        "headline": "U.S.-Iran talks, ICE in airports, gemstone investing and more in Morning Squawk",
+        "description": "Here are five key things investors need to know to start the trading day.",
+        "source": "CNBC",
+        "timestamp": "Mar 23, 08:33 AM EST",
+        "date": "2026-03-23",
+        "link": "https://www.cnbc.com/2026/03/23/5-things-to-know-before-the-market-opens.html",
+        "sentiment_score": 0.944,
+        "market_relevant": true
+      },
+      {
+        "headline": "The uneven cost of tariffs: Why some households will pay more than others",
+        "description": "Households experience the financial cost of tariffs differently based on factors such as household size and consumption, economists said.",
+        "source": "CNBC",
+        "timestamp": "Mar 23, 08:15 AM EST",
+        "date": "2026-03-23",
+        "link": "https://www.cnbc.com/2026/03/23/household-tariff-costs.html",
+        "sentiment_score": -0.992,
+        "market_relevant": true
+      },
+      {
+        "headline": "'This is insane.' Long lines plague U.S. airports as TSA officers face second missed paycheck in shutdown",
+        "description": "The Trump administration said it plans to send ICE officers to help ease airport congestion amid TSA officer absences as they face second missed full paycheck.",
+        "source": "CNBC",
+        "timestamp": "Mar 23, 07:41 AM EST",
+        "date": "2026-03-23",
+        "link": "https://www.cnbc.com/2026/03/23/airport-lines-government-shutdown-tsa.html",
+        "sentiment_score": -0.999,
+        "market_relevant": true
+      },
       {
         "headline": "Bank of Korea's newly appointed chief pledges 'balanced' policy",
         "description": "Shin faces immediate challenges from Middle East-driven inflation and uneven growth.",
@@ -24,33 +54,13 @@
         "market_relevant": true
       },
       {
-        "headline": "Elon Musk\u2019s bold move that could upend TSA workers\u2019 pay standoff amid DHS shutdown",
-        "description": "Elon Musk offered to cover the salaries of Transportation Security Administration (TSA) personnel during the ongoing government funding standoff.",
-        "source": "Fox Business",
-        "timestamp": "Mar 21, 09:45 AM EST",
-        "date": "2026-03-21",
-        "link": "https://www.foxbusiness.com/politics/elon-musk-offers-pay-tsa-workers-salaries-amid-dhs-budget-standoff",
-        "sentiment_score": 0.991,
-        "market_relevant": true
-      },
-      {
-        "headline": "\u2018Tax resistance\u2019 gains attention amid ICE protests, Iran war \u2014 and IRS penalties could follow",
-        "description": "Tax protesters often withhold taxes due to moral objections to certain government programs, such as the Iran war. But there can be IRS penalties, experts say.",
+        "headline": "U.S. executives, from Apple to Eli Lilly, revamp their push into the world's second-largest economy at the China Development Forum",
+        "description": "More than 80 global executives traveled to Beijing this weekend for the state-organized China Development Forum.",
         "source": "CNBC",
-        "timestamp": "Mar 21, 09:30 AM EST",
-        "date": "2026-03-21",
-        "link": "https://www.cnbc.com/2026/03/21/tax-protesters-iran-war-ice.html",
-        "sentiment_score": -0.975,
-        "market_relevant": true
-      },
-      {
-        "headline": "Analysis: Trump's unshackled presidency puts him at the center of the economy",
-        "description": "The president's unprecedented use of executive power has made him a driving force behind oil prices, the Federal Reserve's interest rates and more.",
-        "source": "CNBC",
-        "timestamp": "Mar 21, 08:00 AM EST",
-        "date": "2026-03-21",
-        "link": "https://www.cnbc.com/2026/03/21/trump-oil-fed-economy-iran-war.html",
-        "sentiment_score": 0.994,
+        "timestamp": "Mar 23, 10:05 AM EST",
+        "date": "2026-03-23",
+        "link": "https://www.cnbc.com/2026/03/23/apple-eli-lilly-us-china-market-push-trade-truce.html",
+        "sentiment_score": 0.995,
         "market_relevant": true
       },
       {
@@ -92,32 +102,9 @@
         "link": "https://www.cnbc.com/2026/03/22/iran-war-strait-of-hormuz-trump-oil-prices-economy.html",
         "sentiment_score": -0.994,
         "market_relevant": true
-      },
-      {
-        "headline": "China vows to continue opening its economy amid U.S. trade tensions",
-        "description": "China has reached a temporary truce with the U.S. on trade. The world's second-biggest economy reported a record $1.2 trillion trade surplus for 2025.",
-        "source": "CNBC",
-        "timestamp": "Mar 22, 08:47 AM EST",
-        "date": "2026-03-22",
-        "link": "https://www.cnbc.com/2026/03/22/china-vows-to-continue-opening-its-economy-amid-us-trade-tensions.html",
-        "sentiment_score": -0.807,
-        "market_relevant": true
       }
     ],
     "active_flags": [
-      {
-        "title": "\u2018Tax resistance\u2019 gains attention amid ICE protests, Iran war \u2014 and IRS penalties could follow",
-        "priority": 95,
-        "flag_type": "war",
-        "status": "Developing",
-        "source": "CNBC",
-        "date": "2026-03-21",
-        "timestamp": "Mar 21, 09:30 AM EST",
-        "link": "https://www.cnbc.com/2026/03/21/tax-protesters-iran-war-ice.html",
-        "sentiment": -0.975,
-        "predicted_impact": "bearish",
-        "context": "Tax protesters often withhold taxes due to moral objections to certain government programs, such as the Iran war. But there can be IRS penalties, experts say."
-      },
       {
         "title": "Iran war energy crisis is a renewable energy wake-up call",
         "priority": 95,
@@ -132,30 +119,43 @@
         "context": "The Iran war is exposing how much the global economy still depends on fragile fossil fuel supplies. The conflict has virtually choked off the Strait of Hormuz, a vital shipping lane for a fifth of the"
       },
       {
-        "title": "Iran and Hezbollah launch new attacks on Israel as war also threatens power plants",
-        "priority": 95,
-        "flag_type": "war",
-        "status": "Developing",
-        "source": "Associated Press",
-        "date": "2026-03-22",
-        "timestamp": "Mar 22, 12:53 AM EST",
-        "link": "https://apnews.com/article/iran-us-israel-trump-lebanon-march-22-2026-16cc60862529b873666ce4c1f6529d78",
-        "sentiment": -0.992,
-        "predicted_impact": "bearish",
-        "context": "The United States and Iran threatened to target critical infrastructure as the war in the Middle East, now in its fourth week, puts lives and livelihoods at risk throughout the region. Iran on Sunday "
-      },
-      {
-        "title": "Oil prices are set to rise further as war in the Middle East escalates",
+        "title": "BlackRock\u2019s Larry Fink warns against market timing, says missing best days can halve returns",
         "priority": 95,
         "flag_type": "war",
         "status": "Developing",
         "source": "CNBC",
-        "date": "2026-03-22",
-        "timestamp": "Mar 22, 10:42 AM EST",
-        "link": "https://www.cnbc.com/2026/03/22/oil-prices-are-set-to-rise-further-as-war-in-the-middle-east-escalates.html",
-        "sentiment": -0.641,
+        "date": "2026-03-23",
+        "timestamp": "Mar 23, 10:06 AM EST",
+        "link": "https://www.cnbc.com/2026/03/23/blackrocks-larry-fink-warns-against-trying-to-time-the-market-.html",
+        "sentiment": 0.981,
+        "predicted_impact": "bullish",
+        "context": "BlackRock CEO Larry Fink said staying invested through periods of turmoil has historically delivered far stronger returns."
+      },
+      {
+        "title": "Watch Energy Secretary Wright discuss Iran war after Trump postpones power plant strikes",
+        "priority": 95,
+        "flag_type": "war",
+        "status": "Developing",
+        "source": "CNBC",
+        "date": "2026-03-23",
+        "timestamp": "Mar 23, 09:19 AM EST",
+        "link": "https://www.cnbc.com/2026/03/23/energy-secretary-chris-wright-iran-war-oil-price.html",
+        "sentiment": -0.552,
         "predicted_impact": "bearish",
-        "context": "Oil prices look set to rise on Monday after U.S. and \u200bIranian trade threats to target energy facilities, analysts said."
+        "context": "Wright's comments Monday come after Trump threatened to bomb Iran's power plants if the Islamic Republic's leaders do not fully open the Strait of Hormuz."
+      },
+      {
+        "title": "Sen. Warren questions DOD about Anthropic blacklist that 'appears to be retaliation'",
+        "priority": 95,
+        "flag_type": "war",
+        "status": "Developing",
+        "source": "CNBC",
+        "date": "2026-03-23",
+        "timestamp": "Mar 23, 08:10 AM EST",
+        "link": "https://www.cnbc.com/2026/03/23/sen-warren-dod-anthropic-blacklist-hegseth.html",
+        "sentiment": -0.991,
+        "predicted_impact": "bearish",
+        "context": "Warren sent letters to Pete Hegseth and Sam Altman, asking for additional details of OpenAI's contract with the defense department and Anthropic's blacklisting."
       },
       {
         "title": "Government bonds face \u2018perfect storm\u2019 as Iran war rattles Europe's central banks",
@@ -171,9 +171,9 @@
         "context": "Bond yields have surged as Europe's central banks grapple with new inflation fears."
       }
     ],
-    "total_items": 15,
-    "pillar_score": -1.48,
+    "total_items": 20,
+    "pillar_score": -1.0,
     "status": "live"
   },
-  "timestamp": "2026-03-24T02:06:32.127302"
+  "timestamp": "2026-03-24T14:46:13.501492"
 }

@@ -1,19 +1,19 @@
 {
   "data": {
     "pillar": "news_sentiment",
-    "timestamp": "2026-03-23T22:06:32.127928-04:00",
+    "timestamp": "2026-03-24T10:46:13.502502-04:00",
     "analysis": {
-      "average_score": -0.335,
+      "average_score": -0.361,
       "overall_sentiment": "bearish",
       "bullish_pct": 30.0,
       "bearish_pct": 70.0,
       "neutral_pct": 0.0,
       "total_headlines": 10,
-      "dominant_theme": "\u2018Tax resistance\u2019 gains attention amid ICE protests, Iran war \u2014 and IRS penalties could follow",
-      "pillar_score": -0.67
+      "dominant_theme": "Iran war energy crisis is a renewable energy wake-up call",
+      "pillar_score": -0.72
     },
-    "pillar_score": -0.67,
+    "pillar_score": -0.72,
     "status": "live"
   },
-  "timestamp": "2026-03-24T02:06:32.127954"
+  "timestamp": "2026-03-24T14:46:13.502531"
 }

@@ -1,17 +1,17 @@
 {
   "data": {
     "pillar": "weekly_summary",
-    "timestamp": "2026-03-23T22:06:32.128519-04:00",
+    "timestamp": "2026-03-24T10:46:13.503033-04:00",
     "summary": {
-      "generated_at": "2026-03-23T22:06:32.128476-04:00",
-      "overall": "Overall regime entering this week: Neutral with 7% confidence (Very Low Confidence). Regime is unclear \u2014 reduce size and wait for confirmation.",
-      "economic": "This week has 0 key USD events.",
+      "generated_at": "2026-03-24T10:46:13.503002-04:00",
+      "overall": "Overall regime entering this week: Bearish with 64% confidence (Moderate Confidence). Lean short on rallies, avoid aggressive longs until conditions improve.",
+      "economic": "This week has 5 key USD events including Flash Manufacturing PMI, Flash Services PMI, Richmond Manufacturing Index.",
       "institutional": "Big money is net bullish on NQ (7.67%) and bullish on ES (28.12%).",
-      "macro": "VIX at 26.78 with Fear & Greed at 11 (Extreme Fear).",
-      "geopolitical": "Active geopolitical risks: \u2018Tax resistance\u2019 gains attention amid ICE protests, Iran war | Iran war energy crisis is a renewable energy wake-up call.",
-      "week_of": "March 23, 2026"
+      "macro": "VIX at 26.15 with Fear & Greed at 11 (Extreme Fear).",
+      "geopolitical": "Active geopolitical risks: Iran war energy crisis is a renewable energy wake-up call | BlackRock\u2019s Larry Fink warns against market timing, says mis.",
+      "week_of": "March 24, 2026"
     },
     "status": "live"
   },
-  "timestamp": "2026-03-24T02:06:32.128538"
+  "timestamp": "2026-03-24T14:46:13.503046"
 }
