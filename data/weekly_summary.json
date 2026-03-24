@@ -1,17 +1,17 @@
 {
   "data": {
     "pillar": "weekly_summary",
-    "timestamp": "2026-03-24T19:24:13.214909-04:00",
+    "timestamp": "2026-03-24T19:47:46.175172-04:00",
     "summary": {
-      "generated_at": "2026-03-24T19:24:13.214877-04:00",
-      "overall": "Overall regime entering this week: Bearish with 61% confidence (Moderate Confidence). Lean short on rallies, avoid aggressive longs until conditions improve.",
+      "generated_at": "2026-03-24T19:47:46.175145-04:00",
+      "overall": "Overall regime entering this week: Bearish with 64% confidence (Moderate Confidence). Lean short on rallies, avoid aggressive longs until conditions improve.",
       "economic": "This week has 5 key USD events including Flash Manufacturing PMI, Flash Services PMI, Richmond Manufacturing Index.",
       "institutional": "Big money is net bullish on NQ (7.67%) and bullish on ES (28.12%).",
       "macro": "VIX at 26.15 with Fear & Greed at 11 (Extreme Fear).",
-      "geopolitical": "Active geopolitical risks: Is the Senate heading toward a compromise on DHS funding? | Rep. Nick LaLota on DHS stalemate: \"Funding the whole darn t.",
+      "geopolitical": "Active geopolitical risks: Pentagon restricts satellite imagery to hide the cost of its | Is the Senate heading toward a compromise on DHS funding?.",
       "week_of": "March 24, 2026"
     },
     "status": "live"
   },
-  "timestamp": "2026-03-24T23:24:13.214922"
+  "timestamp": "2026-03-24T23:47:46.175184"
 }

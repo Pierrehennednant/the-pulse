@@ -1,8 +1,18 @@
 {
   "data": {
     "pillar": "geopolitical",
-    "timestamp": "2026-03-24T19:24:13.213485-04:00",
+    "timestamp": "2026-03-24T19:47:46.173690-04:00",
     "news_items": [
+      {
+        "headline": "Metals melt as West Asia war rages on",
+        "description": "India Business News: MUMBAI: The accepted wisdom, for years, was that global uncertainties and inflation would drive the prices of precious metals northward. Th...",
+        "source": "timesofindia.indiatimes.com",
+        "timestamp": "Mar 24, 05:39 PM EST",
+        "date": "2026-03-24",
+        "link": "https://timesofindia.indiatimes.com/business/india-business/metals-melt-as-west-asia-war-rages-on/articleshow/129786724.cms",
+        "sentiment_score": 0.645,
+        "market_relevant": true
+      },
       {
         "headline": "EU shelves Russian oil ban as Iran war rattles energy markets \u2014 RT Business News",
         "description": "The EU has reportedly postponed a proposal to ban Russian oil imports, removing the draft from the agenda as the Iran war fuels energy price turmoil",
@@ -14,13 +24,13 @@
         "market_relevant": true
       },
       {
-        "headline": "Trump says U.S. and Iran are 'in negotiations right now,' Tehran is 'talking sense'",
-        "description": "",
-        "source": "cnbc.com",
-        "timestamp": "Mar 24, 03:56 PM EST",
+        "headline": "Pentagon restricts satellite imagery to hide the cost of its Iran War",
+        "description": "The Pentagon is forcing spy satellite firms to hide the true extent of damage caused in the US-Israeli attack on Iran\u2013more arm-twisting",
+        "source": "thecanary.co",
+        "timestamp": "Mar 24, 07:20 PM EST",
         "date": "2026-03-24",
-        "link": "https://www.cnbc.com/2026/03/24/trump-iran-war-negotiations.html",
-        "sentiment_score": 0.885,
+        "link": "https://www.thecanary.co/global/2026/03/24/pentagon-hiding-the-truth-iran-war/",
+        "sentiment_score": -0.999,
         "market_relevant": true
       },
       {
@@ -41,6 +51,16 @@
         "date": "2026-03-24",
         "link": "https://www.al-monitor.com/originals/2026/03/chinas-foreign-minister-urges-early-peace-talks-call-iranian-counterpart",
         "sentiment_score": -0.596,
+        "market_relevant": true
+      },
+      {
+        "headline": "Lebanon Expels Iranian Ambassador as Israel Creates New \u2018Security Zone\u2019 in Campaign to Counter Hezbollah",
+        "description": "Smoke rises after an Israeli strike, amid escalating hostilities between Israel and Hezbollah, as the US-Israeli conflict with Iran continues, \u2026",
+        "source": "algemeiner.com",
+        "timestamp": "Mar 24, 06:58 PM EST",
+        "date": "2026-03-24",
+        "link": "https://www.algemeiner.com/2026/03/24/lebanon-expels-iranian-ambassador-israel-creates-new-security-zone-campaign-counter-hezbollah/",
+        "sentiment_score": 0.614,
         "market_relevant": true
       },
       {
@@ -81,31 +101,21 @@
         "date": "2026-03-24",
         "link": "https://www.rt.com/news/636072-szijjarto-wiretapping-hungary-election/",
         "sentiment_score": -0.582,
-        "market_relevant": true
-      },
-      {
-        "headline": "Trump says Iran gave U.S. \"a very big present worth a tremendous amount of money\"",
-        "description": "President Trump on Tuesday told CBS News senior White House and political correspondent Ed O'Keefe that Iran",
-        "source": "cbsnews.com",
-        "timestamp": "Mar 24, 06:07 PM EST",
-        "date": "2026-03-24",
-        "link": "https://www.cbsnews.com/video/trump-iran-present-worth-tremendous-amount-money/",
-        "sentiment_score": 0.996,
-        "market_relevant": true
-      },
-      {
-        "headline": "Rep. Nick LaLota on DHS stalemate: \"Funding the whole darn thing is the right way to move forward\"",
-        "description": "House Speaker Mike Johnson told CBS News that he prefers not to split off ICE from Homeland Security funding as the partial government shutdown continues. Repub...",
-        "source": "cbsnews.com",
-        "timestamp": "Mar 24, 06:03 PM EST",
-        "date": "2026-03-24",
-        "link": "https://www.cbsnews.com/video/nick-lalota-dhs-stalemate-funding-whole-darn-thing-right-way-move-forward/",
-        "sentiment_score": 0.982,
         "market_relevant": true
       }
     ],
     "financial_juice_items": [
       {
+        "headline": "Metals melt as West Asia war rages on",
+        "description": "India Business News: MUMBAI: The accepted wisdom, for years, was that global uncertainties and inflation would drive the prices of precious metals northward. Th...",
+        "source": "timesofindia.indiatimes.com",
+        "timestamp": "Mar 24, 05:39 PM EST",
+        "date": "2026-03-24",
+        "link": "https://timesofindia.indiatimes.com/business/india-business/metals-melt-as-west-asia-war-rages-on/articleshow/129786724.cms",
+        "sentiment_score": 0.645,
+        "market_relevant": true
+      },
+      {
         "headline": "EU shelves Russian oil ban as Iran war rattles energy markets \u2014 RT Business News",
         "description": "The EU has reportedly postponed a proposal to ban Russian oil imports, removing the draft from the agenda as the Iran war fuels energy price turmoil",
         "source": "rt.com",
@@ -116,13 +126,13 @@
         "market_relevant": true
       },
       {
-        "headline": "Trump says U.S. and Iran are 'in negotiations right now,' Tehran is 'talking sense'",
-        "description": "",
-        "source": "cnbc.com",
-        "timestamp": "Mar 24, 03:56 PM EST",
+        "headline": "Pentagon restricts satellite imagery to hide the cost of its Iran War",
+        "description": "The Pentagon is forcing spy satellite firms to hide the true extent of damage caused in the US-Israeli attack on Iran\u2013more arm-twisting",
+        "source": "thecanary.co",
+        "timestamp": "Mar 24, 07:20 PM EST",
         "date": "2026-03-24",
-        "link": "https://www.cnbc.com/2026/03/24/trump-iran-war-negotiations.html",
-        "sentiment_score": 0.885,
+        "link": "https://www.thecanary.co/global/2026/03/24/pentagon-hiding-the-truth-iran-war/",
+        "sentiment_score": -0.999,
         "market_relevant": true
       },
       {
@@ -143,6 +153,16 @@
         "date": "2026-03-24",
         "link": "https://www.al-monitor.com/originals/2026/03/chinas-foreign-minister-urges-early-peace-talks-call-iranian-counterpart",
         "sentiment_score": -0.596,
+        "market_relevant": true
+      },
+      {
+        "headline": "Lebanon Expels Iranian Ambassador as Israel Creates New \u2018Security Zone\u2019 in Campaign to Counter Hezbollah",
+        "description": "Smoke rises after an Israeli strike, amid escalating hostilities between Israel and Hezbollah, as the US-Israeli conflict with Iran continues, \u2026",
+        "source": "algemeiner.com",
+        "timestamp": "Mar 24, 06:58 PM EST",
+        "date": "2026-03-24",
+        "link": "https://www.algemeiner.com/2026/03/24/lebanon-expels-iranian-ambassador-israel-creates-new-security-zone-campaign-counter-hezbollah/",
+        "sentiment_score": 0.614,
         "market_relevant": true
       },
       {
@@ -184,30 +204,23 @@
         "link": "https://www.rt.com/news/636072-szijjarto-wiretapping-hungary-election/",
         "sentiment_score": -0.582,
         "market_relevant": true
-      },
-      {
-        "headline": "Trump says Iran gave U.S. \"a very big present worth a tremendous amount of money\"",
-        "description": "President Trump on Tuesday told CBS News senior White House and political correspondent Ed O'Keefe that Iran",
-        "source": "cbsnews.com",
-        "timestamp": "Mar 24, 06:07 PM EST",
-        "date": "2026-03-24",
-        "link": "https://www.cbsnews.com/video/trump-iran-present-worth-tremendous-amount-money/",
-        "sentiment_score": 0.996,
-        "market_relevant": true
-      },
-      {
-        "headline": "Rep. Nick LaLota on DHS stalemate: \"Funding the whole darn thing is the right way to move forward\"",
-        "description": "House Speaker Mike Johnson told CBS News that he prefers not to split off ICE from Homeland Security funding as the partial government shutdown continues. Repub...",
-        "source": "cbsnews.com",
-        "timestamp": "Mar 24, 06:03 PM EST",
-        "date": "2026-03-24",
-        "link": "https://www.cbsnews.com/video/nick-lalota-dhs-stalemate-funding-whole-darn-thing-right-way-move-forward/",
-        "sentiment_score": 0.982,
-        "market_relevant": true
       }
     ],
     "unbiased_network_items": [],
     "active_flags": [
+      {
+        "title": "Pentagon restricts satellite imagery to hide the cost of its Iran War",
+        "priority": 90,
+        "flag_type": "war",
+        "status": "Developing",
+        "source": "thecanary.co",
+        "date": "2026-03-24",
+        "timestamp": "Mar 24, 07:20 PM EST",
+        "link": "https://www.thecanary.co/global/2026/03/24/pentagon-hiding-the-truth-iran-war/",
+        "sentiment": -0.999,
+        "predicted_impact": "bearish",
+        "context": "The Pentagon is forcing spy satellite firms to hide the true extent of damage caused in the US-Israeli attack on Iran\u2013more arm-twisting"
+      },
       {
         "title": "Is the Senate heading toward a compromise on DHS funding?",
         "priority": 90,
@@ -222,61 +235,48 @@
         "context": "Senate leaders and the White House are working on a deal to end the partial government shutdown as travelers face chaos at airports. Political strategists Hyma ..."
       },
       {
-        "title": "Rep. Nick LaLota on DHS stalemate: \"Funding the whole darn thing is the right way to move forward\"",
+        "title": "\u2018Not our war': Europe says no to Trump",
         "priority": 90,
         "flag_type": "war",
         "status": "Developing",
-        "source": "cbsnews.com",
-        "date": "2026-03-24",
-        "timestamp": "Mar 24, 06:03 PM EST",
-        "link": "https://www.cbsnews.com/video/nick-lalota-dhs-stalemate-funding-whole-darn-thing-right-way-move-forward/",
-        "sentiment": 0.982,
-        "predicted_impact": "bullish",
-        "context": "House Speaker Mike Johnson told CBS News that he prefers not to split off ICE from Homeland Security funding as the partial government shutdown continues. Repub..."
-      },
-      {
-        "title": "Week Ahead: The War and Anticipated Policy Responses Drive the Capital Markets",
-        "priority": 90,
-        "flag_type": "war",
-        "status": "Developing",
-        "source": "investing.com",
-        "date": "2026-03-23",
-        "timestamp": "Mar 23, 01:12 AM EST",
-        "link": "https://www.investing.com/analysis/week-ahead-the-war-and-anticipated-policy-responses-drive-the-capital-markets-200677048",
-        "sentiment": 0.995,
-        "predicted_impact": "bullish",
-        "context": "Market Analysis by covering: Euro US Dollar, British Pound US Dollar, US Dollar Japanese Yen, Australian Dollar US Dollar. Read 's Market Analysis on Investing..."
-      },
-      {
-        "title": "As Iran war disrupts the Gulf, India's growth story faces new risks",
-        "priority": 90,
-        "flag_type": "war",
-        "status": "Developing",
-        "source": "economictimes.indiatimes.com",
-        "date": "2026-03-22",
-        "timestamp": "Mar 22, 12:53 AM EST",
-        "link": "https://economictimes.indiatimes.com/news/economy/indicators/as-iran-war-disrupts-the-gulf-indias-growth-story-faces-new-risks/articleshow/129728352.cms",
-        "sentiment": -0.974,
-        "predicted_impact": "bearish",
-        "context": "India's economy faces new challenges. Strong growth is threatened by rising energy prices and disrupted trade. The Middle East conflict impacts oil and gas su..."
-      },
-      {
-        "title": "'Not our war': Europe says no to Trump",
-        "priority": 90,
-        "flag_type": "war",
-        "status": "Developing",
-        "source": "asiaone.com",
+        "source": "al-monitor.com",
         "date": "2026-03-18",
-        "timestamp": "Mar 18, 08:29 PM EST",
-        "link": "https://www.asiaone.com/world/not-our-war-europe-says-no-trump",
-        "sentiment": -0.949,
+        "timestamp": "Mar 18, 01:36 PM EST",
+        "link": "https://www.al-monitor.com/originals/2026/03/not-our-war-europe-says-no-trump",
+        "sentiment": -0.928,
         "predicted_impact": "bearish",
-        "context": "BERLIN/PARIS - For a self-described Transatlanticist like German Chancellor Friedrich Merz, the language has been unusually blunt.When President Donald Trump as..."
+        "context": "By Andreas Rinke, Ludwig Burger and John IrishBERLIN/PARIS, March 18 (Reuters) - For a self-described Transatlanticist like German Chancellor Friedrich Merz, th..."
+      },
+      {
+        "title": "What the Iran War Means for the U.S.-China Relationship",
+        "priority": 90,
+        "flag_type": "war",
+        "status": "Developing",
+        "source": "uctoday.com",
+        "date": "2026-03-17",
+        "timestamp": "Mar 17, 02:30 AM EST",
+        "link": "https://commstrader.com/news/what-the-iran-war-means-for-the-u-s-china-relationship/",
+        "sentiment": 0.979,
+        "predicted_impact": "bullish",
+        "context": "You know that feeling when you're planning a big family reunion or a crucial business meeting, and suddenly everything gets pushed back? That's the vibe right"
+      },
+      {
+        "title": "Press review: Russia ready for arms control reset with US and Mideast war's outlook hazy",
+        "priority": 90,
+        "flag_type": "war",
+        "status": "Developing",
+        "source": "tass.com",
+        "date": "2026-03-24",
+        "timestamp": "Mar 24, 06:00 AM EST",
+        "link": "https://tass.com/pressreview/2106065",
+        "sentiment": -0.963,
+        "predicted_impact": "bearish",
+        "context": "Top stories from the Russian press on Tuesday, March 24th"
       }
     ],
     "total_items": 58,
-    "pillar_score": -0.5,
+    "pillar_score": -0.88,
     "status": "live"
   },
-  "timestamp": "2026-03-24T23:24:13.213521"
+  "timestamp": "2026-03-24T23:47:46.173723"
 }
