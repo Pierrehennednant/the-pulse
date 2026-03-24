@@ -1,7 +1,7 @@
 {
   "data": {
     "pillar": "geopolitical",
-    "timestamp": "2026-03-23T12:31:11.326985-04:00",
+    "timestamp": "2026-03-23T21:52:02.780792-04:00",
     "news_items": [
       {
         "headline": "Trump threatens to deploy ICE agents to airports if DHS shutdown doesn't end, while Elon Musk offers to cover TSA agents' pay",
@@ -44,6 +44,36 @@
         "market_relevant": true
       },
       {
+        "headline": "CNBC Daily Open: Trump issues Strait of Hormuz ultimatum",
+        "description": "U.S.-Iran threats over Hormuz rattle markets as oil risk lingers and missiles hit Israel, raising fears of a prolonged conflict.",
+        "source": "CNBC",
+        "timestamp": "Mar 22, 09:17 PM EST",
+        "date": "2026-03-22",
+        "link": "https://www.cnbc.com/2026/03/23/cnbc-daily-open-us-iran-hormuz-threats-oil-markets-trump.html",
+        "sentiment_score": 0.915,
+        "market_relevant": true
+      },
+      {
+        "headline": "Not just buying 'things': Why China's emotional economy is on the rise",
+        "description": "Amid a prolonged economic slowdown, one segment of the world's second-largest economy is growing quicker than the rest: China's so-called emotional economy.",
+        "source": "CNBC",
+        "timestamp": "Mar 22, 06:58 PM EST",
+        "date": "2026-03-22",
+        "link": "https://www.cnbc.com/2026/03/23/chinas-emotional-economy-is-on-the-rise.html",
+        "sentiment_score": -0.515,
+        "market_relevant": true
+      },
+      {
+        "headline": "Iran war energy crisis is a renewable energy wake-up call",
+        "description": "The Iran war is exposing how much the global economy still depends on fragile fossil fuel supplies. The conflict has virtually choked off the Strait of Hormuz, a vital shipping lane for a fifth of the world\u2019s oil and liquefied natural gas. That's shaking up m\u2026",
+        "source": "Associated Press",
+        "timestamp": "Mar 22, 06:01 PM EST",
+        "date": "2026-03-22",
+        "link": "https://apnews.com/article/middle-east-wars-renewable-energy-asia-4b5fe0693ce5816472c905db85f7da6e",
+        "sentiment_score": -0.981,
+        "market_relevant": true
+      },
+      {
         "headline": "The economy has a Strait of Hormuz deadline for Trump: Two weeks",
         "description": "Corporate executives are not panicking over a short-term increase in oil prices and Strait of Hormuz closure, but patience may wear thin in a matter of weeks.",
         "source": "CNBC",
@@ -72,36 +102,6 @@
         "link": "https://apnews.com/article/iran-us-israel-trump-lebanon-march-22-2026-16cc60862529b873666ce4c1f6529d78",
         "sentiment_score": -0.992,
         "market_relevant": true
-      },
-      {
-        "headline": "Oil prices are set to rise further as war in the Middle East escalates",
-        "description": "Oil prices look set to rise on Monday after U.S. and \u200bIranian trade threats to target energy facilities, analysts said.",
-        "source": "CNBC",
-        "timestamp": "Mar 22, 10:42 AM EST",
-        "date": "2026-03-22",
-        "link": "https://www.cnbc.com/2026/03/22/oil-prices-are-set-to-rise-further-as-war-in-the-middle-east-escalates.html",
-        "sentiment_score": -0.641,
-        "market_relevant": true
-      },
-      {
-        "headline": "U.K. confirms Iran fired two missiles at British-American base in Indian Ocean which failed to reach their target",
-        "description": "Iran fired the two missiles at the joint U.S.-U.K. Diego Garcia base in the Indian Ocean but they failed to reach their target, U.K. minister says.",
-        "source": "CNBC",
-        "timestamp": "Mar 22, 07:11 AM EST",
-        "date": "2026-03-22",
-        "link": "https://www.cnbc.com/2026/03/22/uk-confirms-iran-fired-two-missiles-at-british-american-base.html",
-        "sentiment_score": -0.999,
-        "market_relevant": true
-      },
-      {
-        "headline": "Government bonds face \u2018perfect storm\u2019 as Iran war rattles Europe's central banks",
-        "description": "Bond yields have surged as Europe's central banks grapple with new inflation fears.",
-        "source": "CNBC",
-        "timestamp": "Mar 19, 12:07 PM EST",
-        "date": "2026-03-19",
-        "link": "https://www.cnbc.com/2026/03/19/interest-rates-bonds-bank-of-england-european-central-bank-investors-iran-war-ecb-inflation.html",
-        "sentiment_score": -0.934,
-        "market_relevant": true
       }
     ],
     "active_flags": [
@@ -117,6 +117,19 @@
         "sentiment": -0.975,
         "predicted_impact": "bearish",
         "context": "Tax protesters often withhold taxes due to moral objections to certain government programs, such as the Iran war. But there can be IRS penalties, experts say."
+      },
+      {
+        "title": "Iran war energy crisis is a renewable energy wake-up call",
+        "priority": 90,
+        "flag_type": "war",
+        "status": "Developing",
+        "source": "Associated Press",
+        "date": "2026-03-22",
+        "timestamp": "Mar 22, 06:01 PM EST",
+        "link": "https://apnews.com/article/middle-east-wars-renewable-energy-asia-4b5fe0693ce5816472c905db85f7da6e",
+        "sentiment": -0.981,
+        "predicted_impact": "bearish",
+        "context": "The Iran war is exposing how much the global economy still depends on fragile fossil fuel supplies. The conflict has virtually choked off the Strait of Hormuz, a vital shipping lane for a fifth of the"
       },
       {
         "title": "Iran and Hezbollah launch new attacks on Israel as war also threatens power plants",
@@ -156,24 +169,11 @@
         "sentiment": -0.934,
         "predicted_impact": "bearish",
         "context": "Bond yields have surged as Europe's central banks grapple with new inflation fears."
-      },
-      {
-        "title": "Iran war, oil price surge worsen K-shaped economy, say economists",
-        "priority": 90,
-        "flag_type": "war",
-        "status": "Developing",
-        "source": "CNBC",
-        "date": "2026-03-17",
-        "timestamp": "Mar 17, 02:31 PM EST",
-        "link": "https://www.cnbc.com/2026/03/17/iran-war-oil-price-surge-worsen-k-shaped-economy-say-economists.html",
-        "sentiment": -0.999,
-        "predicted_impact": "bearish",
-        "context": "Rising oil prices and the fallout of the U.S.-Iran war are worsening the economic divide, experts say."
       }
     ],
     "total_items": 15,
-    "pillar_score": -1.35,
+    "pillar_score": -1.43,
     "status": "live"
   },
-  "timestamp": "2026-03-23T16:31:11.327017"
+  "timestamp": "2026-03-24T01:52:02.780825"
 }

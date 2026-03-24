@@ -1,4 +1,5 @@
-from config import PILLAR_WEIGHTS
+Please replace the entire contents of processors/bias_calculator.py with this:"
+pythonfrom config import PILLAR_WEIGHTS
 from utils.logger import pulse_logger
 
 class BiasCalculator:
@@ -27,6 +28,7 @@ class BiasCalculator:
             contribution = score * (weight / 100)
             total_score += contribution
 
+            # Track active pillars and their signals
             if status not in ['unavailable'] and score != 0:
                 active_pillars += 1
                 if score > 0.2:
@@ -45,6 +47,7 @@ class BiasCalculator:
 
         final_score = round(total_score, 3)
 
+        # Determine bias label
         if final_score >= 0.5:
             bias = 'Bullish'
             bias_emoji = '🟢'
@@ -55,11 +58,13 @@ class BiasCalculator:
             bias = 'Neutral'
             bias_emoji = '🟡'
 
+        # Reworked confidence — based on pillar agreement
         if active_pillars == 0:
             confidence = 0
             confidence_label = 'No Data'
             confidence_color = 'gray'
         else:
+            # Count how many active pillars agree with the final bias direction
             if bias == 'Bullish':
                 agreeing = pillar_signals.count('bullish')
             elif bias == 'Bearish':
@@ -71,6 +76,7 @@ class BiasCalculator:
             score_strength = min(abs(final_score) / 2.0, 1.0)
             confidence = int((agreement_pct * 0.6 + score_strength * 0.4) * 100)
 
+            # Confidence label and threshold warning
             if confidence >= 70:
                 confidence_label = 'High Confidence'
                 confidence_color = 'green'
@@ -106,3 +112,4 @@ class BiasCalculator:
         return result
 
 bias_calculator = BiasCalculator()
+Then delete all cache and snapshots, restart the app and show me the log output."
