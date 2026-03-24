@@ -77,6 +77,7 @@ class GeopoliticalPipeline:
                     f"&language=en"
                     f"&categories={category}"
                     f"&limit=25"
+                    f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,abcnews.go.com,washingtonpost.com,nytimes.com"
                 )
                 response = requests.get(url, timeout=10)
                 data = response.json()
@@ -121,6 +122,7 @@ class GeopoliticalPipeline:
                     f"&search={requests.utils.quote(query)}"
                     f"&sort=published_at"
                     f"&limit=25"
+                    f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,washingtonpost.com,nytimes.com"
                 )
                 response = requests.get(url, timeout=10)
                 data = response.json()
@@ -179,7 +181,9 @@ class GeopoliticalPipeline:
             'huffpost', 'breitbart', 'dailykos', 'thegatewaypundit',
             'thestockmarketwatch.com', 'rt.com', 'sputnik',
             'investing.com', 'economictimes.indiatimes.com', 'asiaone.com',
-            'indiatimes.com', 'timesofindia.com', 'hindustantimes.com'
+            'indiatimes.com', 'timesofindia.com', 'hindustantimes.com',
+            'thecanary.co', 'uctoday.com', 'tass.com', 'tass.ru',
+            'sputniknews.com', 'presstv.ir'
         ]
         trusted_sources = [
             'reuters', 'associated press', 'cnbc', 'bloomberg',
