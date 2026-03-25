@@ -1,19 +1,10 @@
 {
   "data": {
     "pillar": "news_sentiment",
-    "timestamp": "2026-03-24T21:37:13.241751-04:00",
-    "analysis": {
-      "average_score": -0.381,
-      "overall_sentiment": "bearish",
-      "bullish_pct": 30.0,
-      "bearish_pct": 70.0,
-      "neutral_pct": 0.0,
-      "total_headlines": 20,
-      "dominant_theme": "Asia-Pacific markets are set for higher open as Trump comments signal Iran war de-escalation",
-      "pillar_score": -0.76
-    },
-    "pillar_score": -0.76,
+    "timestamp": "2026-03-25T08:45:33.087768-04:00",
+    "analysis": null,
+    "pillar_score": 0,
     "status": "live"
   },
-  "timestamp": "2026-03-25T01:37:13.241771"
+  "timestamp": "2026-03-25T12:45:33.087813"
 }
