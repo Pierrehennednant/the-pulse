@@ -45,7 +45,11 @@ class SnapshotGenerator:
         return None
 
     def get_latest(self):
-        files = sorted(os.listdir(self.snapshot_dir), reverse=True)
+        files = sorted(
+            os.listdir(self.snapshot_dir),
+            key=lambda f: os.path.getmtime(os.path.join(self.snapshot_dir, f)),
+            reverse=True
+        )
         if files:
             with open(os.path.join(self.snapshot_dir, files[0]), 'r') as f:
                 return json.load(f)
