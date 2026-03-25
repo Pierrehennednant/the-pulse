@@ -1,18 +1,38 @@
+import json
+import os
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 import pytz
 from config import TIMEZONE
-from utils.cache import cache
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
 
 class InstitutionalPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
-        self.cache_key = "institutional"
+        self.permanent_file = "./data/permanent_cot.json"
         self.cot_url = "https://www.cftc.gov/dea/futures/financial_lf.htm"
         self.headers = {'User-Agent': 'Mozilla/5.0'}
+        self._ensure_exists()
+
+    def _ensure_exists(self):
+        if not os.path.exists('./data'):
+            os.makedirs('./data')
+        if not os.path.exists(self.permanent_file):
+            with open(self.permanent_file, 'w') as f:
+                json.dump({}, f)
+
+    def _load(self):
+        try:
+            with open(self.permanent_file, 'r') as f:
+                return json.load(f)
+        except:
+            return {}
+
+    def _save(self, data):
+        with open(self.permanent_file, 'w') as f:
+            json.dump(data, f, indent=2)
 
     def is_friday(self):
         return datetime.now(pytz.timezone(TIMEZONE)).weekday() == 4
@@ -84,19 +104,18 @@ class InstitutionalPipeline:
 
     def fetch(self):
         try:
-            existing = cache.load(self.cache_key)
+            existing = self._load()
             if not self.is_friday() and existing:
                 pulse_logger.log("↺ Institutional — using weekly COT cache (updates Fridays)")
-                return existing['data']
+                return existing
 
             nq_data, es_data = self.fetch_cot()
 
             prev_nq_net = None
             prev_es_net = None
-            if existing and existing.get('data'):
-                prev = existing['data']
-                prev_nq = prev.get('nq_futures', {})
-                prev_es = prev.get('es_futures', {})
+            if existing:
+                prev_nq = existing.get('nq_futures', {})
+                prev_es = existing.get('es_futures', {})
                 prev_nq_net = prev_nq.get('combined_net')
                 prev_es_net = prev_es.get('combined_net')
 
@@ -127,15 +146,15 @@ class InstitutionalPipeline:
                 'next_update': 'Next Friday',
                 'status': 'live'
             }
-            cache.save(self.cache_key, result)
+            self._save(result)
             pulse_logger.log(f"✓ Institutional COT updated | NQ: {nq_data['direction'] if nq_data else 'unknown'} | ES: {es_data['direction'] if es_data else 'unknown'} | Score: {pillar_score}")
             return result
         except Exception as e:
             error_handler.handle(e, "Institutional")
-            cached = cache.load(self.cache_key)
-            if cached:
-                cached['data']['status'] = 'stale'
-                return cached['data']
+            existing = self._load()
+            if existing:
+                existing['status'] = 'stale'
+                return existing
             return None
 
 institutional_pipeline = InstitutionalPipeline()

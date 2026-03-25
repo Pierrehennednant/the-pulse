@@ -1,14 +1,34 @@
+import json
+import os
 from datetime import datetime
 import pytz
 from config import TIMEZONE
-from utils.cache import cache
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
 
 class WeeklySummaryPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
-        self.cache_key = "weekly_summary"
+        self.permanent_file = "./data/permanent_weekly_summary.json"
+        self._ensure_exists()
+
+    def _ensure_exists(self):
+        if not os.path.exists('./data'):
+            os.makedirs('./data')
+        if not os.path.exists(self.permanent_file):
+            with open(self.permanent_file, 'w') as f:
+                json.dump({}, f)
+
+    def _load(self):
+        try:
+            with open(self.permanent_file, 'r') as f:
+                return json.load(f)
+        except:
+            return {}
+
+    def _save(self, data):
+        with open(self.permanent_file, 'w') as f:
+            json.dump(data, f, indent=2)
 
     def is_monday(self):
         return datetime.now(pytz.timezone(TIMEZONE)).weekday() == 0
@@ -71,13 +91,13 @@ class WeeklySummaryPipeline:
 
     def fetch(self, formatted_data=None, bias=None):
         try:
-            existing = cache.load(self.cache_key)
+            existing = self._load()
             if not self.is_monday() and existing:
                 pulse_logger.log("↺ Weekly Summary — using cached summary (updates Mondays)")
-                return existing['data']
+                return existing
 
             if formatted_data is None:
-                return existing['data'] if existing else None
+                return existing if existing else None
 
             if bias:
                 formatted_data['bias'] = bias
@@ -89,14 +109,12 @@ class WeeklySummaryPipeline:
                 'summary': summary,
                 'status': 'live'
             }
-            cache.save(self.cache_key, result)
+            self._save(result)
             pulse_logger.log(f"✓ Weekly Summary generated for week of {summary['week_of'] if summary else 'N/A'}")
             return result
         except Exception as e:
             error_handler.handle(e, "Weekly Summary")
-            cached = cache.load(self.cache_key)
-            if cached:
-                return cached['data']
-            return None
+            existing = self._load()
+            return existing if existing else None
 
 weekly_summary_pipeline = WeeklySummaryPipeline()
