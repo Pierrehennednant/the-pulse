@@ -25,19 +25,34 @@ class GeopoliticalPipeline:
             'stock market', 'market crash', 'bear market', 'bull market'
         ]
         self.ignore_keywords = [
+            # Entertainment & celebrity
             'saturday night live', 'snl', 'comedy', 'movie', 'film', 'music',
             'album', 'concert', 'celebrity', 'oscars', 'grammy', 'emmy',
+            'savannah guthrie', 'hoda kotb', 'today show', 'morning show',
+            'taylor', 'kardashian', 'epstein', 'true crime',
+            # Sports
             'sports', 'nba', 'nfl', 'nhl', 'mlb', 'soccer', 'football',
+            'basketball', 'baseball', 'tennis', 'golf tournament',
+            # Retail & consumer
+            'prime day', 'spring sale', 'black friday', 'cyber monday',
+            'walmart deals', 'amazon deals', 'shopping deals',
+            'retail earnings', 'burritos', 'holiday shopping',
+            # Local & crime
+            'sheriff', 'local police', 'murder trial', 'missing person',
+            'california court', 'county court', 'city council',
+            # Opinion & advice
             'market timing', 'missing best days', 'long term investing',
             'retirement planning', 'personal finance tips', 'how to invest',
             'warren buffett says hold', 'buy and hold',
-            'tax resistance', 'irs penalties', 'ice protests',
-            'constitutional', 'historical background', 'legal analysis',
+            # Tech that isnt market moving
+            'ai startup', 'venture capital', 'vc funding', 'app launch',
+            'software update', 'new feature', 'product launch',
+            # Misc noise
             'fashion', 'travel', 'food', 'recipe', 'weather',
             'bitcoin drops', 'crypto crash', 'nft', 'dogecoin', 'altcoin',
-            'burritos', 'retail earnings', 'walmart', 'target earnings',
-            'gap earnings', 'home depot earnings', 'consumer spending tips',
-            'holiday shopping', 'flash holiday'
+            'constitutional', 'historical background', 'legal analysis',
+            'tax resistance', 'ice protests',
+            'epstein', 'jeffery epstein', 'ghislaine'
         ]
 
     def is_market_relevant(self, text):
