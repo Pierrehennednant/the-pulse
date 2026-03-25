@@ -1,0 +1,504 @@
+{
+  "id": "D755F19C",
+  "timestamp": "2026-03-24T21:36:07.972618-04:00",
+  "bias": {
+    "final_score": -0.208,
+    "bias": "Neutral",
+    "bias_emoji": "\ud83d\udfe1",
+    "confidence": 16,
+    "confidence_label": "Very Low Confidence",
+    "confidence_color": "red",
+    "threshold_warning": "\ud83d\udeab Very low confidence (16%) \u2014 pillars are conflicting. Avoid trading until regime clarifies.",
+    "active_pillars": 5,
+    "pillar_signals": [
+      "neutral",
+      "bearish",
+      "bullish",
+      "bearish",
+      "bearish"
+    ],
+    "pillar_contributions": {
+      "economic_calendar": {
+        "raw_score": 0.03,
+        "weight": 40,
+        "contribution": 0.012,
+        "status": "live"
+      },
+      "geopolitical": {
+        "raw_score": -0.91,
+        "weight": 28,
+        "contribution": -0.255,
+        "status": "live"
+      },
+      "institutional": {
+        "raw_score": 0.75,
+        "weight": 20,
+        "contribution": 0.15,
+        "status": "live"
+      },
+      "macro_sentiment": {
+        "raw_score": -1.0,
+        "weight": 10,
+        "contribution": -0.1,
+        "status": "live"
+      },
+      "news_sentiment": {
+        "raw_score": -0.76,
+        "weight": 2,
+        "contribution": -0.015,
+        "status": "live"
+      }
+    },
+    "gauge_value": 44
+  },
+  "pillars": {
+    "macro": {
+      "pillar": "macro_sentiment",
+      "timestamp": "2026-03-24T21:35:55.270713-04:00",
+      "vix": {
+        "value": 26.15,
+        "previous": 26.78,
+        "change": -0.63,
+        "change_pct": -2.35,
+        "signal": "bearish"
+      },
+      "vxn": {
+        "value": 27.98,
+        "previous": 29.2,
+        "change": -1.22,
+        "change_pct": -4.18,
+        "signal": "bearish"
+      },
+      "fear_greed": {
+        "score": 14,
+        "rating": "Extreme Fear",
+        "signal": "bearish",
+        "source": "Alternative.me"
+      },
+      "pillar_score": -1.0,
+      "status": "live"
+    },
+    "economic": {
+      "pillar": "economic_calendar",
+      "timestamp": "2026-03-24T21:35:55.362784-04:00",
+      "events": [
+        {
+          "title": "Flash Manufacturing PMI",
+          "time_est": "Tue Mar 24, 09:45 AM EST",
+          "forecast": "51.5",
+          "previous": "51.2",
+          "actual": "52.4",
+          "impact": "High",
+          "result": "beat",
+          "market_impact": "bullish",
+          "reason": "Flash Manufacturing PMI beat forecast (52.4 vs 51.5)",
+          "story_url": null,
+          "story_context": null
+        },
+        {
+          "title": "Flash Services PMI",
+          "time_est": "Tue Mar 24, 09:45 AM EST",
+          "forecast": "52.0",
+          "previous": "52.3",
+          "actual": "51.1",
+          "impact": "High",
+          "result": "miss",
+          "market_impact": "bearish",
+          "reason": "Flash Services PMI missed forecast (51.1 vs 52.0)",
+          "story_url": null,
+          "story_context": null
+        },
+        {
+          "title": "Richmond Manufacturing Index",
+          "time_est": "Tue Mar 24, 10:00 AM EST",
+          "forecast": "-8",
+          "previous": "-10",
+          "actual": "0",
+          "impact": "Medium",
+          "result": "beat",
+          "market_impact": "bullish",
+          "reason": "Richmond Manufacturing Index beat forecast (0 vs -8)",
+          "story_url": null,
+          "story_context": null
+        },
+        {
+          "title": "President Trump Speaks",
+          "time_est": "Wed Mar 25, 07:20 PM EST",
+          "forecast": "N/A",
+          "previous": "N/A",
+          "actual": "Pending",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "President Trump Speaks not yet released"
+        },
+        {
+          "title": "Unemployment Claims",
+          "time_est": "Thu Mar 26, 08:30 AM EST",
+          "forecast": "211K",
+          "previous": "205K",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Unemployment Claims not yet released"
+        },
+        {
+          "title": "Revised UoM Consumer Sentiment",
+          "time_est": "Fri Mar 27, 10:00 AM EST",
+          "forecast": "53.9",
+          "previous": "55.5",
+          "actual": "Pending",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Revised UoM Consumer Sentiment not yet released"
+        }
+      ],
+      "pillar_score": 0.03,
+      "warnings": [],
+      "status": "live"
+    },
+    "institutional": {
+      "pillar": "institutional",
+      "timestamp": "2026-03-24T21:20:06.955971-04:00",
+      "nq_futures": {
+        "asset_mgr_long": 97885,
+        "asset_mgr_short": 36494,
+        "asset_mgr_net": 61391,
+        "leveraged_long": 44996,
+        "leveraged_short": 86037,
+        "leveraged_net": -41041,
+        "combined_net": 20350,
+        "net_pct": 7.67,
+        "direction": "bullish",
+        "score": 0.5
+      },
+      "es_futures": {
+        "asset_mgr_long": 1089306,
+        "asset_mgr_short": 199864,
+        "asset_mgr_net": 889442,
+        "leveraged_long": 145042,
+        "leveraged_short": 492619,
+        "leveraged_net": -347577,
+        "combined_net": 541865,
+        "net_pct": 28.12,
+        "direction": "bullish",
+        "score": 1.0
+      },
+      "pillar_score": 0.75,
+      "update_frequency": "Weekly (Fridays)",
+      "next_update": "Next Friday",
+      "status": "live"
+    },
+    "geopolitical": {
+      "pillar": "geopolitical",
+      "timestamp": "2026-03-24T21:36:07.970890-04:00",
+      "news_items": [
+        {
+          "headline": "Asia-Pacific markets are set for higher open as Trump comments signal Iran war de-escalation",
+          "description": "Trump said he decided to back off from his recent threat to order strikes on Iranian energy infrastructure",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 07:47 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/25/asia-markets-today-nikkei-225-kospi-hang-seng-index.html",
+          "sentiment_score": -0.928,
+          "market_relevant": true
+        },
+        {
+          "headline": "Trump says U.S. and Iran are 'in negotiations right now,' Tehran is 'talking sense'",
+          "description": "",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 03:56 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/24/trump-iran-war-negotiations.html",
+          "sentiment_score": 0.885,
+          "market_relevant": true
+        },
+        {
+          "headline": "Kuwait says Strait of Hormuz closure is beyond catastrophic, will trigger domino effect across global economy",
+          "description": "Iran is holding the world economy hostage by blockading the Strait of Hormuz, said Shaikh Nawaf Al-Sabah, the CEO of Kuwait Petroleum Corporation.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 02:22 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/24/iran-war-oil-strait-hormuz-kuwait-gulf.html",
+          "sentiment_score": -0.851,
+          "market_relevant": true
+        },
+        {
+          "headline": "Strait of Hormuz tanker traffic won't return to normal for months, Kalshi bettors predict",
+          "description": "Prediction market bettors aren't confident that the vital Middle Eastern oil passageway will reopen anytime soon.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 01:21 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/24/kalshi-polymarket-strait-of-hormuz-traffic-trump-iran.html",
+          "sentiment_score": -0.997,
+          "market_relevant": true
+        },
+        {
+          "headline": "Pakistan offers to facilitate U.S.-Iran war talks as Trump, Tehran give mixed signals",
+          "description": "Trump said top U.S. negotiators and their Iranian counterparts have been engaged in \"very, very strong talks,\" but Tehran has denied that claim.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 12:28 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/24/trump-iran-war-pakistan-talks.html",
+          "sentiment_score": -0.891,
+          "market_relevant": true
+        },
+        {
+          "headline": "Jamie Dimon says Iran war makes Middle East peace prospects better in the long term",
+          "description": "JPMorgan Chase CEO Jamie Dimon issued an optimistic viewpoint on Middle East peace, weeks into the war with Iran.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 12:27 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/24/jamie-dimon-iran-war-middle-east-peace-prospects-long-term.html",
+          "sentiment_score": 0.946,
+          "market_relevant": true
+        },
+        {
+          "headline": "As Iran war causes gas and airfares to spike, lawmakers warn of price gouging \u2014 but experts point to supply shocks",
+          "description": "With airfares and gas prices spiking, some lawmakers are warning of the potential for price gouging, even as experts point to extreme supply shocks.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 12:03 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/24/iran-war-gas-prices-airline-tickets.html",
+          "sentiment_score": -0.992,
+          "market_relevant": true
+        },
+        {
+          "headline": "Jim Cramer's top 10 things to watch in the stock market Tuesday",
+          "description": "The rally in oil prices has resumed, and close Nvidia partner Arm Holdings is hosting an AI computing event.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 09:14 AM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/24/jim-cramers-top-10-things-to-watch-in-the-stock-market-tuesday.html",
+          "sentiment_score": 0.99,
+          "market_relevant": true
+        },
+        {
+          "headline": "Cockroaches, surveillance and 16-hour days: The life of a North Korean worker in Russia",
+          "description": "Workers at Russian construction sites are among more than 100,000 North Koreans being exploited worldwide as part of a state-sponsored labor program, researcher...",
+          "source": "nbcnews.com",
+          "timestamp": "Mar 24, 08:01 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.nbcnews.com/world/asia/cockroaches-surveillance-16-hour-days-life-north-korean-worker-russia-rcna264849",
+          "sentiment_score": -0.992,
+          "market_relevant": true
+        },
+        {
+          "headline": "Senate rejects latest push to rein in Trump's powers in Iran as war's off-ramp unclear",
+          "description": "Democrats have vowed to keep forcing votes on the issue as they seek public testimony from administration officials.",
+          "source": "cbsnews.com",
+          "timestamp": "Mar 24, 07:43 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cbsnews.com/news/senate-iran-war-powers-resolution-vote-trump/",
+          "sentiment_score": -0.977,
+          "market_relevant": true
+        }
+      ],
+      "financial_juice_items": [
+        {
+          "headline": "Asia-Pacific markets are set for higher open as Trump comments signal Iran war de-escalation",
+          "description": "Trump said he decided to back off from his recent threat to order strikes on Iranian energy infrastructure",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 07:47 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/25/asia-markets-today-nikkei-225-kospi-hang-seng-index.html",
+          "sentiment_score": -0.928,
+          "market_relevant": true
+        },
+        {
+          "headline": "Trump says U.S. and Iran are 'in negotiations right now,' Tehran is 'talking sense'",
+          "description": "",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 03:56 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/24/trump-iran-war-negotiations.html",
+          "sentiment_score": 0.885,
+          "market_relevant": true
+        },
+        {
+          "headline": "Kuwait says Strait of Hormuz closure is beyond catastrophic, will trigger domino effect across global economy",
+          "description": "Iran is holding the world economy hostage by blockading the Strait of Hormuz, said Shaikh Nawaf Al-Sabah, the CEO of Kuwait Petroleum Corporation.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 02:22 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/24/iran-war-oil-strait-hormuz-kuwait-gulf.html",
+          "sentiment_score": -0.851,
+          "market_relevant": true
+        },
+        {
+          "headline": "Strait of Hormuz tanker traffic won't return to normal for months, Kalshi bettors predict",
+          "description": "Prediction market bettors aren't confident that the vital Middle Eastern oil passageway will reopen anytime soon.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 01:21 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/24/kalshi-polymarket-strait-of-hormuz-traffic-trump-iran.html",
+          "sentiment_score": -0.997,
+          "market_relevant": true
+        },
+        {
+          "headline": "Pakistan offers to facilitate U.S.-Iran war talks as Trump, Tehran give mixed signals",
+          "description": "Trump said top U.S. negotiators and their Iranian counterparts have been engaged in \"very, very strong talks,\" but Tehran has denied that claim.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 12:28 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/24/trump-iran-war-pakistan-talks.html",
+          "sentiment_score": -0.891,
+          "market_relevant": true
+        },
+        {
+          "headline": "Jamie Dimon says Iran war makes Middle East peace prospects better in the long term",
+          "description": "JPMorgan Chase CEO Jamie Dimon issued an optimistic viewpoint on Middle East peace, weeks into the war with Iran.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 12:27 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/24/jamie-dimon-iran-war-middle-east-peace-prospects-long-term.html",
+          "sentiment_score": 0.946,
+          "market_relevant": true
+        },
+        {
+          "headline": "As Iran war causes gas and airfares to spike, lawmakers warn of price gouging \u2014 but experts point to supply shocks",
+          "description": "With airfares and gas prices spiking, some lawmakers are warning of the potential for price gouging, even as experts point to extreme supply shocks.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 12:03 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/24/iran-war-gas-prices-airline-tickets.html",
+          "sentiment_score": -0.992,
+          "market_relevant": true
+        },
+        {
+          "headline": "Jim Cramer's top 10 things to watch in the stock market Tuesday",
+          "description": "The rally in oil prices has resumed, and close Nvidia partner Arm Holdings is hosting an AI computing event.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 09:14 AM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/24/jim-cramers-top-10-things-to-watch-in-the-stock-market-tuesday.html",
+          "sentiment_score": 0.99,
+          "market_relevant": true
+        },
+        {
+          "headline": "Cockroaches, surveillance and 16-hour days: The life of a North Korean worker in Russia",
+          "description": "Workers at Russian construction sites are among more than 100,000 North Koreans being exploited worldwide as part of a state-sponsored labor program, researcher...",
+          "source": "nbcnews.com",
+          "timestamp": "Mar 24, 08:01 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.nbcnews.com/world/asia/cockroaches-surveillance-16-hour-days-life-north-korean-worker-russia-rcna264849",
+          "sentiment_score": -0.992,
+          "market_relevant": true
+        },
+        {
+          "headline": "Senate rejects latest push to rein in Trump's powers in Iran as war's off-ramp unclear",
+          "description": "Democrats have vowed to keep forcing votes on the issue as they seek public testimony from administration officials.",
+          "source": "cbsnews.com",
+          "timestamp": "Mar 24, 07:43 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cbsnews.com/news/senate-iran-war-powers-resolution-vote-trump/",
+          "sentiment_score": -0.977,
+          "market_relevant": true
+        }
+      ],
+      "unbiased_network_items": [],
+      "active_flags": [
+        {
+          "title": "Asia-Pacific markets are set for higher open as Trump comments signal Iran war de-escalation",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "cnbc.com",
+          "date": "2026-03-24",
+          "timestamp": "Mar 24, 07:47 PM EST",
+          "link": "https://www.cnbc.com/2026/03/25/asia-markets-today-nikkei-225-kospi-hang-seng-index.html",
+          "sentiment": -0.928,
+          "predicted_impact": "bearish",
+          "context": "Trump said he decided to back off from his recent threat to order strikes on Iranian energy infrastructure"
+        },
+        {
+          "title": "Pakistan offers to facilitate U.S.-Iran war talks as Trump, Tehran give mixed signals",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "cnbc.com",
+          "date": "2026-03-24",
+          "timestamp": "Mar 24, 12:28 PM EST",
+          "link": "https://www.cnbc.com/2026/03/24/trump-iran-war-pakistan-talks.html",
+          "sentiment": -0.891,
+          "predicted_impact": "bearish",
+          "context": "Trump said top U.S. negotiators and their Iranian counterparts have been engaged in \"very, very strong talks,\" but Tehran has denied that claim."
+        },
+        {
+          "title": "Jamie Dimon says Iran war makes Middle East peace prospects better in the long term",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "cnbc.com",
+          "date": "2026-03-24",
+          "timestamp": "Mar 24, 12:27 PM EST",
+          "link": "https://www.cnbc.com/2026/03/24/jamie-dimon-iran-war-middle-east-peace-prospects-long-term.html",
+          "sentiment": 0.946,
+          "predicted_impact": "bullish",
+          "context": "JPMorgan Chase CEO Jamie Dimon issued an optimistic viewpoint on Middle East peace, weeks into the war with Iran."
+        },
+        {
+          "title": "As Iran war causes gas and airfares to spike, lawmakers warn of price gouging \u2014 but experts point to supply shocks",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "cnbc.com",
+          "date": "2026-03-24",
+          "timestamp": "Mar 24, 12:03 PM EST",
+          "link": "https://www.cnbc.com/2026/03/24/iran-war-gas-prices-airline-tickets.html",
+          "sentiment": -0.992,
+          "predicted_impact": "bearish",
+          "context": "With airfares and gas prices spiking, some lawmakers are warning of the potential for price gouging, even as experts point to extreme supply shocks."
+        },
+        {
+          "title": "Senate rejects latest push to rein in Trump's powers in Iran as war's off-ramp unclear",
+          "priority": 90,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "cbsnews.com",
+          "date": "2026-03-24",
+          "timestamp": "Mar 24, 07:43 PM EST",
+          "link": "https://www.cbsnews.com/news/senate-iran-war-powers-resolution-vote-trump/",
+          "sentiment": -0.977,
+          "predicted_impact": "bearish",
+          "context": "Democrats have vowed to keep forcing votes on the issue as they seek public testimony from administration officials."
+        }
+      ],
+      "total_items": 24,
+      "pillar_score": -0.91,
+      "status": "live"
+    },
+    "news": {
+      "pillar": "news_sentiment",
+      "timestamp": "2026-03-24T21:36:07.971986-04:00",
+      "analysis": {
+        "average_score": -0.381,
+        "overall_sentiment": "bearish",
+        "bullish_pct": 30.0,
+        "bearish_pct": 70.0,
+        "neutral_pct": 0.0,
+        "total_headlines": 20,
+        "dominant_theme": "Asia-Pacific markets are set for higher open as Trump comments signal Iran war de-escalation",
+        "pillar_score": -0.76
+      },
+      "pillar_score": -0.76,
+      "status": "live"
+    }
+  },
+  "weekly_summary": {
+    "pillar": "weekly_summary",
+    "timestamp": "2026-03-24T21:15:49.286531-04:00",
+    "summary": {
+      "generated_at": "2026-03-24T21:15:49.286504-04:00",
+      "overall": "Overall regime entering this week: Neutral with 4% confidence (Very Low Confidence). Regime is unclear \u2014 reduce size and wait for confirmation.",
+      "economic": "This week has 0 key USD events.",
+      "institutional": "Big money is net bullish on NQ (7.67%) and bullish on ES (28.12%).",
+      "macro": "VIX at 26.15 with Fear & Greed at 14 (Extreme Fear).",
+      "geopolitical": "Active geopolitical risks: Asia-Pacific markets are set for higher open as Trump commen | Pakistan offers to facilitate U.S.-Iran war talks as Trump, .",
+      "week_of": "March 24, 2026"
+    },
+    "status": "live"
+  }
+}

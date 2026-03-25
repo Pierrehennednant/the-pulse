@@ -588,7 +588,7 @@
                 actualInput.value = '✓ ' + actual + ' saved';
                 actualInput.disabled = true;
                 if (storyInput) storyInput.disabled = true;
-                setTimeout(() => fetchData(), 1000);
+                setTimeout(() => window.location.reload(), 1500);
             } else {
                 alert('Failed to save. Try again.');
             }
