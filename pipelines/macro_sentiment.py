@@ -13,7 +13,7 @@ class MacroSentimentPipeline:
 
     def fetch_vix(self):
         try:
-            url = f"https://api.stlouisfed.org/fred/series/observations?series_id=VIXCLS&api_key={FRED_API_KEY}&sort_order=desc&limit=2&file_type=json"
+            url = f"https://api.stlouisfed.org/fred/series/observations?series_id=VIXCLS&api_key={FRED_API_KEY}&sort_order=desc&limit=10&file_type=json"
             response = requests.get(url, timeout=10)
             data = response.json()
             observations = [o for o in data.get('observations', []) if o['value'] != '.']
@@ -36,7 +36,7 @@ class MacroSentimentPipeline:
 
     def fetch_vxn(self):
         try:
-            url = f"https://api.stlouisfed.org/fred/series/observations?series_id=VXNCLS&api_key={FRED_API_KEY}&sort_order=desc&limit=2&file_type=json"
+            url = f"https://api.stlouisfed.org/fred/series/observations?series_id=VXNCLS&api_key={FRED_API_KEY}&sort_order=desc&limit=10&file_type=json"
             response = requests.get(url, timeout=10)
             data = response.json()
             observations = [o for o in data.get('observations', []) if o['value'] != '.']

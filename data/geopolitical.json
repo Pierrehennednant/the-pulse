@@ -1,7 +1,7 @@
 {
   "data": {
     "pillar": "geopolitical",
-    "timestamp": "2026-03-25T08:52:47.923112-04:00",
+    "timestamp": "2026-03-25T09:17:45.721835-04:00",
     "news_items": [
       {
         "headline": "Sen. Warren: DOD answers show no anti-corruption protocols for Trump children",
@@ -274,9 +274,9 @@
         "context": "British Prime Minister Keir Starmer likely won't fire back insults at President Donald Trump, those close to him say."
       }
     ],
-    "total_items": 22,
-    "pillar_score": -0.94,
+    "total_items": 21,
+    "pillar_score": -0.91,
     "status": "live"
   },
-  "timestamp": "2026-03-25T12:52:47.923144"
+  "timestamp": "2026-03-25T13:17:45.721862"
 }
