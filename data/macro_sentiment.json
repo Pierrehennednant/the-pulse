@@ -1,7 +1,7 @@
 {
   "data": {
     "pillar": "macro_sentiment",
-    "timestamp": "2026-03-24T19:55:13.870201-04:00",
+    "timestamp": "2026-03-24T21:15:37.730033-04:00",
     "vix": {
       "value": 26.15,
       "previous": 26.78,
@@ -17,7 +17,7 @@
       "signal": "bearish"
     },
     "fear_greed": {
-      "score": 11,
+      "score": 14,
       "rating": "Extreme Fear",
       "signal": "bearish",
       "source": "Alternative.me"
@@ -25,5 +25,5 @@
     "pillar_score": -1.0,
     "status": "live"
   },
-  "timestamp": "2026-03-24T23:55:13.870245"
+  "timestamp": "2026-03-25T01:15:37.730072"
 }

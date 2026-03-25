@@ -1,0 +1,71 @@
+You're right — every time we delete the cache it wipes the manual inputs too since they're stored in the data folder. That's the problem.
+Tell Replit AI:
+
+"Please move the manual inputs cache to a separate permanent location that doesn't get wiped with the rest of the cache. Make these changes:
+1. In pipelines/manual_input.py replace the __init__ method with:
+pythondef __init__(self):
+    self.timezone = pytz.timezone(TIMEZONE)
+    self.cache_key = "manual_inputs"
+    self.permanent_file = "./data/permanent_manual_inputs.json"
+    self.headers = {'User-Agent': 'Mozilla/5.0'}
+    self._ensure_exists()
+
+def _ensure_exists(self):
+    if not os.path.exists('./data'):
+        os.makedirs('./data')
+    if not os.path.exists(self.permanent_file):
+        with open(self.permanent_file, 'w') as f:
+            json.dump({}, f)
+2. Replace the save_actual method with:
+pythondef save_actual(self, event_title, actual_value, story_url=None):
+    try:
+        story_context = None
+        if story_url:
+            story_context = self.fetch_story_context(story_url)
+
+        with open(self.permanent_file, 'r') as f:
+            inputs = json.load(f)
+
+        inputs[event_title] = {
+            'actual': actual_value,
+            'story_url': story_url,
+            'story_context': story_context,
+            'timestamp': datetime.now(self.timezone).isoformat()
+        }
+
+        with open(self.permanent_file, 'w') as f:
+            json.dump(inputs, f, indent=2)
+
+        pulse_logger.log(f"✓ Manual input saved permanently | {event_title}: {actual_value}")
+        return True
+    except Exception as e:
+        error_handler.handle(e, "Manual Input")
+        return False
+3. Replace the get_inputs method with:
+pythondef get_inputs(self):
+    try:
+        with open(self.permanent_file, 'r') as f:
+            return json.load(f)
+    except:
+        return {}
+4. Replace the clear_old_inputs method with:
+pythondef clear_old_inputs(self):
+    try:
+        with open(self.permanent_file, 'r') as f:
+            inputs = json.load(f)
+        now = datetime.now(self.timezone)
+        fresh = {}
+        for title, data in inputs.items():
+            try:
+                ts = datetime.fromisoformat(data['timestamp'])
+                if ts.tzinfo is None:
+                    ts = self.timezone.localize(ts)
+                if (now - ts).total_seconds() < 86400:
+                    fresh[title] = data
+            except:
+                pass
+        with open(self.permanent_file, 'w') as f:
+            json.dump(fresh, f, indent=2)
+    except Exception as e:
+        error_handler.handle(e, "Manual Input Cleanup")
+Then restart the app WITHOUT deleting cache and test the manual input.

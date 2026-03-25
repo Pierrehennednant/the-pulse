@@ -1,17 +1,16 @@
 {
-  "id": "B7A444FA",
-  "timestamp": "2026-03-24T19:55:25.851761-04:00",
+  "id": "78217BC6",
+  "timestamp": "2026-03-24T21:15:49.286765-04:00",
   "bias": {
-    "final_score": -0.795,
-    "bias": "Bearish",
-    "bias_emoji": "\ud83d\udd34",
-    "confidence": 63,
-    "confidence_label": "Moderate Confidence",
-    "confidence_color": "yellow",
-    "threshold_warning": null,
-    "active_pillars": 5,
+    "final_score": -0.22,
+    "bias": "Neutral",
+    "bias_emoji": "\ud83d\udfe1",
+    "confidence": 4,
+    "confidence_label": "Very Low Confidence",
+    "confidence_color": "red",
+    "threshold_warning": "\ud83d\udeab Very low confidence (4%) \u2014 pillars are conflicting. Avoid trading until regime clarifies.",
+    "active_pillars": 4,
     "pillar_signals": [
-      "bearish",
       "bearish",
       "bullish",
       "bearish",
@@ -19,15 +18,15 @@
     ],
     "pillar_contributions": {
       "economic_calendar": {
-        "raw_score": -1.5,
+        "raw_score": 0,
         "weight": 40,
-        "contribution": -0.6,
-        "status": "live"
+        "contribution": 0.0,
+        "status": "stale"
       },
       "geopolitical": {
-        "raw_score": -0.82,
+        "raw_score": -0.91,
         "weight": 28,
-        "contribution": -0.23,
+        "contribution": -0.255,
         "status": "live"
       },
       "institutional": {
@@ -43,18 +42,18 @@
         "status": "live"
       },
       "news_sentiment": {
-        "raw_score": -0.78,
+        "raw_score": -0.76,
         "weight": 2,
-        "contribution": -0.016,
+        "contribution": -0.015,
         "status": "live"
       }
     },
-    "gauge_value": 30
+    "gauge_value": 44
   },
   "pillars": {
     "macro": {
       "pillar": "macro_sentiment",
-      "timestamp": "2026-03-24T19:55:13.870201-04:00",
+      "timestamp": "2026-03-24T21:15:37.730033-04:00",
       "vix": {
         "value": 26.15,
         "previous": 26.78,
@@ -70,7 +69,7 @@
         "signal": "bearish"
       },
       "fear_greed": {
-        "score": 11,
+        "score": 14,
         "rating": "Extreme Fear",
         "signal": "bearish",
         "source": "Alternative.me"
@@ -80,71 +79,17 @@
     },
     "economic": {
       "pillar": "economic_calendar",
-      "timestamp": "2026-03-24T19:55:13.957468-04:00",
-      "events": [
-        {
-          "title": "Flash Manufacturing PMI",
-          "time_est": "Tue Mar 24, 09:45 AM EST",
-          "forecast": "51.5",
-          "previous": "51.2",
-          "actual": "Pending",
-          "impact": "High",
-          "result": "pending",
-          "market_impact": "unknown",
-          "reason": "Flash Manufacturing PMI not yet released"
-        },
-        {
-          "title": "Flash Services PMI",
-          "time_est": "Tue Mar 24, 09:45 AM EST",
-          "forecast": "52.0",
-          "previous": "52.3",
-          "actual": "Pending",
-          "impact": "High",
-          "result": "pending",
-          "market_impact": "unknown",
-          "reason": "Flash Services PMI not yet released"
-        },
-        {
-          "title": "Richmond Manufacturing Index",
-          "time_est": "Tue Mar 24, 10:00 AM EST",
-          "forecast": "-8",
-          "previous": "-10",
-          "actual": "Pending",
-          "impact": "Medium",
-          "result": "pending",
-          "market_impact": "unknown",
-          "reason": "Richmond Manufacturing Index not yet released"
-        },
-        {
-          "title": "Unemployment Claims",
-          "time_est": "Thu Mar 26, 08:30 AM EST",
-          "forecast": "211K",
-          "previous": "205K",
-          "actual": "Pending",
-          "impact": "High",
-          "result": "pending",
-          "market_impact": "unknown",
-          "reason": "Unemployment Claims not yet released"
-        },
-        {
-          "title": "Revised UoM Consumer Sentiment",
-          "time_est": "Fri Mar 27, 10:00 AM EST",
-          "forecast": "53.9",
-          "previous": "55.5",
-          "actual": "Pending",
-          "impact": "Medium",
-          "result": "pending",
-          "market_impact": "unknown",
-          "reason": "Revised UoM Consumer Sentiment not yet released"
-        }
+      "timestamp": "2026-03-24T21:15:37.771651-04:00",
+      "events": [],
+      "pillar_score": 0,
+      "warnings": [
+        "\u26a0\ufe0f Economic calendar temporarily unavailable \u2014 rate limited"
       ],
-      "pillar_score": -1.5,
-      "warnings": [],
-      "status": "live"
+      "status": "stale"
     },
     "institutional": {
       "pillar": "institutional",
-      "timestamp": "2026-03-24T19:55:14.389155-04:00",
+      "timestamp": "2026-03-24T21:15:08.214534-04:00",
       "nq_futures": {
         "asset_mgr_long": 97885,
         "asset_mgr_short": 36494,
@@ -176,8 +121,18 @@
     },
     "geopolitical": {
       "pillar": "geopolitical",
-      "timestamp": "2026-03-24T19:55:25.850288-04:00",
+      "timestamp": "2026-03-24T21:15:49.285096-04:00",
       "news_items": [
+        {
+          "headline": "Asia-Pacific markets are set for higher open as Trump comments signal Iran war de-escalation",
+          "description": "Trump said he decided to back off from his recent threat to order strikes on Iranian energy infrastructure",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 07:47 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/25/asia-markets-today-nikkei-225-kospi-hang-seng-index.html",
+          "sentiment_score": -0.928,
+          "market_relevant": true
+        },
         {
           "headline": "Trump says U.S. and Iran are 'in negotiations right now,' Tehran is 'talking sense'",
           "description": "",
@@ -249,6 +204,16 @@
           "market_relevant": true
         },
         {
+          "headline": "Cockroaches, surveillance and 16-hour days: The life of a North Korean worker in Russia",
+          "description": "Workers at Russian construction sites are among more than 100,000 North Koreans being exploited worldwide as part of a state-sponsored labor program, researcher...",
+          "source": "nbcnews.com",
+          "timestamp": "Mar 24, 08:01 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.nbcnews.com/world/asia/cockroaches-surveillance-16-hour-days-life-north-korean-worker-russia-rcna264849",
+          "sentiment_score": -0.992,
+          "market_relevant": true
+        },
+        {
           "headline": "Senate rejects latest push to rein in Trump's powers in Iran as war's off-ramp unclear",
           "description": "Democrats have vowed to keep forcing votes on the issue as they seek public testimony from administration officials.",
           "source": "cbsnews.com",
@@ -256,31 +221,21 @@
           "date": "2026-03-24",
           "link": "https://www.cbsnews.com/news/senate-iran-war-powers-resolution-vote-trump/",
           "sentiment_score": -0.977,
-          "market_relevant": true
-        },
-        {
-          "headline": "Trump says Iran gave U.S. \"a very big present\" related to oil and gas",
-          "description": "Even as Iran launched missiles towards Israel and other Gulf nations, President Trump claimed the regime is so near defeat that it has no choice but to negotiat...",
-          "source": "cbsnews.com",
-          "timestamp": "Mar 24, 07:31 PM EST",
-          "date": "2026-03-24",
-          "link": "https://www.cbsnews.com/video/trump-says-iran-gave-us-a-very-big-present-related-to-oil-and-gas/",
-          "sentiment_score": -0.999,
-          "market_relevant": true
-        },
-        {
-          "headline": "U.S. expected to deploy troops from 82nd Airborne Division to Middle East",
-          "description": "President Trump claimed Tuesday that the U.S. is already in direct negotiations with Iran and that the country has agreed never to have a nuclear weapon. Meanwh...",
-          "source": "cbsnews.com",
-          "timestamp": "Mar 24, 06:38 PM EST",
-          "date": "2026-03-24",
-          "link": "https://www.cbsnews.com/video/us-expected-deploy-troops-82nd-airborne-division-middle-east/",
-          "sentiment_score": -0.99,
           "market_relevant": true
         }
       ],
       "financial_juice_items": [
         {
+          "headline": "Asia-Pacific markets are set for higher open as Trump comments signal Iran war de-escalation",
+          "description": "Trump said he decided to back off from his recent threat to order strikes on Iranian energy infrastructure",
+          "source": "cnbc.com",
+          "timestamp": "Mar 24, 07:47 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.cnbc.com/2026/03/25/asia-markets-today-nikkei-225-kospi-hang-seng-index.html",
+          "sentiment_score": -0.928,
+          "market_relevant": true
+        },
+        {
           "headline": "Trump says U.S. and Iran are 'in negotiations right now,' Tehran is 'talking sense'",
           "description": "",
           "source": "cnbc.com",
@@ -351,6 +306,16 @@
           "market_relevant": true
         },
         {
+          "headline": "Cockroaches, surveillance and 16-hour days: The life of a North Korean worker in Russia",
+          "description": "Workers at Russian construction sites are among more than 100,000 North Koreans being exploited worldwide as part of a state-sponsored labor program, researcher...",
+          "source": "nbcnews.com",
+          "timestamp": "Mar 24, 08:01 PM EST",
+          "date": "2026-03-24",
+          "link": "https://www.nbcnews.com/world/asia/cockroaches-surveillance-16-hour-days-life-north-korean-worker-russia-rcna264849",
+          "sentiment_score": -0.992,
+          "market_relevant": true
+        },
+        {
           "headline": "Senate rejects latest push to rein in Trump's powers in Iran as war's off-ramp unclear",
           "description": "Democrats have vowed to keep forcing votes on the issue as they seek public testimony from administration officials.",
           "source": "cbsnews.com",
@@ -359,30 +324,23 @@
           "link": "https://www.cbsnews.com/news/senate-iran-war-powers-resolution-vote-trump/",
           "sentiment_score": -0.977,
           "market_relevant": true
-        },
-        {
-          "headline": "Trump says Iran gave U.S. \"a very big present\" related to oil and gas",
-          "description": "Even as Iran launched missiles towards Israel and other Gulf nations, President Trump claimed the regime is so near defeat that it has no choice but to negotiat...",
-          "source": "cbsnews.com",
-          "timestamp": "Mar 24, 07:31 PM EST",
-          "date": "2026-03-24",
-          "link": "https://www.cbsnews.com/video/trump-says-iran-gave-us-a-very-big-present-related-to-oil-and-gas/",
-          "sentiment_score": -0.999,
-          "market_relevant": true
-        },
-        {
-          "headline": "U.S. expected to deploy troops from 82nd Airborne Division to Middle East",
-          "description": "President Trump claimed Tuesday that the U.S. is already in direct negotiations with Iran and that the country has agreed never to have a nuclear weapon. Meanwh...",
-          "source": "cbsnews.com",
-          "timestamp": "Mar 24, 06:38 PM EST",
-          "date": "2026-03-24",
-          "link": "https://www.cbsnews.com/video/us-expected-deploy-troops-82nd-airborne-division-middle-east/",
-          "sentiment_score": -0.99,
-          "market_relevant": true
         }
       ],
       "unbiased_network_items": [],
       "active_flags": [
+        {
+          "title": "Asia-Pacific markets are set for higher open as Trump comments signal Iran war de-escalation",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "cnbc.com",
+          "date": "2026-03-24",
+          "timestamp": "Mar 24, 07:47 PM EST",
+          "link": "https://www.cnbc.com/2026/03/25/asia-markets-today-nikkei-225-kospi-hang-seng-index.html",
+          "sentiment": -0.928,
+          "predicted_impact": "bearish",
+          "context": "Trump said he decided to back off from his recent threat to order strikes on Iranian energy infrastructure"
+        },
         {
           "title": "Pakistan offers to facilitate U.S.-Iran war talks as Trump, Tehran give mixed signals",
           "priority": 95,
@@ -434,52 +392,38 @@
           "sentiment": -0.977,
           "predicted_impact": "bearish",
           "context": "Democrats have vowed to keep forcing votes on the issue as they seek public testimony from administration officials."
-        },
-        {
-          "title": "Is the Senate heading toward a compromise on DHS funding?",
-          "priority": 90,
-          "flag_type": "war",
-          "status": "Developing",
-          "source": "cbsnews.com",
-          "date": "2026-03-24",
-          "timestamp": "Mar 24, 06:36 PM EST",
-          "link": "https://www.cbsnews.com/video/is-senate-heading-toward-compromise-dhs-funding/",
-          "sentiment": -0.997,
-          "predicted_impact": "bearish",
-          "context": "Senate leaders and the White House are working on a deal to end the partial government shutdown as travelers face chaos at airports. Political strategists Hyma ..."
         }
       ],
       "total_items": 24,
-      "pillar_score": -0.82,
+      "pillar_score": -0.91,
       "status": "live"
     },
     "news": {
       "pillar": "news_sentiment",
-      "timestamp": "2026-03-24T19:55:25.851148-04:00",
+      "timestamp": "2026-03-24T21:15:49.286007-04:00",
       "analysis": {
-        "average_score": -0.388,
+        "average_score": -0.381,
         "overall_sentiment": "bearish",
         "bullish_pct": 30.0,
         "bearish_pct": 70.0,
         "neutral_pct": 0.0,
         "total_headlines": 20,
-        "dominant_theme": "Pakistan offers to facilitate U.S.-Iran war talks as Trump, Tehran give mixed signals",
-        "pillar_score": -0.78
+        "dominant_theme": "Asia-Pacific markets are set for higher open as Trump comments signal Iran war de-escalation",
+        "pillar_score": -0.76
       },
-      "pillar_score": -0.78,
+      "pillar_score": -0.76,
       "status": "live"
     },
     "bias": {
-      "final_score": -0.795,
-      "bias": "Bearish",
-      "bias_emoji": "\ud83d\udd34",
-      "confidence": 63,
-      "confidence_label": "Moderate Confidence",
-      "confidence_color": "yellow",
-      "threshold_warning": null,
-      "active_pillars": 5,
+      "final_score": -0.22,
+      "bias": "Neutral",
+      "bias_emoji": "\ud83d\udfe1",
+      "confidence": 4,
+      "confidence_label": "Very Low Confidence",
+      "confidence_color": "red",
+      "threshold_warning": "\ud83d\udeab Very low confidence (4%) \u2014 pillars are conflicting. Avoid trading until regime clarifies.",
+      "active_pillars": 4,
       "pillar_signals": [
-        "bearish",
         "bearish",
         "bullish",
         "bearish",
@@ -487,15 +431,15 @@
       ],
       "pillar_contributions": {
         "economic_calendar": {
-          "raw_score": -1.5,
+          "raw_score": 0,
           "weight": 40,
-          "contribution": -0.6,
-          "status": "live"
+          "contribution": 0.0,
+          "status": "stale"
         },
         "geopolitical": {
-          "raw_score": -0.82,
+          "raw_score": -0.91,
           "weight": 28,
-          "contribution": -0.23,
+          "contribution": -0.255,
           "status": "live"
         },
         "institutional": {
@@ -511,25 +455,25 @@
           "status": "live"
         },
         "news_sentiment": {
-          "raw_score": -0.78,
+          "raw_score": -0.76,
           "weight": 2,
-          "contribution": -0.016,
+          "contribution": -0.015,
           "status": "live"
         }
       },
-      "gauge_value": 30
+      "gauge_value": 44
     }
   },
   "weekly_summary": {
     "pillar": "weekly_summary",
-    "timestamp": "2026-03-24T19:55:25.851569-04:00",
+    "timestamp": "2026-03-24T21:15:49.286531-04:00",
     "summary": {
-      "generated_at": "2026-03-24T19:55:25.851543-04:00",
-      "overall": "Overall regime entering this week: Bearish with 63% confidence (Moderate Confidence). Lean short on rallies, avoid aggressive longs until conditions improve.",
-      "economic": "This week has 5 key USD events including Flash Manufacturing PMI, Flash Services PMI, Richmond Manufacturing Index.",
+      "generated_at": "2026-03-24T21:15:49.286504-04:00",
+      "overall": "Overall regime entering this week: Neutral with 4% confidence (Very Low Confidence). Regime is unclear \u2014 reduce size and wait for confirmation.",
+      "economic": "This week has 0 key USD events.",
       "institutional": "Big money is net bullish on NQ (7.67%) and bullish on ES (28.12%).",
-      "macro": "VIX at 26.15 with Fear & Greed at 11 (Extreme Fear).",
-      "geopolitical": "Active geopolitical risks: Pakistan offers to facilitate U.S.-Iran war talks as Trump,  | Jamie Dimon says Iran war makes Middle East peace prospects .",
+      "macro": "VIX at 26.15 with Fear & Greed at 14 (Extreme Fear).",
+      "geopolitical": "Active geopolitical risks: Asia-Pacific markets are set for higher open as Trump commen | Pakistan offers to facilitate U.S.-Iran war talks as Trump, .",
       "week_of": "March 24, 2026"
     },
     "status": "live"

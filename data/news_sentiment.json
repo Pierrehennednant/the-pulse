@@ -1,19 +1,19 @@
 {
   "data": {
     "pillar": "news_sentiment",
-    "timestamp": "2026-03-24T19:55:25.851148-04:00",
+    "timestamp": "2026-03-24T21:15:49.286007-04:00",
     "analysis": {
-      "average_score": -0.388,
+      "average_score": -0.381,
       "overall_sentiment": "bearish",
       "bullish_pct": 30.0,
       "bearish_pct": 70.0,
       "neutral_pct": 0.0,
       "total_headlines": 20,
-      "dominant_theme": "Pakistan offers to facilitate U.S.-Iran war talks as Trump, Tehran give mixed signals",
-      "pillar_score": -0.78
+      "dominant_theme": "Asia-Pacific markets are set for higher open as Trump comments signal Iran war de-escalation",
+      "pillar_score": -0.76
     },
-    "pillar_score": -0.78,
+    "pillar_score": -0.76,
     "status": "live"
   },
-  "timestamp": "2026-03-24T23:55:25.851169"
+  "timestamp": "2026-03-25T01:15:49.286033"
 }

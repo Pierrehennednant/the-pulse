@@ -13,16 +13,25 @@ class ManualInputPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "manual_inputs"
+        self.permanent_file = "./data/permanent_manual_inputs.json"
         self.headers = {'User-Agent': 'Mozilla/5.0'}
+        self._ensure_exists()
+
+    def _ensure_exists(self):
+        if not os.path.exists('./data'):
+            os.makedirs('./data')
+        if not os.path.exists(self.permanent_file):
+            with open(self.permanent_file, 'w') as f:
+                json.dump({}, f)
 
     def save_actual(self, event_title, actual_value, story_url=None):
         try:
-            existing = cache.load(self.cache_key)
-            inputs = existing['data'] if existing else {}
-
             story_context = None
             if story_url:
                 story_context = self.fetch_story_context(story_url)
+
+            with open(self.permanent_file, 'r') as f:
+                inputs = json.load(f)
 
             inputs[event_title] = {
                 'actual': actual_value,
@@ -31,8 +40,10 @@ class ManualInputPipeline:
                 'timestamp': datetime.now(self.timezone).isoformat()
             }
 
-            cache.save(self.cache_key, inputs)
-            pulse_logger.log(f"✓ Manual input saved | {event_title}: {actual_value}")
+            with open(self.permanent_file, 'w') as f:
+                json.dump(inputs, f, indent=2)
+
+            pulse_logger.log(f"✓ Manual input saved permanently | {event_title}: {actual_value}")
             return True
         except Exception as e:
             error_handler.handle(e, "Manual Input")
@@ -50,25 +61,29 @@ class ManualInputPipeline:
             return None
 
     def get_inputs(self):
-        existing = cache.load(self.cache_key)
-        return existing['data'] if existing else {}
+        try:
+            with open(self.permanent_file, 'r') as f:
+                return json.load(f)
+        except:
+            return {}
 
     def clear_old_inputs(self):
         try:
-            existing = cache.load(self.cache_key)
-            if not existing:
-                return
-            inputs = existing['data']
+            with open(self.permanent_file, 'r') as f:
+                inputs = json.load(f)
             now = datetime.now(self.timezone)
             fresh = {}
             for title, data in inputs.items():
                 try:
                     ts = datetime.fromisoformat(data['timestamp'])
+                    if ts.tzinfo is None:
+                        ts = self.timezone.localize(ts)
                     if (now - ts).total_seconds() < 86400:
                         fresh[title] = data
                 except:
                     pass
-            cache.save(self.cache_key, fresh)
+            with open(self.permanent_file, 'w') as f:
+                json.dump(fresh, f, indent=2)
         except Exception as e:
             error_handler.handle(e, "Manual Input Cleanup")
 
