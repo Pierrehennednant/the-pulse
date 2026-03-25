@@ -1,7 +1,7 @@
 {
   "data": {
     "pillar": "economic_calendar",
-    "timestamp": "2026-03-25T08:45:23.032522-04:00",
+    "timestamp": "2026-03-25T08:50:33.777979-04:00",
     "events": [
       {
         "title": "Flash Manufacturing PMI",
@@ -47,11 +47,13 @@
         "time_est": "Wed Mar 25, 07:20 PM EST",
         "forecast": "N/A",
         "previous": "N/A",
-        "actual": "Pending",
+        "actual": "n/a",
         "impact": "Medium",
         "result": "pending",
         "market_impact": "unknown",
-        "reason": "President Trump Speaks not yet released"
+        "reason": "President Trump Speaks \u2014 cannot parse values",
+        "story_url": null,
+        "story_context": null
       },
       {
         "title": "Unemployment Claims",
@@ -80,5 +82,5 @@
     "warnings": [],
     "status": "live"
   },
-  "timestamp": "2026-03-25T12:45:23.032551"
+  "timestamp": "2026-03-25T12:50:33.778001"
 }
