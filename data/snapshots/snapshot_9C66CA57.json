@@ -1,17 +1,17 @@
 {
-  "id": "89F89C48",
-  "timestamp": "2026-03-26T08:36:16.792291-04:00",
+  "id": "9C66CA57",
+  "timestamp": "2026-03-26T08:44:46.949906-04:00",
   "bias": {
-    "final_score": -0.449,
-    "bias": "Neutral",
-    "bias_emoji": "\ud83d\udfe1",
-    "confidence": 20,
-    "confidence_label": "Low Confidence",
-    "confidence_color": "orange",
-    "threshold_warning": "\u26a0\ufe0f Low confidence (20%) \u2014 regime is unclear. Consider reducing size or sitting out today.",
+    "final_score": -0.509,
+    "bias": "Bearish",
+    "bias_emoji": "\ud83d\udd34",
+    "confidence": 58,
+    "confidence_label": "Moderate Confidence",
+    "confidence_color": "yellow",
+    "threshold_warning": null,
     "active_pillars": 5,
     "pillar_signals": [
-      "neutral",
+      "bearish",
       "bearish",
       "bullish",
       "bearish",
@@ -19,10 +19,10 @@
     ],
     "pillar_contributions": {
       "economic_calendar": {
-        "raw_score": -0.07,
+        "raw_score": -0.22,
         "weight": 40,
-        "contribution": -0.028,
-        "status": "stale"
+        "contribution": -0.088,
+        "status": "live"
       },
       "geopolitical": {
         "raw_score": -1.57,
@@ -49,12 +49,12 @@
         "status": "live"
       }
     },
-    "gauge_value": 38
+    "gauge_value": 37
   },
   "pillars": {
     "macro": {
       "pillar": "macro_sentiment",
-      "timestamp": "2026-03-26T08:36:03.894486-04:00",
+      "timestamp": "2026-03-26T08:44:35.695176-04:00",
       "vix": {
         "value": 26.95,
         "previous": 26.15,
@@ -80,7 +80,7 @@
     },
     "economic": {
       "pillar": "economic_calendar",
-      "timestamp": "2026-03-26T08:31:06.480179-04:00",
+      "timestamp": "2026-03-26T08:44:35.771672-04:00",
       "events": [
         {
           "title": "Flash Manufacturing PMI",
@@ -172,9 +172,9 @@
           "reason": "Revised UoM Consumer Sentiment not yet released"
         }
       ],
-      "pillar_score": -0.07,
+      "pillar_score": -0.22,
       "warnings": [],
-      "status": "stale"
+      "status": "live"
     },
     "institutional": {
       "pillar": "institutional",
@@ -210,7 +210,7 @@
     },
     "geopolitical": {
       "pillar": "geopolitical",
-      "timestamp": "2026-03-26T08:36:16.790535-04:00",
+      "timestamp": "2026-03-26T08:44:46.948549-04:00",
       "news_items": [
         {
           "headline": "Higher gas prices from Iran war could offset bigger tax refunds from Trump's 'big beautiful bill'",
@@ -489,7 +489,7 @@
     },
     "news": {
       "pillar": "news_sentiment",
-      "timestamp": "2026-03-26T08:36:16.791664-04:00",
+      "timestamp": "2026-03-26T08:44:46.949303-04:00",
       "analysis": {
         "average_score": -0.796,
         "overall_sentiment": "bearish",
@@ -504,5 +504,18 @@
       "status": "live"
     }
   },
-  "weekly_summary": null
+  "weekly_summary": {
+    "pillar": "weekly_summary",
+    "timestamp": "2026-03-24T21:20:26.804440-04:00",
+    "summary": {
+      "generated_at": "2026-03-24T21:20:26.804402-04:00",
+      "overall": "Overall regime entering this week: Neutral with 3% confidence (Very Low Confidence). Regime is unclear \u2014 reduce size and wait for confirmation.",
+      "economic": "This week has 5 key USD events including Flash Services PMI, Richmond Manufacturing Index, President Trump Speaks.",
+      "institutional": "Big money is net bullish on NQ (7.67%) and bullish on ES (28.12%).",
+      "macro": "VIX at 26.15 with Fear & Greed at 14 (Extreme Fear).",
+      "geopolitical": "No major geopolitical flags active this week.",
+      "week_of": "March 24, 2026"
+    },
+    "status": "live"
+  }
 }

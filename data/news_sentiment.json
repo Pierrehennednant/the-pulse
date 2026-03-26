@@ -1,7 +1,7 @@
 {
   "data": {
     "pillar": "news_sentiment",
-    "timestamp": "2026-03-26T08:38:06.479105-04:00",
+    "timestamp": "2026-03-26T08:44:46.949303-04:00",
     "analysis": {
       "average_score": -0.796,
       "overall_sentiment": "bearish",
@@ -15,5 +15,5 @@
     "pillar_score": -1.59,
     "status": "live"
   },
-  "timestamp": "2026-03-26T12:38:06.479135"
+  "timestamp": "2026-03-26T12:44:46.949326"
 }

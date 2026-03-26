@@ -23,18 +23,34 @@ class SnapshotGenerator:
     def save(self, bias_score, formatted_data):
         timestamp = datetime.now(self.timezone).isoformat()
         snapshot_id = self.generate_id(timestamp)
-        weekly = cache.load('weekly_summary')
+        weekly = None
+        try:
+            with open('./data/permanent_weekly_summary.json', 'r') as f:
+                weekly = json.load(f)
+        except:
+            pass
         snapshot = {
             'id': snapshot_id,
             'timestamp': timestamp,
             'bias': bias_score,
             'pillars': formatted_data,
-            'weekly_summary': weekly['data'] if weekly else None
+            'weekly_summary': weekly if weekly else None
         }
         snapshot_file = os.path.join(self.snapshot_dir, f"snapshot_{snapshot_id}.json")
         with open(snapshot_file, 'w') as f:
             json.dump(snapshot, f, indent=2)
         pulse_logger.log(f"📸 Snapshot saved | ID: {snapshot_id}")
+
+        # Keep only last 50 snapshots
+        all_snapshots = sorted(
+            os.listdir(self.snapshot_dir),
+            key=lambda f: os.path.getmtime(os.path.join(self.snapshot_dir, f)),
+            reverse=True
+        )
+        if len(all_snapshots) > 50:
+            for old_file in all_snapshots[50:]:
+                os.remove(os.path.join(self.snapshot_dir, old_file))
+
         return snapshot_id
 
     def load(self, snapshot_id):
