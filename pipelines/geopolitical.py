@@ -79,20 +79,59 @@ class GeopoliticalPipeline:
         except:
             return 0.0
 
-    def fetch_news(self):
-        try:
-            categories = ['business', 'politics', 'tech']
-            search_queries = [
-                'federal reserve OR FOMC OR interest rate OR inflation',
-                'tariff OR trade war OR sanctions OR trump economy',
-                'war OR military OR nuclear OR iran OR russia OR china',
-                'government shutdown OR debt ceiling OR congress',
-                'recession OR GDP OR unemployment OR jobs'
-            ]
-            items = []
-            seen_titles = set()
+    def _parse_articles(self, data, seen_titles, items):
+        for article in data.get('data', []):
+            title = article.get('title', '')
+            if not title or title in seen_titles:
+                continue
+            if not self.is_market_relevant(title):
+                continue
+            seen_titles.add(title)
+            description = article.get('description', '') or ''
+            full_text = f"{title} {description}"
+            sentiment = self.get_sentiment_score(full_text)
+            published = article.get('published_at', '')
+            try:
+                dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
+                est = dt.astimezone(pytz.timezone(TIMEZONE))
+                timestamp = est.strftime('%b %d, %I:%M %p EST')
+                date = est.strftime('%Y-%m-%d')
+            except:
+                timestamp = published
+                date = datetime.now(self.timezone).strftime('%Y-%m-%d')
+            try:
+                dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
+                age_days = (datetime.now(pytz.UTC) - dt.replace(tzinfo=pytz.UTC) if dt.tzinfo is None else datetime.now(pytz.UTC) - dt).days
+                if age_days > 7:
+                    continue
+            except:
+                pass
+            items.append({
+                'headline': title,
+                'description': ' '.join(description[:300].split()),
+                'source': article.get('source', 'TheNewsAPI'),
+                'timestamp': timestamp,
+                'date': date,
+                'link': article.get('url', ''),
+                'sentiment_score': sentiment,
+                'market_relevant': True
+            })
 
-            for category in categories:
+    def fetch_news(self):
+        categories = ['business', 'politics', 'tech']
+        search_queries = [
+            'federal reserve OR FOMC OR interest rate OR inflation',
+            'tariff OR trade war OR sanctions OR trump economy',
+            'war OR military OR nuclear OR iran OR russia OR china',
+            'government shutdown OR debt ceiling OR congress',
+            'recession OR GDP OR unemployment OR jobs'
+        ]
+        items = []
+        seen_titles = set()
+        errors = 0
+
+        for category in categories:
+            try:
                 url = (
                     f"https://api.thenewsapi.com/v1/news/top"
                     f"?api_token={THENEWS_API_KEY}"
@@ -101,50 +140,14 @@ class GeopoliticalPipeline:
                     f"&limit=25"
                     f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,abcnews.go.com,washingtonpost.com,nytimes.com"
                 )
-                response = requests.get(url, timeout=10)
-                data = response.json()
+                response = requests.get(url, timeout=15)
+                self._parse_articles(response.json(), seen_titles, items)
+            except Exception as e:
+                errors += 1
+                error_handler.handle(e, f"TheNewsAPI category:{category}")
 
-                for article in data.get('data', []):
-                    title = article.get('title', '')
-                    if not title or title in seen_titles:
-                        continue
-                    if not self.is_market_relevant(title):
-                        continue
-                    seen_titles.add(title)
-                    description = article.get('description', '') or ''
-                    full_text = f"{title} {description}"
-                    sentiment = self.get_sentiment_score(full_text)
-                    published = article.get('published_at', '')
-
-                    try:
-                        dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
-                        est = dt.astimezone(pytz.timezone(TIMEZONE))
-                        timestamp = est.strftime('%b %d, %I:%M %p EST')
-                        date = est.strftime('%Y-%m-%d')
-                    except:
-                        timestamp = published
-                        date = datetime.now(self.timezone).strftime('%Y-%m-%d')
-
-                    try:
-                        dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
-                        age_days = (datetime.now(pytz.UTC) - dt.replace(tzinfo=pytz.UTC) if dt.tzinfo is None else datetime.now(pytz.UTC) - dt).days
-                        if age_days > 7:
-                            continue
-                    except:
-                        pass
-
-                    items.append({
-                        'headline': title,
-                        'description': ' '.join(description[:300].split()),
-                        'source': article.get('source', 'TheNewsAPI'),
-                        'timestamp': timestamp,
-                        'date': date,
-                        'link': article.get('url', ''),
-                        'sentiment_score': sentiment,
-                        'market_relevant': True
-                    })
-
-            for query in search_queries:
+        for query in search_queries:
+            try:
                 url = (
                     f"https://api.thenewsapi.com/v1/news/all"
                     f"?api_token={THENEWS_API_KEY}"
@@ -154,53 +157,15 @@ class GeopoliticalPipeline:
                     f"&limit=25"
                     f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,washingtonpost.com,nytimes.com"
                 )
-                response = requests.get(url, timeout=10)
-                data = response.json()
+                response = requests.get(url, timeout=15)
+                self._parse_articles(response.json(), seen_titles, items)
+            except Exception as e:
+                errors += 1
+                error_handler.handle(e, f"TheNewsAPI search:{query[:30]}")
 
-                for article in data.get('data', []):
-                    title = article.get('title', '')
-                    if not title or title in seen_titles:
-                        continue
-                    if not self.is_market_relevant(title):
-                        continue
-                    seen_titles.add(title)
-                    description = article.get('description', '') or ''
-                    full_text = f"{title} {description}"
-                    sentiment = self.get_sentiment_score(full_text)
-                    published = article.get('published_at', '')
-
-                    try:
-                        dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
-                        est = dt.astimezone(pytz.timezone(TIMEZONE))
-                        timestamp = est.strftime('%b %d, %I:%M %p EST')
-                        date = est.strftime('%Y-%m-%d')
-                    except:
-                        timestamp = published
-                        date = datetime.now(self.timezone).strftime('%Y-%m-%d')
-
-                    try:
-                        dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
-                        age_days = (datetime.now(pytz.UTC) - dt.replace(tzinfo=pytz.UTC) if dt.tzinfo is None else datetime.now(pytz.UTC) - dt).days
-                        if age_days > 7:
-                            continue
-                    except:
-                        pass
-
-                    items.append({
-                        'headline': title,
-                        'description': ' '.join(description[:300].split()),
-                        'source': article.get('source', 'TheNewsAPI'),
-                        'timestamp': timestamp,
-                        'date': date,
-                        'link': article.get('url', ''),
-                        'sentiment_score': sentiment,
-                        'market_relevant': True
-                    })
-
-            return items
-        except Exception as e:
-            error_handler.handle(e, "TheNewsAPI Fetcher")
-            return []
+        if errors > 0 and not items:
+            error_handler.handle(Exception(f"All {errors} TheNewsAPI requests failed"), "TheNewsAPI Fetcher")
+        return items
 
     def identify_flags(self, items):
         flags = []
@@ -283,6 +248,12 @@ class GeopoliticalPipeline:
                 return existing['data']
 
             items = self.fetch_news()
+
+            if not items and existing:
+                pulse_logger.log(f"↺ Geopolitical — fetch returned empty (API timeout?), keeping last good cache ({age_minutes:.0f}min old)")
+                existing['data']['status'] = 'cached'
+                return existing['data']
+
             flags = self.identify_flags(items)
             score = self.calculate_score(items, flags)
 

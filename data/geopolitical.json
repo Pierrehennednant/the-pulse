@@ -1,8 +1,28 @@
 {
   "data": {
     "pillar": "geopolitical",
-    "timestamp": "2026-03-26T09:13:19.168501-04:00",
+    "timestamp": "2026-03-26T10:24:49.569991-04:00",
     "news_items": [
+      {
+        "headline": "Retail firms warn of price hikes if Iran war extends for months",
+        "description": "Fashion retailer Next has accounted for millions in additional costs likely to arise from the Middle East conflict",
+        "source": "cnbc.com",
+        "timestamp": "Mar 26, 09:41 AM EST",
+        "date": "2026-03-26",
+        "link": "https://www.cnbc.com/2026/03/26/retail-next-hm-stock-price-hikes-iran-war-middle-east-costs.html",
+        "sentiment_score": -0.995,
+        "market_relevant": true
+      },
+      {
+        "headline": "Iran war will spare no major economy, says OECD \u2014 but the UK is more vulnerable than others",
+        "description": "The U.K. is predicted to be worse hit by the Iran war than its developed market counterparts, the OECD said in its interim economic outlook on Thursday.",
+        "source": "cnbc.com",
+        "timestamp": "Mar 26, 09:09 AM EST",
+        "date": "2026-03-26",
+        "link": "https://www.cnbc.com/2026/03/26/uk-could-be-worse-hit-from-iran-war-of-all-major-economies-oecd.html",
+        "sentiment_score": -0.997,
+        "market_relevant": true
+      },
       {
         "headline": "Higher gas prices from Iran war could offset bigger tax refunds from Trump's 'big beautiful bill'",
         "description": "Amid the Iran war, higher gas prices could offset the bigger tax refunds from President Donald Trump's",
@@ -81,31 +101,31 @@
         "date": "2026-03-25",
         "link": "https://www.cnbc.com/2026/03/26/asia-pacific-markets-live-updates-nikkei-225-kospi-hang-seng-index.html",
         "sentiment_score": -1.0,
-        "market_relevant": true
-      },
-      {
-        "headline": "How the Iran war could rattle the global economy long after hostilities end",
-        "description": "A reopening of the critical Strait of Hormuz, which Iran has effectively closed to oil tankers, won't immediately restore the world to its pre-conflict state.",
-        "source": "cnbc.com",
-        "timestamp": "Mar 25, 03:10 PM EST",
-        "date": "2026-03-25",
-        "link": "https://www.cnbc.com/2026/03/25/the-iran-war-could-rattle-the-global-economy-long-after-hostilities-end.html",
-        "sentiment_score": -0.999,
-        "market_relevant": true
-      },
-      {
-        "headline": "White House says Trump will meet Xi in China in May",
-        "description": "A long-awaited meeting between President Donald Trump and Chinese President Xi Jinping will take place in Beijing on May 14 and 15, the White House said.",
-        "source": "cnbc.com",
-        "timestamp": "Mar 25, 01:52 PM EST",
-        "date": "2026-03-25",
-        "link": "https://www.cnbc.com/2026/03/25/trump-xi-beijing-china-summit.html",
-        "sentiment_score": 0.995,
         "market_relevant": true
       }
     ],
     "financial_juice_items": [
       {
+        "headline": "Retail firms warn of price hikes if Iran war extends for months",
+        "description": "Fashion retailer Next has accounted for millions in additional costs likely to arise from the Middle East conflict",
+        "source": "cnbc.com",
+        "timestamp": "Mar 26, 09:41 AM EST",
+        "date": "2026-03-26",
+        "link": "https://www.cnbc.com/2026/03/26/retail-next-hm-stock-price-hikes-iran-war-middle-east-costs.html",
+        "sentiment_score": -0.995,
+        "market_relevant": true
+      },
+      {
+        "headline": "Iran war will spare no major economy, says OECD \u2014 but the UK is more vulnerable than others",
+        "description": "The U.K. is predicted to be worse hit by the Iran war than its developed market counterparts, the OECD said in its interim economic outlook on Thursday.",
+        "source": "cnbc.com",
+        "timestamp": "Mar 26, 09:09 AM EST",
+        "date": "2026-03-26",
+        "link": "https://www.cnbc.com/2026/03/26/uk-could-be-worse-hit-from-iran-war-of-all-major-economies-oecd.html",
+        "sentiment_score": -0.997,
+        "market_relevant": true
+      },
+      {
         "headline": "Higher gas prices from Iran war could offset bigger tax refunds from Trump's 'big beautiful bill'",
         "description": "Amid the Iran war, higher gas prices could offset the bigger tax refunds from President Donald Trump's",
         "source": "cnbc.com",
@@ -184,30 +204,36 @@
         "link": "https://www.cnbc.com/2026/03/26/asia-pacific-markets-live-updates-nikkei-225-kospi-hang-seng-index.html",
         "sentiment_score": -1.0,
         "market_relevant": true
-      },
-      {
-        "headline": "How the Iran war could rattle the global economy long after hostilities end",
-        "description": "A reopening of the critical Strait of Hormuz, which Iran has effectively closed to oil tankers, won't immediately restore the world to its pre-conflict state.",
-        "source": "cnbc.com",
-        "timestamp": "Mar 25, 03:10 PM EST",
-        "date": "2026-03-25",
-        "link": "https://www.cnbc.com/2026/03/25/the-iran-war-could-rattle-the-global-economy-long-after-hostilities-end.html",
-        "sentiment_score": -0.999,
-        "market_relevant": true
-      },
-      {
-        "headline": "White House says Trump will meet Xi in China in May",
-        "description": "A long-awaited meeting between President Donald Trump and Chinese President Xi Jinping will take place in Beijing on May 14 and 15, the White House said.",
-        "source": "cnbc.com",
-        "timestamp": "Mar 25, 01:52 PM EST",
-        "date": "2026-03-25",
-        "link": "https://www.cnbc.com/2026/03/25/trump-xi-beijing-china-summit.html",
-        "sentiment_score": 0.995,
-        "market_relevant": true
       }
     ],
     "unbiased_network_items": [],
     "active_flags": [
+      {
+        "title": "Retail firms warn of price hikes if Iran war extends for months",
+        "priority": 95,
+        "flag_type": "war",
+        "status": "Developing",
+        "source": "cnbc.com",
+        "date": "2026-03-26",
+        "timestamp": "Mar 26, 09:41 AM EST",
+        "link": "https://www.cnbc.com/2026/03/26/retail-next-hm-stock-price-hikes-iran-war-middle-east-costs.html",
+        "sentiment": -0.995,
+        "predicted_impact": "bearish",
+        "context": "Fashion retailer Next has accounted for millions in additional costs likely to arise from the Middle East conflict"
+      },
+      {
+        "title": "Iran war will spare no major economy, says OECD \u2014 but the UK is more vulnerable than others",
+        "priority": 95,
+        "flag_type": "war",
+        "status": "Developing",
+        "source": "cnbc.com",
+        "date": "2026-03-26",
+        "timestamp": "Mar 26, 09:09 AM EST",
+        "link": "https://www.cnbc.com/2026/03/26/uk-could-be-worse-hit-from-iran-war-of-all-major-economies-oecd.html",
+        "sentiment": -0.997,
+        "predicted_impact": "bearish",
+        "context": "The U.K. is predicted to be worse hit by the Iran war than its developed market counterparts, the OECD said in its interim economic outlook on Thursday."
+      },
       {
         "title": "Higher gas prices from Iran war could offset bigger tax refunds from Trump's 'big beautiful bill'",
         "priority": 95,
@@ -246,37 +272,11 @@
         "sentiment": -0.998,
         "predicted_impact": "bearish",
         "context": "Since the start of the U.S.-Israel war with Iran on Feb. 28, interference with location-based services has disrupted life across the Persian Gulf."
-      },
-      {
-        "title": "How the Iran war could rattle the global economy long after hostilities end",
-        "priority": 95,
-        "flag_type": "war",
-        "status": "Developing",
-        "source": "cnbc.com",
-        "date": "2026-03-25",
-        "timestamp": "Mar 25, 03:10 PM EST",
-        "link": "https://www.cnbc.com/2026/03/25/the-iran-war-could-rattle-the-global-economy-long-after-hostilities-end.html",
-        "sentiment": -0.999,
-        "predicted_impact": "bearish",
-        "context": "A reopening of the critical Strait of Hormuz, which Iran has effectively closed to oil tankers, won't immediately restore the world to its pre-conflict state."
-      },
-      {
-        "title": "What comes next? Three attack scenarios as U.S. sends thousands more troops to Middle East",
-        "priority": 90,
-        "flag_type": "attack",
-        "status": "Developing",
-        "source": "cnbc.com",
-        "date": "2026-03-26",
-        "timestamp": "Mar 26, 06:29 AM EST",
-        "link": "https://www.cnbc.com/2026/03/26/iran-war-trump-us-troops-kharg-island-qeshm-island-nuclear-middle-east.html",
-        "sentiment": -0.987,
-        "predicted_impact": "bearish",
-        "context": "One of Iran's top lawmakers has said that they were anticipating a potential ground invasion of one its islands."
       }
     ],
-    "total_items": 23,
-    "pillar_score": -1.58,
+    "total_items": 26,
+    "pillar_score": -1.71,
     "status": "live"
   },
-  "timestamp": "2026-03-26T13:13:19.168531"
+  "timestamp": "2026-03-26T14:24:49.570022"
 }
