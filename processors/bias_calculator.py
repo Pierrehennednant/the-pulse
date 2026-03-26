@@ -90,25 +90,31 @@ class BiasCalculator:
 
         # Trading Directive
         if bias == 'Neutral':
-            directive = "🟡 No trade today. Regime has no directional conviction. Sit out."
+            directive = "🟡 Neutral — No trade today. Sit out."
             directive_color = "#f39c12"
-        elif confidence < 50:
-            directive = "⚫ Regime unclear. No trade today. Wait for stronger conviction."
+        elif confidence < 20:
+            directive = "⚫ Regime conflicted — Sit out. If you must trade, quarter size only."
             directive_color = "#7a8fa8"
         elif bias == 'Bearish' and confidence >= 70:
-            directive = "🔴 Prioritize shorts. Aggressive on confirmed setups."
+            directive = "🔴 Bearish — Prioritize shorts. Half size first entry, full size second entry."
             directive_color = "#e74c3c"
         elif bias == 'Bearish' and confidence >= 50:
-            directive = "🔴 Lean short. Wait for confirmation before entering."
+            directive = "🔴 Bearish — Lean short. Half size first entry, no second entry until confirmed."
             directive_color = "#e74c3c"
+        elif bias == 'Bearish' and confidence >= 20:
+            directive = "🟠 Bearish lean — Regime unclear. Half size only, no second entry today."
+            directive_color = "#ff8c00"
         elif bias == 'Bullish' and confidence >= 70:
-            directive = "🟢 Prioritize longs. Aggressive on confirmed setups."
+            directive = "🟢 Bullish — Prioritize longs. Half size first entry, full size second entry."
             directive_color = "#2ecc71"
         elif bias == 'Bullish' and confidence >= 50:
-            directive = "🟢 Lean long. Wait for confirmation before entering."
+            directive = "🟢 Bullish — Lean long. Half size first entry, no second entry until confirmed."
             directive_color = "#2ecc71"
+        elif bias == 'Bullish' and confidence >= 20:
+            directive = "🟠 Bullish lean — Regime unclear. Half size only, no second entry today."
+            directive_color = "#ff8c00"
         else:
-            directive = "⚫ Regime unclear. No trade today. Wait for stronger conviction."
+            directive = "⚫ Regime conflicted — Sit out. If you must trade, quarter size only."
             directive_color = "#7a8fa8"
 
         result = {

@@ -1,19 +1,19 @@
 {
   "data": {
     "pillar": "news_sentiment",
-    "timestamp": "2026-03-26T13:23:40.779181-04:00",
+    "timestamp": "2026-03-26T13:34:45.594951-04:00",
     "analysis": {
-      "average_score": -0.994,
+      "average_score": -0.395,
       "overall_sentiment": "bearish",
-      "bullish_pct": 0.0,
-      "bearish_pct": 100.0,
+      "bullish_pct": 33.3,
+      "bearish_pct": 66.7,
       "neutral_pct": 0.0,
-      "total_headlines": 20,
-      "dominant_theme": "Retail firms warn of price hikes if Iran war extends for months",
-      "pillar_score": -1.99
+      "total_headlines": 6,
+      "dominant_theme": "Fed Governor Waller urges caution for now, says rate cuts possible later in the year",
+      "pillar_score": -0.79
     },
-    "pillar_score": -1.99,
+    "pillar_score": -0.79,
     "status": "live"
   },
-  "timestamp": "2026-03-26T17:23:40.779213"
+  "timestamp": "2026-03-26T17:34:45.594974"
 }

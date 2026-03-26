@@ -1,14 +1,14 @@
 {
-  "id": "F74403FD",
-  "timestamp": "2026-03-26T13:11:36.753409-04:00",
+  "id": "6517F269",
+  "timestamp": "2026-03-26T13:34:45.595441-04:00",
   "bias": {
-    "final_score": -0.447,
+    "final_score": -0.255,
     "bias": "Neutral",
     "bias_emoji": "\ud83d\udfe1",
-    "confidence": 8,
+    "confidence": 5,
     "confidence_label": "Very Low Confidence",
     "confidence_color": "red",
-    "threshold_warning": "\ud83d\udeab Very low confidence (8%) \u2014 pillars are conflicting. Avoid trading until regime clarifies.",
+    "threshold_warning": "\ud83d\udeab Very low confidence (5%) \u2014 pillars are conflicting. Avoid trading until regime clarifies.",
     "active_pillars": 5,
     "pillar_signals": [
       "bearish",
@@ -22,12 +22,12 @@
         "raw_score": -0.22,
         "weight": 40,
         "contribution": -0.088,
-        "status": "live"
+        "status": "stale"
       },
       "geopolitical": {
-        "raw_score": -1.32,
+        "raw_score": -0.72,
         "weight": 28,
-        "contribution": -0.37,
+        "contribution": -0.202,
         "status": "live"
       },
       "institutional": {
@@ -43,20 +43,20 @@
         "status": "live"
       },
       "news_sentiment": {
-        "raw_score": -1.98,
+        "raw_score": -0.79,
         "weight": 2,
-        "contribution": -0.04,
+        "contribution": -0.016,
         "status": "live"
       }
     },
-    "gauge_value": 38,
-    "directive": "\ud83d\udfe1 No trade today. Regime has no directional conviction. Sit out.",
+    "gauge_value": 43,
+    "directive": "\ud83d\udfe1 Neutral \u2014 No trade today. Sit out.",
     "directive_color": "#f39c12"
   },
   "pillars": {
     "macro": {
       "pillar": "macro_sentiment",
-      "timestamp": "2026-03-26T13:09:58.511024-04:00",
+      "timestamp": "2026-03-26T13:33:35.748234-04:00",
       "vix": {
         "value": 25.33,
         "previous": 26.95,
@@ -82,7 +82,7 @@
     },
     "economic": {
       "pillar": "economic_calendar",
-      "timestamp": "2026-03-26T13:09:58.584366-04:00",
+      "timestamp": "2026-03-26T13:32:55.680390-04:00",
       "events": [
         {
           "title": "Flash Manufacturing PMI",
@@ -176,7 +176,7 @@
       ],
       "pillar_score": -0.22,
       "warnings": [],
-      "status": "live"
+      "status": "stale"
     },
     "institutional": {
       "pillar": "institutional",
@@ -212,7 +212,7 @@
     },
     "geopolitical": {
       "pillar": "geopolitical",
-      "timestamp": "2026-03-26T13:11:36.744866-04:00",
+      "timestamp": "2026-03-26T13:34:45.594300-04:00",
       "news_items": [
         {
           "headline": "Fed Governor Waller urges caution for now, says rate cuts possible later in the year",
@@ -232,6 +232,16 @@
           "date": "2026-03-18",
           "link": "https://www.foxbusiness.com/economy/federal-reserve-cut-interest-rates-2026",
           "sentiment_score": -0.999,
+          "market_relevant": true
+        },
+        {
+          "headline": "With South Korea and China building ships faster and cheaper than U.S., Trump makes shipbuilding a priority",
+          "description": "China rolls out over 1,000 cargo ships a year, while the U.S. \u2013 maybe three. The Trump administration has called this a crisis with both economic and national...",
+          "source": "cbsnews.com",
+          "timestamp": "Mar 22, 07:45 PM EST",
+          "date": "2026-03-22",
+          "link": "https://www.cbsnews.com/news/us-ship-building-lags-behind-china-south-korea-trump-makes-it-priority-60-minutes-transcript/",
+          "sentiment_score": 0.795,
           "market_relevant": true
         }
       ],
@@ -254,6 +264,16 @@
           "date": "2026-03-18",
           "link": "https://www.foxbusiness.com/economy/federal-reserve-cut-interest-rates-2026",
           "sentiment_score": -0.999,
+          "market_relevant": true
+        },
+        {
+          "headline": "With South Korea and China building ships faster and cheaper than U.S., Trump makes shipbuilding a priority",
+          "description": "China rolls out over 1,000 cargo ships a year, while the U.S. \u2013 maybe three. The Trump administration has called this a crisis with both economic and national...",
+          "source": "cbsnews.com",
+          "timestamp": "Mar 22, 07:45 PM EST",
+          "date": "2026-03-22",
+          "link": "https://www.cbsnews.com/news/us-ship-building-lags-behind-china-south-korea-trump-makes-it-priority-60-minutes-transcript/",
+          "sentiment_score": 0.795,
           "market_relevant": true
         }
       ],
@@ -286,24 +306,24 @@
           "context": "Federal Reserve decision pushes expectations for rate cuts lower for the rest of 2026, as uncertainty over the impact of the Iran war, sluggish job growth and s..."
         }
       ],
-      "total_items": 2,
-      "pillar_score": -1.32,
+      "total_items": 3,
+      "pillar_score": -0.72,
       "status": "live"
     },
     "news": {
       "pillar": "news_sentiment",
-      "timestamp": "2026-03-26T13:11:36.745601-04:00",
+      "timestamp": "2026-03-26T13:34:45.594951-04:00",
       "analysis": {
-        "average_score": -0.99,
+        "average_score": -0.395,
         "overall_sentiment": "bearish",
-        "bullish_pct": 0.0,
-        "bearish_pct": 100.0,
+        "bullish_pct": 33.3,
+        "bearish_pct": 66.7,
         "neutral_pct": 0.0,
-        "total_headlines": 4,
+        "total_headlines": 6,
         "dominant_theme": "Fed Governor Waller urges caution for now, says rate cuts possible later in the year",
-        "pillar_score": -1.98
+        "pillar_score": -0.79
       },
-      "pillar_score": -1.98,
+      "pillar_score": -0.79,
       "status": "live"
     }
   },
