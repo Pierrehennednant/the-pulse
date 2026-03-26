@@ -1,7 +1,7 @@
 {
   "data": {
     "pillar": "economic_calendar",
-    "timestamp": "2026-03-25T20:56:54.557442-04:00",
+    "timestamp": "2026-03-26T08:38:06.473463-04:00",
     "events": [
       {
         "title": "Flash Manufacturing PMI",
@@ -60,11 +60,26 @@
         "time_est": "Thu Mar 26, 08:30 AM EST",
         "forecast": "211K",
         "previous": "205K",
-        "actual": "Pending",
+        "actual": "210K",
         "impact": "High",
+        "result": "miss",
+        "market_impact": "bearish",
+        "reason": "Unemployment Claims missed forecast (210K vs 211K)",
+        "story_url": null,
+        "story_context": null
+      },
+      {
+        "title": "President Trump Speaks",
+        "time_est": "Thu Mar 26, 04:00 PM EST",
+        "forecast": "N/A",
+        "previous": "N/A",
+        "actual": "n/a",
+        "impact": "Medium",
         "result": "pending",
         "market_impact": "unknown",
-        "reason": "Unemployment Claims not yet released"
+        "reason": "President Trump Speaks \u2014 cannot parse values",
+        "story_url": null,
+        "story_context": null
       },
       {
         "title": "Revised UoM Consumer Sentiment",
@@ -78,9 +93,9 @@
         "reason": "Revised UoM Consumer Sentiment not yet released"
       }
     ],
-    "pillar_score": 0.03,
+    "pillar_score": -0.22,
     "warnings": [],
     "status": "live"
   },
-  "timestamp": "2026-03-26T00:56:54.557467"
+  "timestamp": "2026-03-26T12:38:06.473487"
 }

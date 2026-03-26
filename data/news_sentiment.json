@@ -1,19 +1,19 @@
 {
   "data": {
     "pillar": "news_sentiment",
-    "timestamp": "2026-03-25T20:57:06.005460-04:00",
+    "timestamp": "2026-03-26T08:38:06.479105-04:00",
     "analysis": {
-      "average_score": -0.746,
+      "average_score": -0.796,
       "overall_sentiment": "bearish",
       "bullish_pct": 10.0,
       "bearish_pct": 90.0,
       "neutral_pct": 0.0,
       "total_headlines": 20,
-      "dominant_theme": "How the Iran war could rattle the global economy long after hostilities end",
-      "pillar_score": -1.49
+      "dominant_theme": "Higher gas prices from Iran war could offset bigger tax refunds from Trump's 'big beautiful bill'",
+      "pillar_score": -1.59
     },
-    "pillar_score": -1.49,
+    "pillar_score": -1.59,
     "status": "live"
   },
-  "timestamp": "2026-03-26T00:57:06.005496"
+  "timestamp": "2026-03-26T12:38:06.479135"
 }
