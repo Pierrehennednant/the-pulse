@@ -25,6 +25,10 @@ class GeopoliticalPipeline:
             'stock market', 'market crash', 'bear market', 'bull market'
         ]
         self.ignore_keywords = [
+            # CNBC investment commentary
+            'investing club', 'war beneficiary stock', 'jim cramer', 'cramer',
+            'we\'re adding', 'we like the message', 'top 10 things to watch',
+            'portfolio buy', 'portfolio sell', 'charitable trust',
             # Entertainment & celebrity
             'saturday night live', 'snl', 'comedy', 'movie', 'film', 'music',
             'album', 'concert', 'celebrity', 'oscars', 'grammy', 'emmy',

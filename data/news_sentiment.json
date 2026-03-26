@@ -1,19 +1,19 @@
 {
   "data": {
     "pillar": "news_sentiment",
-    "timestamp": "2026-03-25T20:53:56.558104-04:00",
+    "timestamp": "2026-03-25T20:57:06.005460-04:00",
     "analysis": {
-      "average_score": -0.372,
+      "average_score": -0.746,
       "overall_sentiment": "bearish",
-      "bullish_pct": 30.0,
-      "bearish_pct": 70.0,
+      "bullish_pct": 10.0,
+      "bearish_pct": 90.0,
       "neutral_pct": 0.0,
       "total_headlines": 20,
       "dominant_theme": "How the Iran war could rattle the global economy long after hostilities end",
-      "pillar_score": -0.74
+      "pillar_score": -1.49
     },
-    "pillar_score": -0.74,
+    "pillar_score": -1.49,
     "status": "live"
   },
-  "timestamp": "2026-03-26T00:53:56.558128"
+  "timestamp": "2026-03-26T00:57:06.005496"
 }

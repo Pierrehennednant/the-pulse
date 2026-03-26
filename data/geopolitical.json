@@ -1,7 +1,7 @@
 {
   "data": {
     "pillar": "geopolitical",
-    "timestamp": "2026-03-25T20:54:41.873484-04:00",
+    "timestamp": "2026-03-25T20:57:06.003695-04:00",
     "news_items": [
       {
         "headline": "Asia markets set to fall as Iran rules out direct U.S. talks despite reviewing proposal",
@@ -31,36 +31,6 @@
         "date": "2026-03-25",
         "link": "https://www.cnbc.com/2026/03/25/trump-xi-beijing-china-summit.html",
         "sentiment_score": 0.995,
-        "market_relevant": true
-      },
-      {
-        "headline": "We're adding to an out-of-favor stock with limited exposure to Iran war upheaval",
-        "description": "The stock has pulled back roughly 9% since the start of the conflict with Iran.",
-        "source": "cnbc.com",
-        "timestamp": "Mar 25, 12:21 PM EST",
-        "date": "2026-03-25",
-        "link": "https://www.cnbc.com/2026/03/25/were-adding-to-an-out-of-favor-stock-with-limited-exposure-to-iran-war-upheaval.html",
-        "sentiment_score": -0.998,
-        "market_relevant": true
-      },
-      {
-        "headline": "We like the message of Meta's new executive stock plan \u2014 plus, a war beneficiary stock",
-        "description": "The Investing Club holds its \"Morning Meeting\" every weekday at 10:20 a.m. ET.",
-        "source": "cnbc.com",
-        "timestamp": "Mar 25, 11:03 AM EST",
-        "date": "2026-03-25",
-        "link": "https://www.cnbc.com/2026/03/25/we-like-the-message-of-metas-new-executive-stock-plan-plus-a-war-beneficiary-stock.html",
-        "sentiment_score": 0.985,
-        "market_relevant": true
-      },
-      {
-        "headline": "Jim Cramer's top 10 things to watch in the stock market Wednesday",
-        "description": "If oil prices are falling, then it's hard to be negative about stocks.",
-        "source": "cnbc.com",
-        "timestamp": "Mar 25, 09:16 AM EST",
-        "date": "2026-03-25",
-        "link": "https://www.cnbc.com/2026/03/25/jim-cramers-top-10-things-to-watch-in-the-stock-market-wednesday.html",
-        "sentiment_score": 0.997,
         "market_relevant": true
       },
       {
@@ -101,6 +71,36 @@
         "date": "2026-03-25",
         "link": "https://www.cbsnews.com/video/trump-claims-progress-with-iran-as-tehran-rejects-ceasefire-proposal/",
         "sentiment_score": -0.971,
+        "market_relevant": true
+      },
+      {
+        "headline": "Democrat flips state seat near Mar-a-Lago, raising new warning signs for Trump",
+        "description": "As the war with Iran rages on and gas prices keep climbing, President Trump is now feeling the political pain in his own front yard. Ed O'Keefe has more.",
+        "source": "cbsnews.com",
+        "timestamp": "Mar 25, 07:25 PM EST",
+        "date": "2026-03-25",
+        "link": "https://www.cbsnews.com/video/democrat-flips-state-seat-near-mar-a-lago-raising-new-warning-signs-for-trump/",
+        "sentiment_score": -0.936,
+        "market_relevant": true
+      },
+      {
+        "headline": "Would U.S. or Israel agree to any of Iran's conditions to end the war?",
+        "description": "Iran has sent the U.S. a counterproposal for possible peace talks, including five conditions to end the war. Retired U.S. Navy Vice Admiral Robert Murrett joins",
+        "source": "cbsnews.com",
+        "timestamp": "Mar 25, 07:25 PM EST",
+        "date": "2026-03-25",
+        "link": "https://www.cbsnews.com/video/would-us-israel-agree-irans-conditions-end-war/",
+        "sentiment_score": -0.882,
+        "market_relevant": true
+      },
+      {
+        "headline": "Iran rejects Trump\u2019s peace proposal",
+        "description": "The Iranian regime has rejected President Trump\u2019s 15-point peace proposal to end the war. NBC News\u2019 Gabe Gutierrez reports.",
+        "source": "nbcnews.com",
+        "timestamp": "Mar 25, 06:54 PM EST",
+        "date": "2026-03-25",
+        "link": "https://www.nbcnews.com/nightly-news/video/iran-rejects-trump-s-peace-proposal-260068933512",
+        "sentiment_score": -0.939,
         "market_relevant": true
       }
     ],
@@ -136,36 +136,6 @@
         "market_relevant": true
       },
       {
-        "headline": "We're adding to an out-of-favor stock with limited exposure to Iran war upheaval",
-        "description": "The stock has pulled back roughly 9% since the start of the conflict with Iran.",
-        "source": "cnbc.com",
-        "timestamp": "Mar 25, 12:21 PM EST",
-        "date": "2026-03-25",
-        "link": "https://www.cnbc.com/2026/03/25/were-adding-to-an-out-of-favor-stock-with-limited-exposure-to-iran-war-upheaval.html",
-        "sentiment_score": -0.998,
-        "market_relevant": true
-      },
-      {
-        "headline": "We like the message of Meta's new executive stock plan \u2014 plus, a war beneficiary stock",
-        "description": "The Investing Club holds its \"Morning Meeting\" every weekday at 10:20 a.m. ET.",
-        "source": "cnbc.com",
-        "timestamp": "Mar 25, 11:03 AM EST",
-        "date": "2026-03-25",
-        "link": "https://www.cnbc.com/2026/03/25/we-like-the-message-of-metas-new-executive-stock-plan-plus-a-war-beneficiary-stock.html",
-        "sentiment_score": 0.985,
-        "market_relevant": true
-      },
-      {
-        "headline": "Jim Cramer's top 10 things to watch in the stock market Wednesday",
-        "description": "If oil prices are falling, then it's hard to be negative about stocks.",
-        "source": "cnbc.com",
-        "timestamp": "Mar 25, 09:16 AM EST",
-        "date": "2026-03-25",
-        "link": "https://www.cnbc.com/2026/03/25/jim-cramers-top-10-things-to-watch-in-the-stock-market-wednesday.html",
-        "sentiment_score": 0.997,
-        "market_relevant": true
-      },
-      {
         "headline": "Sen. Warren: DOD answers show no anti-corruption protocols for Trump children",
         "description": "Democrats have been hotly critical of the Trump family's business dealings while President Donald Trump serves in the White House.",
         "source": "cnbc.com",
@@ -204,6 +174,36 @@
         "link": "https://www.cbsnews.com/video/trump-claims-progress-with-iran-as-tehran-rejects-ceasefire-proposal/",
         "sentiment_score": -0.971,
         "market_relevant": true
+      },
+      {
+        "headline": "Democrat flips state seat near Mar-a-Lago, raising new warning signs for Trump",
+        "description": "As the war with Iran rages on and gas prices keep climbing, President Trump is now feeling the political pain in his own front yard. Ed O'Keefe has more.",
+        "source": "cbsnews.com",
+        "timestamp": "Mar 25, 07:25 PM EST",
+        "date": "2026-03-25",
+        "link": "https://www.cbsnews.com/video/democrat-flips-state-seat-near-mar-a-lago-raising-new-warning-signs-for-trump/",
+        "sentiment_score": -0.936,
+        "market_relevant": true
+      },
+      {
+        "headline": "Would U.S. or Israel agree to any of Iran's conditions to end the war?",
+        "description": "Iran has sent the U.S. a counterproposal for possible peace talks, including five conditions to end the war. Retired U.S. Navy Vice Admiral Robert Murrett joins",
+        "source": "cbsnews.com",
+        "timestamp": "Mar 25, 07:25 PM EST",
+        "date": "2026-03-25",
+        "link": "https://www.cbsnews.com/video/would-us-israel-agree-irans-conditions-end-war/",
+        "sentiment_score": -0.882,
+        "market_relevant": true
+      },
+      {
+        "headline": "Iran rejects Trump\u2019s peace proposal",
+        "description": "The Iranian regime has rejected President Trump\u2019s 15-point peace proposal to end the war. NBC News\u2019 Gabe Gutierrez reports.",
+        "source": "nbcnews.com",
+        "timestamp": "Mar 25, 06:54 PM EST",
+        "date": "2026-03-25",
+        "link": "https://www.nbcnews.com/nightly-news/video/iran-rejects-trump-s-peace-proposal-260068933512",
+        "sentiment_score": -0.939,
+        "market_relevant": true
       }
     ],
     "unbiased_network_items": [],
@@ -220,32 +220,6 @@
         "sentiment": -0.999,
         "predicted_impact": "bearish",
         "context": "A reopening of the critical Strait of Hormuz, which Iran has effectively closed to oil tankers, won't immediately restore the world to its pre-conflict state."
-      },
-      {
-        "title": "We're adding to an out-of-favor stock with limited exposure to Iran war upheaval",
-        "priority": 95,
-        "flag_type": "war",
-        "status": "Developing",
-        "source": "cnbc.com",
-        "date": "2026-03-25",
-        "timestamp": "Mar 25, 12:21 PM EST",
-        "link": "https://www.cnbc.com/2026/03/25/were-adding-to-an-out-of-favor-stock-with-limited-exposure-to-iran-war-upheaval.html",
-        "sentiment": -0.998,
-        "predicted_impact": "bearish",
-        "context": "The stock has pulled back roughly 9% since the start of the conflict with Iran."
-      },
-      {
-        "title": "We like the message of Meta's new executive stock plan \u2014 plus, a war beneficiary stock",
-        "priority": 95,
-        "flag_type": "war",
-        "status": "Developing",
-        "source": "cnbc.com",
-        "date": "2026-03-25",
-        "timestamp": "Mar 25, 11:03 AM EST",
-        "link": "https://www.cnbc.com/2026/03/25/we-like-the-message-of-metas-new-executive-stock-plan-plus-a-war-beneficiary-stock.html",
-        "sentiment": 0.985,
-        "predicted_impact": "bullish",
-        "context": "The Investing Club holds its \"Morning Meeting\" every weekday at 10:20 a.m. ET."
       },
       {
         "title": "Sen. Warren: DOD answers show no anti-corruption protocols for Trump children",
@@ -272,11 +246,37 @@
         "sentiment": -0.746,
         "predicted_impact": "bearish",
         "context": "The Iran conflict has offered the illicit oil trade a lifeline \u2014 while the easing of US sanctions widens a transatlantic rift"
+      },
+      {
+        "title": "Democrat flips state seat near Mar-a-Lago, raising new warning signs for Trump",
+        "priority": 90,
+        "flag_type": "war",
+        "status": "Developing",
+        "source": "cbsnews.com",
+        "date": "2026-03-25",
+        "timestamp": "Mar 25, 07:25 PM EST",
+        "link": "https://www.cbsnews.com/video/democrat-flips-state-seat-near-mar-a-lago-raising-new-warning-signs-for-trump/",
+        "sentiment": -0.936,
+        "predicted_impact": "bearish",
+        "context": "As the war with Iran rages on and gas prices keep climbing, President Trump is now feeling the political pain in his own front yard. Ed O'Keefe has more."
+      },
+      {
+        "title": "Would U.S. or Israel agree to any of Iran's conditions to end the war?",
+        "priority": 90,
+        "flag_type": "war",
+        "status": "Developing",
+        "source": "cbsnews.com",
+        "date": "2026-03-25",
+        "timestamp": "Mar 25, 07:25 PM EST",
+        "link": "https://www.cbsnews.com/video/would-us-israel-agree-irans-conditions-end-war/",
+        "sentiment": -0.882,
+        "predicted_impact": "bearish",
+        "context": "Iran has sent the U.S. a counterproposal for possible peace talks, including five conditions to end the war. Retired U.S. Navy Vice Admiral Robert Murrett joins"
       }
     ],
-    "total_items": 22,
-    "pillar_score": -1.08,
+    "total_items": 19,
+    "pillar_score": -1.58,
     "status": "live"
   },
-  "timestamp": "2026-03-26T00:54:41.873516"
+  "timestamp": "2026-03-26T00:57:06.003739"
 }
