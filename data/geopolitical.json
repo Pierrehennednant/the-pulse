@@ -1,7 +1,7 @@
 {
   "data": {
     "pillar": "geopolitical",
-    "timestamp": "2026-03-26T10:24:49.569991-04:00",
+    "timestamp": "2026-03-26T13:23:40.778190-04:00",
     "news_items": [
       {
         "headline": "Retail firms warn of price hikes if Iran war extends for months",
@@ -274,9 +274,9 @@
         "context": "Since the start of the U.S.-Israel war with Iran on Feb. 28, interference with location-based services has disrupted life across the Persian Gulf."
       }
     ],
-    "total_items": 26,
-    "pillar_score": -1.71,
+    "total_items": 17,
+    "pillar_score": -1.72,
     "status": "live"
   },
-  "timestamp": "2026-03-26T14:24:49.570022"
+  "timestamp": "2026-03-26T17:23:40.778222"
 }

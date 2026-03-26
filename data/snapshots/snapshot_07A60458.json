@@ -1,0 +1,523 @@
+{
+  "id": "07A60458",
+  "timestamp": "2026-03-26T13:23:40.779785-04:00",
+  "bias": {
+    "final_score": -0.559,
+    "bias": "Bearish",
+    "bias_emoji": "\ud83d\udd34",
+    "confidence": 59,
+    "confidence_label": "Moderate Confidence",
+    "confidence_color": "yellow",
+    "threshold_warning": null,
+    "active_pillars": 5,
+    "pillar_signals": [
+      "bearish",
+      "bearish",
+      "bullish",
+      "bearish",
+      "bearish"
+    ],
+    "pillar_contributions": {
+      "economic_calendar": {
+        "raw_score": -0.22,
+        "weight": 40,
+        "contribution": -0.088,
+        "status": "live"
+      },
+      "geopolitical": {
+        "raw_score": -1.72,
+        "weight": 28,
+        "contribution": -0.482,
+        "status": "live"
+      },
+      "institutional": {
+        "raw_score": 0.75,
+        "weight": 20,
+        "contribution": 0.15,
+        "status": "live"
+      },
+      "macro_sentiment": {
+        "raw_score": -1.0,
+        "weight": 10,
+        "contribution": -0.1,
+        "status": "live"
+      },
+      "news_sentiment": {
+        "raw_score": -1.99,
+        "weight": 2,
+        "contribution": -0.04,
+        "status": "live"
+      }
+    },
+    "gauge_value": 36,
+    "directive": "\ud83d\udd34 Lean short. Wait for confirmation before entering.",
+    "directive_color": "#e74c3c"
+  },
+  "pillars": {
+    "macro": {
+      "pillar": "macro_sentiment",
+      "timestamp": "2026-03-26T13:22:47.852827-04:00",
+      "vix": {
+        "value": 25.33,
+        "previous": 26.95,
+        "change": -1.62,
+        "change_pct": -6.01,
+        "signal": "bearish"
+      },
+      "vxn": {
+        "value": 27.65,
+        "previous": 28.74,
+        "change": -1.09,
+        "change_pct": -3.79,
+        "signal": "bearish"
+      },
+      "fear_greed": {
+        "score": 10,
+        "rating": "Extreme Fear",
+        "signal": "bearish",
+        "source": "Alternative.me"
+      },
+      "pillar_score": -1.0,
+      "status": "live"
+    },
+    "economic": {
+      "pillar": "economic_calendar",
+      "timestamp": "2026-03-26T13:22:47.920462-04:00",
+      "events": [
+        {
+          "title": "Flash Manufacturing PMI",
+          "time_est": "Tue Mar 24, 09:45 AM EST",
+          "forecast": "51.5",
+          "previous": "51.2",
+          "actual": "52.4",
+          "impact": "High",
+          "result": "beat",
+          "market_impact": "bullish",
+          "reason": "Flash Manufacturing PMI beat forecast (52.4 vs 51.5)",
+          "story_url": null,
+          "story_context": null
+        },
+        {
+          "title": "Flash Services PMI",
+          "time_est": "Tue Mar 24, 09:45 AM EST",
+          "forecast": "52.0",
+          "previous": "52.3",
+          "actual": "51.1",
+          "impact": "High",
+          "result": "miss",
+          "market_impact": "bearish",
+          "reason": "Flash Services PMI missed forecast (51.1 vs 52.0)",
+          "story_url": null,
+          "story_context": null
+        },
+        {
+          "title": "Richmond Manufacturing Index",
+          "time_est": "Tue Mar 24, 10:00 AM EST",
+          "forecast": "-8",
+          "previous": "-10",
+          "actual": "0",
+          "impact": "Medium",
+          "result": "beat",
+          "market_impact": "bullish",
+          "reason": "Richmond Manufacturing Index beat forecast (0 vs -8)",
+          "story_url": null,
+          "story_context": null
+        },
+        {
+          "title": "President Trump Speaks",
+          "time_est": "Wed Mar 25, 07:20 PM EST",
+          "forecast": "N/A",
+          "previous": "N/A",
+          "actual": "n/a",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "President Trump Speaks \u2014 cannot parse values",
+          "story_url": null,
+          "story_context": null
+        },
+        {
+          "title": "Unemployment Claims",
+          "time_est": "Thu Mar 26, 08:30 AM EST",
+          "forecast": "211K",
+          "previous": "205K",
+          "actual": "210K",
+          "impact": "High",
+          "result": "miss",
+          "market_impact": "bearish",
+          "reason": "Unemployment Claims missed forecast (210K vs 211K)",
+          "story_url": null,
+          "story_context": null
+        },
+        {
+          "title": "President Trump Speaks",
+          "time_est": "Thu Mar 26, 04:00 PM EST",
+          "forecast": "N/A",
+          "previous": "N/A",
+          "actual": "n/a",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "President Trump Speaks \u2014 cannot parse values",
+          "story_url": null,
+          "story_context": null
+        },
+        {
+          "title": "Revised UoM Consumer Sentiment",
+          "time_est": "Fri Mar 27, 10:00 AM EST",
+          "forecast": "53.9",
+          "previous": "55.5",
+          "actual": "Pending",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Revised UoM Consumer Sentiment not yet released"
+        }
+      ],
+      "pillar_score": -0.22,
+      "warnings": [],
+      "status": "live"
+    },
+    "institutional": {
+      "pillar": "institutional",
+      "timestamp": "2026-03-24T21:20:06.955971-04:00",
+      "nq_futures": {
+        "asset_mgr_long": 97885,
+        "asset_mgr_short": 36494,
+        "asset_mgr_net": 61391,
+        "leveraged_long": 44996,
+        "leveraged_short": 86037,
+        "leveraged_net": -41041,
+        "combined_net": 20350,
+        "net_pct": 7.67,
+        "direction": "bullish",
+        "score": 0.5
+      },
+      "es_futures": {
+        "asset_mgr_long": 1089306,
+        "asset_mgr_short": 199864,
+        "asset_mgr_net": 889442,
+        "leveraged_long": 145042,
+        "leveraged_short": 492619,
+        "leveraged_net": -347577,
+        "combined_net": 541865,
+        "net_pct": 28.12,
+        "direction": "bullish",
+        "score": 1.0
+      },
+      "pillar_score": 0.75,
+      "update_frequency": "Weekly (Fridays)",
+      "next_update": "Next Friday",
+      "status": "live"
+    },
+    "geopolitical": {
+      "pillar": "geopolitical",
+      "timestamp": "2026-03-26T13:23:40.778190-04:00",
+      "news_items": [
+        {
+          "headline": "Retail firms warn of price hikes if Iran war extends for months",
+          "description": "Fashion retailer Next has accounted for millions in additional costs likely to arise from the Middle East conflict",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 09:41 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/retail-next-hm-stock-price-hikes-iran-war-middle-east-costs.html",
+          "sentiment_score": -0.995,
+          "market_relevant": true
+        },
+        {
+          "headline": "Iran war will spare no major economy, says OECD \u2014 but the UK is more vulnerable than others",
+          "description": "The U.K. is predicted to be worse hit by the Iran war than its developed market counterparts, the OECD said in its interim economic outlook on Thursday.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 09:09 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/uk-could-be-worse-hit-from-iran-war-of-all-major-economies-oecd.html",
+          "sentiment_score": -0.997,
+          "market_relevant": true
+        },
+        {
+          "headline": "Higher gas prices from Iran war could offset bigger tax refunds from Trump's 'big beautiful bill'",
+          "description": "Amid the Iran war, higher gas prices could offset the bigger tax refunds from President Donald Trump's",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 08:26 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/high-gas-prices-iran-war-tax-refunds.html",
+          "sentiment_score": -0.991,
+          "market_relevant": true
+        },
+        {
+          "headline": "Trump says Iranian negotiators 'better get serious soon, before it is too late'",
+          "description": "Trump's comments come amid ongoing confusion over whether the U.S. and Iran have held negotiations over ending the war.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 06:55 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/trump-iran-negotiations.html",
+          "sentiment_score": -0.997,
+          "market_relevant": true
+        },
+        {
+          "headline": "What comes next? Three attack scenarios as U.S. sends thousands more troops to Middle East",
+          "description": "One of Iran's top lawmakers has said that they were anticipating a potential ground invasion of one its islands.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 06:29 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/iran-war-trump-us-troops-kharg-island-qeshm-island-nuclear-middle-east.html",
+          "sentiment_score": -0.987,
+          "market_relevant": true
+        },
+        {
+          "headline": "Gulf states say they're ready for 'self defense' as stance shifts on Iran war",
+          "description": "Gulf states have issued a joint statement on Thursday condemning Iran's",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 05:49 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/gulf-states-ready-for-self-defense-against-iran-as-war-stance-shifts.html",
+          "sentiment_score": -0.982,
+          "market_relevant": true
+        },
+        {
+          "headline": "Electronic warfare in the Persian Gulf: How GPS interference is disrupting the Middle East",
+          "description": "Since the start of the U.S.-Israel war with Iran on Feb. 28, interference with location-based services has disrupted life across the Persian Gulf.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 04:01 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/how-gps-interference-is-disrupting-the-middle-east.html",
+          "sentiment_score": -0.998,
+          "market_relevant": true
+        },
+        {
+          "headline": "Trump wants to squeeze Iran into peace talks with more troops \u2014 but it may backfire, analysts say",
+          "description": "Trump's threats to ramp up military presence may be to pressure Iran to negotiate but the battle may be harder than he calculated, say analysts.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 02:24 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/trump-iran-peace-talks-troops-ceasefire-forever-war.html",
+          "sentiment_score": -0.999,
+          "market_relevant": true
+        },
+        {
+          "headline": "European markets head for lower open amid Iran peace talks uncertainty",
+          "description": "European stocks are expected to open in negative territory on Thursday as investors weigh mixed messages on the status of Middle East peace talks.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 02:13 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/european-markets-stoxx-600-ftse-dax-cac-iran-war-news-oil-prices.html",
+          "sentiment_score": -0.999,
+          "market_relevant": true
+        },
+        {
+          "headline": "Asia markets set to fall as Iran rules out direct U.S. talks despite reviewing proposal",
+          "description": "Asia-Pacific markets looked set to mostly fall after Iran signaled it had no intention of holding direct talks with the United States.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 25, 07:40 PM EST",
+          "date": "2026-03-25",
+          "link": "https://www.cnbc.com/2026/03/26/asia-pacific-markets-live-updates-nikkei-225-kospi-hang-seng-index.html",
+          "sentiment_score": -1.0,
+          "market_relevant": true
+        }
+      ],
+      "financial_juice_items": [
+        {
+          "headline": "Retail firms warn of price hikes if Iran war extends for months",
+          "description": "Fashion retailer Next has accounted for millions in additional costs likely to arise from the Middle East conflict",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 09:41 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/retail-next-hm-stock-price-hikes-iran-war-middle-east-costs.html",
+          "sentiment_score": -0.995,
+          "market_relevant": true
+        },
+        {
+          "headline": "Iran war will spare no major economy, says OECD \u2014 but the UK is more vulnerable than others",
+          "description": "The U.K. is predicted to be worse hit by the Iran war than its developed market counterparts, the OECD said in its interim economic outlook on Thursday.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 09:09 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/uk-could-be-worse-hit-from-iran-war-of-all-major-economies-oecd.html",
+          "sentiment_score": -0.997,
+          "market_relevant": true
+        },
+        {
+          "headline": "Higher gas prices from Iran war could offset bigger tax refunds from Trump's 'big beautiful bill'",
+          "description": "Amid the Iran war, higher gas prices could offset the bigger tax refunds from President Donald Trump's",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 08:26 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/high-gas-prices-iran-war-tax-refunds.html",
+          "sentiment_score": -0.991,
+          "market_relevant": true
+        },
+        {
+          "headline": "Trump says Iranian negotiators 'better get serious soon, before it is too late'",
+          "description": "Trump's comments come amid ongoing confusion over whether the U.S. and Iran have held negotiations over ending the war.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 06:55 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/trump-iran-negotiations.html",
+          "sentiment_score": -0.997,
+          "market_relevant": true
+        },
+        {
+          "headline": "What comes next? Three attack scenarios as U.S. sends thousands more troops to Middle East",
+          "description": "One of Iran's top lawmakers has said that they were anticipating a potential ground invasion of one its islands.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 06:29 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/iran-war-trump-us-troops-kharg-island-qeshm-island-nuclear-middle-east.html",
+          "sentiment_score": -0.987,
+          "market_relevant": true
+        },
+        {
+          "headline": "Gulf states say they're ready for 'self defense' as stance shifts on Iran war",
+          "description": "Gulf states have issued a joint statement on Thursday condemning Iran's",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 05:49 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/gulf-states-ready-for-self-defense-against-iran-as-war-stance-shifts.html",
+          "sentiment_score": -0.982,
+          "market_relevant": true
+        },
+        {
+          "headline": "Electronic warfare in the Persian Gulf: How GPS interference is disrupting the Middle East",
+          "description": "Since the start of the U.S.-Israel war with Iran on Feb. 28, interference with location-based services has disrupted life across the Persian Gulf.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 04:01 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/how-gps-interference-is-disrupting-the-middle-east.html",
+          "sentiment_score": -0.998,
+          "market_relevant": true
+        },
+        {
+          "headline": "Trump wants to squeeze Iran into peace talks with more troops \u2014 but it may backfire, analysts say",
+          "description": "Trump's threats to ramp up military presence may be to pressure Iran to negotiate but the battle may be harder than he calculated, say analysts.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 02:24 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/trump-iran-peace-talks-troops-ceasefire-forever-war.html",
+          "sentiment_score": -0.999,
+          "market_relevant": true
+        },
+        {
+          "headline": "European markets head for lower open amid Iran peace talks uncertainty",
+          "description": "European stocks are expected to open in negative territory on Thursday as investors weigh mixed messages on the status of Middle East peace talks.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 26, 02:13 AM EST",
+          "date": "2026-03-26",
+          "link": "https://www.cnbc.com/2026/03/26/european-markets-stoxx-600-ftse-dax-cac-iran-war-news-oil-prices.html",
+          "sentiment_score": -0.999,
+          "market_relevant": true
+        },
+        {
+          "headline": "Asia markets set to fall as Iran rules out direct U.S. talks despite reviewing proposal",
+          "description": "Asia-Pacific markets looked set to mostly fall after Iran signaled it had no intention of holding direct talks with the United States.",
+          "source": "cnbc.com",
+          "timestamp": "Mar 25, 07:40 PM EST",
+          "date": "2026-03-25",
+          "link": "https://www.cnbc.com/2026/03/26/asia-pacific-markets-live-updates-nikkei-225-kospi-hang-seng-index.html",
+          "sentiment_score": -1.0,
+          "market_relevant": true
+        }
+      ],
+      "unbiased_network_items": [],
+      "active_flags": [
+        {
+          "title": "Retail firms warn of price hikes if Iran war extends for months",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "cnbc.com",
+          "date": "2026-03-26",
+          "timestamp": "Mar 26, 09:41 AM EST",
+          "link": "https://www.cnbc.com/2026/03/26/retail-next-hm-stock-price-hikes-iran-war-middle-east-costs.html",
+          "sentiment": -0.995,
+          "predicted_impact": "bearish",
+          "context": "Fashion retailer Next has accounted for millions in additional costs likely to arise from the Middle East conflict"
+        },
+        {
+          "title": "Iran war will spare no major economy, says OECD \u2014 but the UK is more vulnerable than others",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "cnbc.com",
+          "date": "2026-03-26",
+          "timestamp": "Mar 26, 09:09 AM EST",
+          "link": "https://www.cnbc.com/2026/03/26/uk-could-be-worse-hit-from-iran-war-of-all-major-economies-oecd.html",
+          "sentiment": -0.997,
+          "predicted_impact": "bearish",
+          "context": "The U.K. is predicted to be worse hit by the Iran war than its developed market counterparts, the OECD said in its interim economic outlook on Thursday."
+        },
+        {
+          "title": "Higher gas prices from Iran war could offset bigger tax refunds from Trump's 'big beautiful bill'",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "cnbc.com",
+          "date": "2026-03-26",
+          "timestamp": "Mar 26, 08:26 AM EST",
+          "link": "https://www.cnbc.com/2026/03/26/high-gas-prices-iran-war-tax-refunds.html",
+          "sentiment": -0.991,
+          "predicted_impact": "bearish",
+          "context": "Amid the Iran war, higher gas prices could offset the bigger tax refunds from President Donald Trump's"
+        },
+        {
+          "title": "Gulf states say they're ready for 'self defense' as stance shifts on Iran war",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "cnbc.com",
+          "date": "2026-03-26",
+          "timestamp": "Mar 26, 05:49 AM EST",
+          "link": "https://www.cnbc.com/2026/03/26/gulf-states-ready-for-self-defense-against-iran-as-war-stance-shifts.html",
+          "sentiment": -0.982,
+          "predicted_impact": "bearish",
+          "context": "Gulf states have issued a joint statement on Thursday condemning Iran's"
+        },
+        {
+          "title": "Electronic warfare in the Persian Gulf: How GPS interference is disrupting the Middle East",
+          "priority": 95,
+          "flag_type": "war",
+          "status": "Developing",
+          "source": "cnbc.com",
+          "date": "2026-03-26",
+          "timestamp": "Mar 26, 04:01 AM EST",
+          "link": "https://www.cnbc.com/2026/03/26/how-gps-interference-is-disrupting-the-middle-east.html",
+          "sentiment": -0.998,
+          "predicted_impact": "bearish",
+          "context": "Since the start of the U.S.-Israel war with Iran on Feb. 28, interference with location-based services has disrupted life across the Persian Gulf."
+        }
+      ],
+      "total_items": 17,
+      "pillar_score": -1.72,
+      "status": "live"
+    },
+    "news": {
+      "pillar": "news_sentiment",
+      "timestamp": "2026-03-26T13:23:40.779181-04:00",
+      "analysis": {
+        "average_score": -0.994,
+        "overall_sentiment": "bearish",
+        "bullish_pct": 0.0,
+        "bearish_pct": 100.0,
+        "neutral_pct": 0.0,
+        "total_headlines": 20,
+        "dominant_theme": "Retail firms warn of price hikes if Iran war extends for months",
+        "pillar_score": -1.99
+      },
+      "pillar_score": -1.99,
+      "status": "live"
+    }
+  },
+  "weekly_summary": {
+    "pillar": "weekly_summary",
+    "timestamp": "2026-03-24T21:20:26.804440-04:00",
+    "summary": {
+      "generated_at": "2026-03-24T21:20:26.804402-04:00",
+      "overall": "Overall regime entering this week: Neutral with 3% confidence (Very Low Confidence). Regime is unclear \u2014 reduce size and wait for confirmation.",
+      "economic": "This week has 5 key USD events including Flash Services PMI, Richmond Manufacturing Index, President Trump Speaks.",
+      "institutional": "Big money is net bullish on NQ (7.67%) and bullish on ES (28.12%).",
+      "macro": "VIX at 26.15 with Fear & Greed at 14 (Extreme Fear).",
+      "geopolitical": "No major geopolitical flags active this week.",
+      "week_of": "March 24, 2026"
+    },
+    "status": "live"
+  }
+}
