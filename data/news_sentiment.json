@@ -1,19 +1,19 @@
 {
   "data": {
     "pillar": "news_sentiment",
-    "timestamp": "2026-03-25T09:24:13.796068-04:00",
+    "timestamp": "2026-03-25T20:53:56.558104-04:00",
     "analysis": {
-      "average_score": -0.39,
+      "average_score": -0.372,
       "overall_sentiment": "bearish",
       "bullish_pct": 30.0,
       "bearish_pct": 70.0,
       "neutral_pct": 0.0,
       "total_headlines": 20,
-      "dominant_theme": "Sen. Warren: DOD answers show no anti-corruption protocols for Trump children",
-      "pillar_score": -0.78
+      "dominant_theme": "How the Iran war could rattle the global economy long after hostilities end",
+      "pillar_score": -0.74
     },
-    "pillar_score": -0.78,
+    "pillar_score": -0.74,
     "status": "live"
   },
-  "timestamp": "2026-03-25T13:24:13.796086"
+  "timestamp": "2026-03-26T00:53:56.558128"
 }

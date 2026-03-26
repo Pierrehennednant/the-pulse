@@ -1,0 +1,214 @@
+{
+  "id": "508549FD",
+  "timestamp": "2026-03-25T10:00:34.163797-04:00",
+  "bias": {
+    "final_score": 0.062,
+    "bias": "Neutral",
+    "bias_emoji": "\ud83d\udfe1",
+    "confidence": 21,
+    "confidence_label": "Low Confidence",
+    "confidence_color": "orange",
+    "threshold_warning": "\u26a0\ufe0f Low confidence (21%) \u2014 regime is unclear. Consider reducing size or sitting out today.",
+    "active_pillars": 3,
+    "pillar_signals": [
+      "neutral",
+      "bullish",
+      "bearish"
+    ],
+    "pillar_contributions": {
+      "economic_calendar": {
+        "raw_score": 0.03,
+        "weight": 40,
+        "contribution": 0.012,
+        "status": "live"
+      },
+      "geopolitical": {
+        "raw_score": 0.0,
+        "weight": 28,
+        "contribution": 0.0,
+        "status": "live"
+      },
+      "institutional": {
+        "raw_score": 0.75,
+        "weight": 20,
+        "contribution": 0.15,
+        "status": "live"
+      },
+      "macro_sentiment": {
+        "raw_score": -1.0,
+        "weight": 10,
+        "contribution": -0.1,
+        "status": "live"
+      },
+      "news_sentiment": {
+        "raw_score": 0,
+        "weight": 2,
+        "contribution": 0.0,
+        "status": "live"
+      }
+    },
+    "gauge_value": 51
+  },
+  "pillars": {
+    "macro": {
+      "pillar": "macro_sentiment",
+      "timestamp": "2026-03-25T10:00:23.977048-04:00",
+      "vix": {
+        "value": 26.95,
+        "previous": 26.15,
+        "change": 0.8,
+        "change_pct": 3.06,
+        "signal": "bearish"
+      },
+      "vxn": {
+        "value": 28.74,
+        "previous": 27.98,
+        "change": 0.76,
+        "change_pct": 2.72,
+        "signal": "bearish"
+      },
+      "fear_greed": {
+        "score": 14,
+        "rating": "Extreme Fear",
+        "signal": "bearish",
+        "source": "Alternative.me"
+      },
+      "pillar_score": -1.0,
+      "status": "live"
+    },
+    "economic": {
+      "pillar": "economic_calendar",
+      "timestamp": "2026-03-25T10:00:24.071529-04:00",
+      "events": [
+        {
+          "title": "Flash Manufacturing PMI",
+          "time_est": "Tue Mar 24, 09:45 AM EST",
+          "forecast": "51.5",
+          "previous": "51.2",
+          "actual": "52.4",
+          "impact": "High",
+          "result": "beat",
+          "market_impact": "bullish",
+          "reason": "Flash Manufacturing PMI beat forecast (52.4 vs 51.5)",
+          "story_url": null,
+          "story_context": null
+        },
+        {
+          "title": "Flash Services PMI",
+          "time_est": "Tue Mar 24, 09:45 AM EST",
+          "forecast": "52.0",
+          "previous": "52.3",
+          "actual": "51.1",
+          "impact": "High",
+          "result": "miss",
+          "market_impact": "bearish",
+          "reason": "Flash Services PMI missed forecast (51.1 vs 52.0)",
+          "story_url": null,
+          "story_context": null
+        },
+        {
+          "title": "Richmond Manufacturing Index",
+          "time_est": "Tue Mar 24, 10:00 AM EST",
+          "forecast": "-8",
+          "previous": "-10",
+          "actual": "0",
+          "impact": "Medium",
+          "result": "beat",
+          "market_impact": "bullish",
+          "reason": "Richmond Manufacturing Index beat forecast (0 vs -8)",
+          "story_url": null,
+          "story_context": null
+        },
+        {
+          "title": "President Trump Speaks",
+          "time_est": "Wed Mar 25, 07:20 PM EST",
+          "forecast": "N/A",
+          "previous": "N/A",
+          "actual": "n/a",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "President Trump Speaks \u2014 cannot parse values",
+          "story_url": null,
+          "story_context": null
+        },
+        {
+          "title": "Unemployment Claims",
+          "time_est": "Thu Mar 26, 08:30 AM EST",
+          "forecast": "211K",
+          "previous": "205K",
+          "actual": "Pending",
+          "impact": "High",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Unemployment Claims not yet released"
+        },
+        {
+          "title": "Revised UoM Consumer Sentiment",
+          "time_est": "Fri Mar 27, 10:00 AM EST",
+          "forecast": "53.9",
+          "previous": "55.5",
+          "actual": "Pending",
+          "impact": "Medium",
+          "result": "pending",
+          "market_impact": "unknown",
+          "reason": "Revised UoM Consumer Sentiment not yet released"
+        }
+      ],
+      "pillar_score": 0.03,
+      "warnings": [],
+      "status": "live"
+    },
+    "institutional": {
+      "pillar": "institutional",
+      "timestamp": "2026-03-24T21:20:06.955971-04:00",
+      "nq_futures": {
+        "asset_mgr_long": 97885,
+        "asset_mgr_short": 36494,
+        "asset_mgr_net": 61391,
+        "leveraged_long": 44996,
+        "leveraged_short": 86037,
+        "leveraged_net": -41041,
+        "combined_net": 20350,
+        "net_pct": 7.67,
+        "direction": "bullish",
+        "score": 0.5
+      },
+      "es_futures": {
+        "asset_mgr_long": 1089306,
+        "asset_mgr_short": 199864,
+        "asset_mgr_net": 889442,
+        "leveraged_long": 145042,
+        "leveraged_short": 492619,
+        "leveraged_net": -347577,
+        "combined_net": 541865,
+        "net_pct": 28.12,
+        "direction": "bullish",
+        "score": 1.0
+      },
+      "pillar_score": 0.75,
+      "update_frequency": "Weekly (Fridays)",
+      "next_update": "Next Friday",
+      "status": "live"
+    },
+    "geopolitical": {
+      "pillar": "geopolitical",
+      "timestamp": "2026-03-25T10:00:34.161975-04:00",
+      "news_items": [],
+      "financial_juice_items": [],
+      "unbiased_network_items": [],
+      "active_flags": [],
+      "total_items": 0,
+      "pillar_score": 0.0,
+      "status": "live"
+    },
+    "news": {
+      "pillar": "news_sentiment",
+      "timestamp": "2026-03-25T10:00:34.162515-04:00",
+      "analysis": null,
+      "pillar_score": 0,
+      "status": "live"
+    }
+  },
+  "weekly_summary": null
+}

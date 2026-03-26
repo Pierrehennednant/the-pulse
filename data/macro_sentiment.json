@@ -1,23 +1,23 @@
 {
   "data": {
     "pillar": "macro_sentiment",
-    "timestamp": "2026-03-25T09:24:13.744002-04:00",
+    "timestamp": "2026-03-25T20:53:47.475146-04:00",
     "vix": {
-      "value": 26.15,
-      "previous": 26.78,
-      "change": -0.63,
-      "change_pct": -2.35,
+      "value": 26.95,
+      "previous": 26.15,
+      "change": 0.8,
+      "change_pct": 3.06,
       "signal": "bearish"
     },
     "vxn": {
-      "value": 27.98,
-      "previous": 29.2,
-      "change": -1.22,
-      "change_pct": -4.18,
+      "value": 28.74,
+      "previous": 27.98,
+      "change": 0.76,
+      "change_pct": 2.72,
       "signal": "bearish"
     },
     "fear_greed": {
-      "score": 14,
+      "score": 10,
       "rating": "Extreme Fear",
       "signal": "bearish",
       "source": "Alternative.me"
@@ -25,5 +25,5 @@
     "pillar_score": -1.0,
     "status": "live"
   },
-  "timestamp": "2026-03-25T13:24:13.744045"
+  "timestamp": "2026-03-26T00:53:47.475192"
 }

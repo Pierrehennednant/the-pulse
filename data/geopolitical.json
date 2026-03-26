@@ -1,8 +1,68 @@
 {
   "data": {
     "pillar": "geopolitical",
-    "timestamp": "2026-03-25T09:22:59.948820-04:00",
+    "timestamp": "2026-03-25T20:54:41.873484-04:00",
     "news_items": [
+      {
+        "headline": "Asia markets set to fall as Iran rules out direct U.S. talks despite reviewing proposal",
+        "description": "Asia-Pacific markets looked set to mostly fall after Iran signaled it had no intention of holding direct talks with the United States.",
+        "source": "cnbc.com",
+        "timestamp": "Mar 25, 07:40 PM EST",
+        "date": "2026-03-25",
+        "link": "https://www.cnbc.com/2026/03/26/asia-pacific-markets-live-updates-nikkei-225-kospi-hang-seng-index.html",
+        "sentiment_score": -1.0,
+        "market_relevant": true
+      },
+      {
+        "headline": "How the Iran war could rattle the global economy long after hostilities end",
+        "description": "A reopening of the critical Strait of Hormuz, which Iran has effectively closed to oil tankers, won't immediately restore the world to its pre-conflict state.",
+        "source": "cnbc.com",
+        "timestamp": "Mar 25, 03:10 PM EST",
+        "date": "2026-03-25",
+        "link": "https://www.cnbc.com/2026/03/25/the-iran-war-could-rattle-the-global-economy-long-after-hostilities-end.html",
+        "sentiment_score": -0.999,
+        "market_relevant": true
+      },
+      {
+        "headline": "White House says Trump will meet Xi in China in May",
+        "description": "A long-awaited meeting between President Donald Trump and Chinese President Xi Jinping will take place in Beijing on May 14 and 15, the White House said.",
+        "source": "cnbc.com",
+        "timestamp": "Mar 25, 01:52 PM EST",
+        "date": "2026-03-25",
+        "link": "https://www.cnbc.com/2026/03/25/trump-xi-beijing-china-summit.html",
+        "sentiment_score": 0.995,
+        "market_relevant": true
+      },
+      {
+        "headline": "We're adding to an out-of-favor stock with limited exposure to Iran war upheaval",
+        "description": "The stock has pulled back roughly 9% since the start of the conflict with Iran.",
+        "source": "cnbc.com",
+        "timestamp": "Mar 25, 12:21 PM EST",
+        "date": "2026-03-25",
+        "link": "https://www.cnbc.com/2026/03/25/were-adding-to-an-out-of-favor-stock-with-limited-exposure-to-iran-war-upheaval.html",
+        "sentiment_score": -0.998,
+        "market_relevant": true
+      },
+      {
+        "headline": "We like the message of Meta's new executive stock plan \u2014 plus, a war beneficiary stock",
+        "description": "The Investing Club holds its \"Morning Meeting\" every weekday at 10:20 a.m. ET.",
+        "source": "cnbc.com",
+        "timestamp": "Mar 25, 11:03 AM EST",
+        "date": "2026-03-25",
+        "link": "https://www.cnbc.com/2026/03/25/we-like-the-message-of-metas-new-executive-stock-plan-plus-a-war-beneficiary-stock.html",
+        "sentiment_score": 0.985,
+        "market_relevant": true
+      },
+      {
+        "headline": "Jim Cramer's top 10 things to watch in the stock market Wednesday",
+        "description": "If oil prices are falling, then it's hard to be negative about stocks.",
+        "source": "cnbc.com",
+        "timestamp": "Mar 25, 09:16 AM EST",
+        "date": "2026-03-25",
+        "link": "https://www.cnbc.com/2026/03/25/jim-cramers-top-10-things-to-watch-in-the-stock-market-wednesday.html",
+        "sentiment_score": 0.997,
+        "market_relevant": true
+      },
       {
         "headline": "Sen. Warren: DOD answers show no anti-corruption protocols for Trump children",
         "description": "Democrats have been hotly critical of the Trump family's business dealings while President Donald Trump serves in the White House.",
@@ -34,78 +94,78 @@
         "market_relevant": true
       },
       {
-        "headline": "Asia-Pacific markets are set for higher open as Trump comments signal Iran war de-escalation",
-        "description": "Trump said he decided to back off from his recent threat to order strikes on Iranian energy infrastructure",
-        "source": "cnbc.com",
-        "timestamp": "Mar 24, 07:47 PM EST",
-        "date": "2026-03-24",
-        "link": "https://www.cnbc.com/2026/03/25/asia-markets-today-nikkei-225-kospi-hang-seng-index.html",
-        "sentiment_score": -0.928,
-        "market_relevant": true
-      },
-      {
-        "headline": "Trump says U.S. and Iran are 'in negotiations right now,' Tehran is 'talking sense'",
-        "description": "",
-        "source": "cnbc.com",
-        "timestamp": "Mar 24, 03:56 PM EST",
-        "date": "2026-03-24",
-        "link": "https://www.cnbc.com/2026/03/24/trump-iran-war-negotiations.html",
-        "sentiment_score": 0.885,
-        "market_relevant": true
-      },
-      {
-        "headline": "Kuwait says Strait of Hormuz closure is beyond catastrophic, will trigger domino effect across global economy",
-        "description": "Iran is holding the world economy hostage by blockading the Strait of Hormuz, said Shaikh Nawaf Al-Sabah, the CEO of Kuwait Petroleum Corporation.",
-        "source": "cnbc.com",
-        "timestamp": "Mar 24, 02:22 PM EST",
-        "date": "2026-03-24",
-        "link": "https://www.cnbc.com/2026/03/24/iran-war-oil-strait-hormuz-kuwait-gulf.html",
-        "sentiment_score": -0.851,
-        "market_relevant": true
-      },
-      {
-        "headline": "Live Updates: As Trump declares war won, Iran mocks suggestion talks underway, warns against ground invasion",
-        "description": "Trump says the Iran war is already won, but more U.S. forces are heading to the Mideast as Tehran asks U.S. officials if they're",
+        "headline": "Trump claims progress with Iran as Tehran rejects ceasefire proposal",
+        "description": "Iran has rejected the Trump administration's 15-point proposal to end the war, contradicting the president's claims that Iranian leaders are eager to end the co...",
         "source": "cbsnews.com",
-        "timestamp": "Mar 25, 07:28 AM EST",
+        "timestamp": "Mar 25, 07:28 PM EST",
         "date": "2026-03-25",
-        "link": "https://www.cbsnews.com/live-updates/iran-war-trump-israel-tehran-mocks-us-warns-against-ground-invasion/",
-        "sentiment_score": -0.987,
-        "market_relevant": true
-      },
-      {
-        "headline": "Additional Troops Deployed to Middle East as Trump Claims Victory",
-        "description": "More than 1,000 additional troops from the 82nd Airborne Division are heading to the Middle East, according to two sources. The announcement came as President D...",
-        "source": "nbcnews.com",
-        "timestamp": "Mar 25, 07:27 AM EST",
-        "date": "2026-03-25",
-        "link": "https://www.today.com/video/trump-declares-iran-war-won-as-tehran-unleashes-new-strikes-260011589553",
-        "sentiment_score": 0.713,
-        "market_relevant": true
-      },
-      {
-        "headline": "Where Negotiations to End Partial Government Shutdown Stand",
-        "description": "Frustration is mounting as long lines continue at airports and TSA officers face a sixth week without pay. It comes as a deal to end the partial government shut...",
-        "source": "nbcnews.com",
-        "timestamp": "Mar 25, 07:11 AM EST",
-        "date": "2026-03-25",
-        "link": "https://www.today.com/video/proposed-deal-to-fund-dhs-falls-short-as-democrats-push-back-260009541930",
-        "sentiment_score": -0.997,
-        "market_relevant": true
-      },
-      {
-        "headline": "'Oh, golly': Britain's embattled Starmer navigates Trump's Iran war ire",
-        "description": "British Prime Minister Keir Starmer likely won't fire back insults at President Donald Trump, those close to him say.",
-        "source": "nbcnews.com",
-        "timestamp": "Mar 25, 05:00 AM EST",
-        "date": "2026-03-25",
-        "link": "https://www.nbcnews.com/world/united-kingdom/british-pm-starmer-trump-iran-war-criticism-uk-bases-bombing-snl-rcna264861",
-        "sentiment_score": 0.993,
+        "link": "https://www.cbsnews.com/video/trump-claims-progress-with-iran-as-tehran-rejects-ceasefire-proposal/",
+        "sentiment_score": -0.971,
         "market_relevant": true
       }
     ],
     "financial_juice_items": [
       {
+        "headline": "Asia markets set to fall as Iran rules out direct U.S. talks despite reviewing proposal",
+        "description": "Asia-Pacific markets looked set to mostly fall after Iran signaled it had no intention of holding direct talks with the United States.",
+        "source": "cnbc.com",
+        "timestamp": "Mar 25, 07:40 PM EST",
+        "date": "2026-03-25",
+        "link": "https://www.cnbc.com/2026/03/26/asia-pacific-markets-live-updates-nikkei-225-kospi-hang-seng-index.html",
+        "sentiment_score": -1.0,
+        "market_relevant": true
+      },
+      {
+        "headline": "How the Iran war could rattle the global economy long after hostilities end",
+        "description": "A reopening of the critical Strait of Hormuz, which Iran has effectively closed to oil tankers, won't immediately restore the world to its pre-conflict state.",
+        "source": "cnbc.com",
+        "timestamp": "Mar 25, 03:10 PM EST",
+        "date": "2026-03-25",
+        "link": "https://www.cnbc.com/2026/03/25/the-iran-war-could-rattle-the-global-economy-long-after-hostilities-end.html",
+        "sentiment_score": -0.999,
+        "market_relevant": true
+      },
+      {
+        "headline": "White House says Trump will meet Xi in China in May",
+        "description": "A long-awaited meeting between President Donald Trump and Chinese President Xi Jinping will take place in Beijing on May 14 and 15, the White House said.",
+        "source": "cnbc.com",
+        "timestamp": "Mar 25, 01:52 PM EST",
+        "date": "2026-03-25",
+        "link": "https://www.cnbc.com/2026/03/25/trump-xi-beijing-china-summit.html",
+        "sentiment_score": 0.995,
+        "market_relevant": true
+      },
+      {
+        "headline": "We're adding to an out-of-favor stock with limited exposure to Iran war upheaval",
+        "description": "The stock has pulled back roughly 9% since the start of the conflict with Iran.",
+        "source": "cnbc.com",
+        "timestamp": "Mar 25, 12:21 PM EST",
+        "date": "2026-03-25",
+        "link": "https://www.cnbc.com/2026/03/25/were-adding-to-an-out-of-favor-stock-with-limited-exposure-to-iran-war-upheaval.html",
+        "sentiment_score": -0.998,
+        "market_relevant": true
+      },
+      {
+        "headline": "We like the message of Meta's new executive stock plan \u2014 plus, a war beneficiary stock",
+        "description": "The Investing Club holds its \"Morning Meeting\" every weekday at 10:20 a.m. ET.",
+        "source": "cnbc.com",
+        "timestamp": "Mar 25, 11:03 AM EST",
+        "date": "2026-03-25",
+        "link": "https://www.cnbc.com/2026/03/25/we-like-the-message-of-metas-new-executive-stock-plan-plus-a-war-beneficiary-stock.html",
+        "sentiment_score": 0.985,
+        "market_relevant": true
+      },
+      {
+        "headline": "Jim Cramer's top 10 things to watch in the stock market Wednesday",
+        "description": "If oil prices are falling, then it's hard to be negative about stocks.",
+        "source": "cnbc.com",
+        "timestamp": "Mar 25, 09:16 AM EST",
+        "date": "2026-03-25",
+        "link": "https://www.cnbc.com/2026/03/25/jim-cramers-top-10-things-to-watch-in-the-stock-market-wednesday.html",
+        "sentiment_score": 0.997,
+        "market_relevant": true
+      },
+      {
         "headline": "Sen. Warren: DOD answers show no anti-corruption protocols for Trump children",
         "description": "Democrats have been hotly critical of the Trump family's business dealings while President Donald Trump serves in the White House.",
         "source": "cnbc.com",
@@ -136,78 +196,57 @@
         "market_relevant": true
       },
       {
-        "headline": "Asia-Pacific markets are set for higher open as Trump comments signal Iran war de-escalation",
-        "description": "Trump said he decided to back off from his recent threat to order strikes on Iranian energy infrastructure",
-        "source": "cnbc.com",
-        "timestamp": "Mar 24, 07:47 PM EST",
-        "date": "2026-03-24",
-        "link": "https://www.cnbc.com/2026/03/25/asia-markets-today-nikkei-225-kospi-hang-seng-index.html",
-        "sentiment_score": -0.928,
-        "market_relevant": true
-      },
-      {
-        "headline": "Trump says U.S. and Iran are 'in negotiations right now,' Tehran is 'talking sense'",
-        "description": "",
-        "source": "cnbc.com",
-        "timestamp": "Mar 24, 03:56 PM EST",
-        "date": "2026-03-24",
-        "link": "https://www.cnbc.com/2026/03/24/trump-iran-war-negotiations.html",
-        "sentiment_score": 0.885,
-        "market_relevant": true
-      },
-      {
-        "headline": "Kuwait says Strait of Hormuz closure is beyond catastrophic, will trigger domino effect across global economy",
-        "description": "Iran is holding the world economy hostage by blockading the Strait of Hormuz, said Shaikh Nawaf Al-Sabah, the CEO of Kuwait Petroleum Corporation.",
-        "source": "cnbc.com",
-        "timestamp": "Mar 24, 02:22 PM EST",
-        "date": "2026-03-24",
-        "link": "https://www.cnbc.com/2026/03/24/iran-war-oil-strait-hormuz-kuwait-gulf.html",
-        "sentiment_score": -0.851,
-        "market_relevant": true
-      },
-      {
-        "headline": "Live Updates: As Trump declares war won, Iran mocks suggestion talks underway, warns against ground invasion",
-        "description": "Trump says the Iran war is already won, but more U.S. forces are heading to the Mideast as Tehran asks U.S. officials if they're",
+        "headline": "Trump claims progress with Iran as Tehran rejects ceasefire proposal",
+        "description": "Iran has rejected the Trump administration's 15-point proposal to end the war, contradicting the president's claims that Iranian leaders are eager to end the co...",
         "source": "cbsnews.com",
-        "timestamp": "Mar 25, 07:28 AM EST",
+        "timestamp": "Mar 25, 07:28 PM EST",
         "date": "2026-03-25",
-        "link": "https://www.cbsnews.com/live-updates/iran-war-trump-israel-tehran-mocks-us-warns-against-ground-invasion/",
-        "sentiment_score": -0.987,
-        "market_relevant": true
-      },
-      {
-        "headline": "Additional Troops Deployed to Middle East as Trump Claims Victory",
-        "description": "More than 1,000 additional troops from the 82nd Airborne Division are heading to the Middle East, according to two sources. The announcement came as President D...",
-        "source": "nbcnews.com",
-        "timestamp": "Mar 25, 07:27 AM EST",
-        "date": "2026-03-25",
-        "link": "https://www.today.com/video/trump-declares-iran-war-won-as-tehran-unleashes-new-strikes-260011589553",
-        "sentiment_score": 0.713,
-        "market_relevant": true
-      },
-      {
-        "headline": "Where Negotiations to End Partial Government Shutdown Stand",
-        "description": "Frustration is mounting as long lines continue at airports and TSA officers face a sixth week without pay. It comes as a deal to end the partial government shut...",
-        "source": "nbcnews.com",
-        "timestamp": "Mar 25, 07:11 AM EST",
-        "date": "2026-03-25",
-        "link": "https://www.today.com/video/proposed-deal-to-fund-dhs-falls-short-as-democrats-push-back-260009541930",
-        "sentiment_score": -0.997,
-        "market_relevant": true
-      },
-      {
-        "headline": "'Oh, golly': Britain's embattled Starmer navigates Trump's Iran war ire",
-        "description": "British Prime Minister Keir Starmer likely won't fire back insults at President Donald Trump, those close to him say.",
-        "source": "nbcnews.com",
-        "timestamp": "Mar 25, 05:00 AM EST",
-        "date": "2026-03-25",
-        "link": "https://www.nbcnews.com/world/united-kingdom/british-pm-starmer-trump-iran-war-criticism-uk-bases-bombing-snl-rcna264861",
-        "sentiment_score": 0.993,
+        "link": "https://www.cbsnews.com/video/trump-claims-progress-with-iran-as-tehran-rejects-ceasefire-proposal/",
+        "sentiment_score": -0.971,
         "market_relevant": true
       }
     ],
     "unbiased_network_items": [],
     "active_flags": [
+      {
+        "title": "How the Iran war could rattle the global economy long after hostilities end",
+        "priority": 95,
+        "flag_type": "war",
+        "status": "Developing",
+        "source": "cnbc.com",
+        "date": "2026-03-25",
+        "timestamp": "Mar 25, 03:10 PM EST",
+        "link": "https://www.cnbc.com/2026/03/25/the-iran-war-could-rattle-the-global-economy-long-after-hostilities-end.html",
+        "sentiment": -0.999,
+        "predicted_impact": "bearish",
+        "context": "A reopening of the critical Strait of Hormuz, which Iran has effectively closed to oil tankers, won't immediately restore the world to its pre-conflict state."
+      },
+      {
+        "title": "We're adding to an out-of-favor stock with limited exposure to Iran war upheaval",
+        "priority": 95,
+        "flag_type": "war",
+        "status": "Developing",
+        "source": "cnbc.com",
+        "date": "2026-03-25",
+        "timestamp": "Mar 25, 12:21 PM EST",
+        "link": "https://www.cnbc.com/2026/03/25/were-adding-to-an-out-of-favor-stock-with-limited-exposure-to-iran-war-upheaval.html",
+        "sentiment": -0.998,
+        "predicted_impact": "bearish",
+        "context": "The stock has pulled back roughly 9% since the start of the conflict with Iran."
+      },
+      {
+        "title": "We like the message of Meta's new executive stock plan \u2014 plus, a war beneficiary stock",
+        "priority": 95,
+        "flag_type": "war",
+        "status": "Developing",
+        "source": "cnbc.com",
+        "date": "2026-03-25",
+        "timestamp": "Mar 25, 11:03 AM EST",
+        "link": "https://www.cnbc.com/2026/03/25/we-like-the-message-of-metas-new-executive-stock-plan-plus-a-war-beneficiary-stock.html",
+        "sentiment": 0.985,
+        "predicted_impact": "bullish",
+        "context": "The Investing Club holds its \"Morning Meeting\" every weekday at 10:20 a.m. ET."
+      },
       {
         "title": "Sen. Warren: DOD answers show no anti-corruption protocols for Trump children",
         "priority": 95,
@@ -222,32 +261,6 @@
         "context": "Democrats have been hotly critical of the Trump family's business dealings while President Donald Trump serves in the White House."
       },
       {
-        "title": "Asia-Pacific markets are set for higher open as Trump comments signal Iran war de-escalation",
-        "priority": 95,
-        "flag_type": "war",
-        "status": "Developing",
-        "source": "cnbc.com",
-        "date": "2026-03-24",
-        "timestamp": "Mar 24, 07:47 PM EST",
-        "link": "https://www.cnbc.com/2026/03/25/asia-markets-today-nikkei-225-kospi-hang-seng-index.html",
-        "sentiment": -0.928,
-        "predicted_impact": "bearish",
-        "context": "Trump said he decided to back off from his recent threat to order strikes on Iranian energy infrastructure"
-      },
-      {
-        "title": "Live Updates: As Trump declares war won, Iran mocks suggestion talks underway, warns against ground invasion",
-        "priority": 92,
-        "flag_type": "invasion",
-        "status": "Developing",
-        "source": "cbsnews.com",
-        "date": "2026-03-25",
-        "timestamp": "Mar 25, 07:28 AM EST",
-        "link": "https://www.cbsnews.com/live-updates/iran-war-trump-israel-tehran-mocks-us-warns-against-ground-invasion/",
-        "sentiment": -0.987,
-        "predicted_impact": "bearish",
-        "context": "Trump says the Iran war is already won, but more U.S. forces are heading to the Mideast as Tehran asks U.S. officials if they're"
-      },
-      {
         "title": "How the shadow fleet is capitalising on the chaos of war",
         "priority": 90,
         "flag_type": "war",
@@ -259,24 +272,11 @@
         "sentiment": -0.746,
         "predicted_impact": "bearish",
         "context": "The Iran conflict has offered the illicit oil trade a lifeline \u2014 while the easing of US sanctions widens a transatlantic rift"
-      },
-      {
-        "title": "'Oh, golly': Britain's embattled Starmer navigates Trump's Iran war ire",
-        "priority": 90,
-        "flag_type": "war",
-        "status": "Developing",
-        "source": "nbcnews.com",
-        "date": "2026-03-25",
-        "timestamp": "Mar 25, 05:00 AM EST",
-        "link": "https://www.nbcnews.com/world/united-kingdom/british-pm-starmer-trump-iran-war-criticism-uk-bases-bombing-snl-rcna264861",
-        "sentiment": 0.993,
-        "predicted_impact": "bullish",
-        "context": "British Prime Minister Keir Starmer likely won't fire back insults at President Donald Trump, those close to him say."
       }
     ],
-    "total_items": 21,
-    "pillar_score": -0.91,
+    "total_items": 22,
+    "pillar_score": -1.08,
     "status": "live"
   },
-  "timestamp": "2026-03-25T13:22:59.948848"
+  "timestamp": "2026-03-26T00:54:41.873516"
 }
