@@ -1,19 +1,10 @@
 {
   "data": {
     "pillar": "news_sentiment",
-    "timestamp": "2026-03-26T08:44:46.949303-04:00",
-    "analysis": {
-      "average_score": -0.796,
-      "overall_sentiment": "bearish",
-      "bullish_pct": 10.0,
-      "bearish_pct": 90.0,
-      "neutral_pct": 0.0,
-      "total_headlines": 20,
-      "dominant_theme": "Higher gas prices from Iran war could offset bigger tax refunds from Trump's 'big beautiful bill'",
-      "pillar_score": -1.59
-    },
-    "pillar_score": -1.59,
+    "timestamp": "2026-03-26T09:02:53.491139-04:00",
+    "analysis": null,
+    "pillar_score": 0,
     "status": "live"
   },
-  "timestamp": "2026-03-26T12:44:46.949326"
+  "timestamp": "2026-03-26T13:02:53.491173"
 }

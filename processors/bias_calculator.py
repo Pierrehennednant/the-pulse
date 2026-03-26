@@ -88,6 +88,29 @@ class BiasCalculator:
                 confidence_color = 'red'
                 threshold_warning = f"🚫 Very low confidence ({confidence}%) — pillars are conflicting. Avoid trading until regime clarifies."
 
+        # Trading Directive
+        if bias == 'Neutral':
+            directive = "🟡 No trade today. Regime has no directional conviction. Sit out."
+            directive_color = "#f39c12"
+        elif confidence < 50:
+            directive = "⚫ Regime unclear. No trade today. Wait for stronger conviction."
+            directive_color = "#7a8fa8"
+        elif bias == 'Bearish' and confidence >= 70:
+            directive = "🔴 Prioritize shorts. Aggressive on confirmed setups."
+            directive_color = "#e74c3c"
+        elif bias == 'Bearish' and confidence >= 50:
+            directive = "🔴 Lean short. Wait for confirmation before entering."
+            directive_color = "#e74c3c"
+        elif bias == 'Bullish' and confidence >= 70:
+            directive = "🟢 Prioritize longs. Aggressive on confirmed setups."
+            directive_color = "#2ecc71"
+        elif bias == 'Bullish' and confidence >= 50:
+            directive = "🟢 Lean long. Wait for confirmation before entering."
+            directive_color = "#2ecc71"
+        else:
+            directive = "⚫ Regime unclear. No trade today. Wait for stronger conviction."
+            directive_color = "#7a8fa8"
+
         result = {
             'final_score': final_score,
             'bias': bias,
@@ -99,7 +122,9 @@ class BiasCalculator:
             'active_pillars': active_pillars,
             'pillar_signals': pillar_signals,
             'pillar_contributions': pillar_contributions,
-            'gauge_value': int((final_score + 2) / 4 * 100)
+            'gauge_value': int((final_score + 2) / 4 * 100),
+            'directive': directive,
+            'directive_color': directive_color
         }
 
         pulse_logger.log(f"📊 Bias: {bias_emoji} {bias} | Score: {final_score} | Confidence: {confidence}% ({confidence_label}) | Active Pillars: {active_pillars}/5")

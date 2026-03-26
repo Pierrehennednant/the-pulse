@@ -223,6 +223,7 @@
         </div>
         <div class="gauge-label" id="bias-label">Loading...</div>
         <div class="confidence" id="confidence-text"></div>
+        <div id="trading-directive" style="margin-top:10px;padding:10px 16px;border-radius:8px;background:#0d1224;border:1px solid #1e2d4a;font-size:14px;font-weight:600;text-align:center"></div>
         <div class="last-updated"><span class="live-dot"></span><span id="last-updated-text">Fetching data...</span></div>
     </div>
     <div id="weekly-summary-card" class="why-today" style="border-left-color: #9b59b6; display:none;">
@@ -518,6 +519,16 @@
         biasLabel.textContent = `${bias.bias_emoji || ''} ${bias.bias || 'Neutral'}`;
         biasLabel.className = `gauge-label ${(bias.bias || 'neutral').toLowerCase()}`;
         document.getElementById('confidence-text').textContent = `Confidence: ${bias.confidence || 0}%`;
+
+        // Trading directive
+        const directive = document.getElementById('trading-directive');
+        if (bias.directive) {
+            directive.textContent = bias.directive;
+            directive.style.color = bias.directive_color;
+            directive.style.borderColor = bias.directive_color + '40';
+            directive.style.background = bias.directive_color + '15';
+        }
+
         document.getElementById('last-updated-text').textContent = `Last updated: ${new Date(snapshot.timestamp).toLocaleTimeString('en-US', {timeZone: 'America/New_York'})} EST`;
         document.getElementById('why-today-text').innerHTML = generateWhyToday(snapshot);
         const econ = pillars.economic || {};

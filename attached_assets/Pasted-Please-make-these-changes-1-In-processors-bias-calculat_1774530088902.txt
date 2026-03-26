@@ -1,0 +1,39 @@
+Please make these changes:
+1. In processors/bias_calculator.py add a trading directive to the result. Find the result dictionary and add this field:
+python# Trading Directive
+if bias == 'Neutral':
+    directive = "🟡 No trade today. Regime has no directional conviction. Sit out."
+    directive_color = "#f39c12"
+elif confidence < 50:
+    directive = "⚫ Regime unclear. No trade today. Wait for stronger conviction."
+    directive_color = "#7a8fa8"
+elif bias == 'Bearish' and confidence >= 70:
+    directive = "🔴 Prioritize shorts. Aggressive on confirmed setups."
+    directive_color = "#e74c3c"
+elif bias == 'Bearish' and confidence >= 50:
+    directive = "🔴 Lean short. Wait for confirmation before entering."
+    directive_color = "#e74c3c"
+elif bias == 'Bullish' and confidence >= 70:
+    directive = "🟢 Prioritize longs. Aggressive on confirmed setups."
+    directive_color = "#2ecc71"
+elif bias == 'Bullish' and confidence >= 50:
+    directive = "🟢 Lean long. Wait for confirmation before entering."
+    directive_color = "#2ecc71"
+else:
+    directive = "⚫ Regime unclear. No trade today. Wait for stronger conviction."
+    directive_color = "#7a8fa8"
+Then add to the result dictionary:
+python'directive': directive,
+'directive_color': directive_color,
+2. In ui/templates/dashboard.html find the gauge section and add this right after the confidence line and before the last-updated line:
+html<div id="trading-directive" style="margin-top:10px;padding:10px 16px;border-radius:8px;background:#0d1224;border:1px solid #1e2d4a;font-size:14px;font-weight:600;text-align:center"></div>
+3. In the updateDashboard JavaScript function add this after setting the confidence text:
+javascript// Trading directive
+const directive = document.getElementById('trading-directive');
+if (bias.directive) {
+    directive.textContent = bias.directive;
+    directive.style.color = bias.directive_color;
+    directive.style.borderColor = bias.directive_color + '40';
+    directive.style.background = bias.directive_color + '15';
+}
+Then delete cache and snapshots, restart app
