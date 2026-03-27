@@ -360,12 +360,12 @@
         const es = data.es_futures || {};
 
         const wowArrow = (change) => {
-            if (change === undefined || change === null) return '';
+            if (change === undefined || change === null || change === 0) return '';
             return change > 0 ? ' <span style="color:#2ecc71">▲</span>' : ' <span style="color:#e74c3c">▼</span>';
         };
 
         const wowText = (change) => {
-            if (change === undefined || change === null) return '';
+            if (change === undefined || change === null || change === 0) return '';
             const abs = Math.abs(change).toLocaleString();
             return `<span style="font-size:11px;color:#7a8fa8"> (${change > 0 ? '+' : '-'}${abs} WoW)</span>`;
         };
