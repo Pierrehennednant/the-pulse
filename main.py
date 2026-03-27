@@ -57,8 +57,13 @@ def run_scheduler():
 
 if __name__ == "__main__":
     pulse_logger.log("🚀 The Pulse is starting...")
-    run_pulse()
+
+    # Run initial pulse in background so Flask opens immediately
+    initial_thread = threading.Thread(target=run_pulse, daemon=True)
+    initial_thread.start()
+
     scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
     scheduler_thread.start()
-    pulse_logger.log("🌐 Dashboard running on http://0.0.0.0:8080")
+
+    pulse_logger.log("🌐 Dashboard running on http://0.0.0.0:5000")
     dashboard_app.run(host='0.0.0.0', port=5000, debug=False)
