@@ -1,10 +1,12 @@
+import os
+
 # The Pulse Configuration
 
-# API Keys
-FRED_API_KEY = "4b560856fe7d4a4f62e342c9d6491748"
-ALPHA_VANTAGE_API_KEY = "SNLHICLP2DN6PFH2"
-NEWS_API_KEY = "b1cf7c6588274e55892f6f993a3c0c28"
-THENEWS_API_KEY = "m7Cao53wbd59FtTP3BCrUE2fo4NYynpfCqiOR8Dg"
+# API Keys — set these as environment variables in Railway (and optionally locally via .env)
+FRED_API_KEY = os.environ.get("FRED_API_KEY", "")
+ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
+NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "")
+THENEWS_API_KEY = os.environ.get("THENEWS_API_KEY", "")
 
 # Endpoints
 CNN_FEAR_GREED_URL = "https://www.cnn.com/markets/fear-and-greed"

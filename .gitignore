@@ -1,3 +1,34 @@
+# ── The Pulse project-specific ignores ──
+# Runtime data cache (ephemeral, regenerated on startup)
+data/economic_calendar.json
+data/geopolitical.json
+data/macro_sentiment.json
+data/news_sentiment.json
+data/snapshots/
+
+# Permanent data files — keep these out of git (they contain state)
+data/permanent_cot.json
+data/permanent_weekly_summary.json
+data/permanent_manual_inputs.json
+
+# Logs
+*.log
+the_pulse.log
+
+# Replit-specific
+.local/
+.pythonlibs/
+.upm/
+.cache/
+.agents/
+attached_assets/
+.replit
+replit.nix
+
+# Secrets — never commit
+.env
+
+# ── Standard Python ignores ──
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
