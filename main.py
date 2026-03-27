@@ -66,4 +66,6 @@ if __name__ == "__main__":
     scheduler_thread.start()
 
     pulse_logger.log("🌐 Dashboard running on http://0.0.0.0:5000")
-    dashboard_app.run(host='0.0.0.0', port=5000, debug=False)
+    import os
+    port = int(os.environ.get('PORT', 5000))
+    dashboard_app.run(host='0.0.0.0', port=port, debug=False)

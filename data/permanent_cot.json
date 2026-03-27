@@ -1,6 +1,6 @@
 {
   "pillar": "institutional",
-  "timestamp": "2026-03-24T21:20:06.955971-04:00",
+  "timestamp": "2026-03-27T09:09:27.135710-04:00",
   "nq_futures": {
     "asset_mgr_long": 97885,
     "asset_mgr_short": 36494,
@@ -11,7 +11,10 @@
     "combined_net": 20350,
     "net_pct": 7.67,
     "direction": "bullish",
-    "score": 0.5
+    "score": 0.5,
+    "prev_net": 20350,
+    "wow_change": 0,
+    "wow_direction": "decreasing"
   },
   "es_futures": {
     "asset_mgr_long": 1089306,
@@ -23,7 +26,10 @@
     "combined_net": 541865,
     "net_pct": 28.12,
     "direction": "bullish",
-    "score": 1.0
+    "score": 1.0,
+    "prev_net": 541865,
+    "wow_change": 0,
+    "wow_direction": "decreasing"
   },
   "pillar_score": 0.75,
   "update_frequency": "Weekly (Fridays)",

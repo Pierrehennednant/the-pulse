@@ -1,21 +1,9 @@
 {
   "data": {
     "pillar": "macro_sentiment",
-    "timestamp": "2026-03-26T22:29:39.581136-04:00",
-    "vix": {
-      "value": 25.33,
-      "previous": 26.95,
-      "change": -1.62,
-      "change_pct": -6.01,
-      "signal": "bearish"
-    },
-    "vxn": {
-      "value": 27.65,
-      "previous": 28.74,
-      "change": -1.09,
-      "change_pct": -3.79,
-      "signal": "bearish"
-    },
+    "timestamp": "2026-03-27T09:09:25.753108-04:00",
+    "vix": null,
+    "vxn": null,
     "fear_greed": {
       "score": 13,
       "rating": "Extreme Fear",
@@ -25,5 +13,5 @@
     "pillar_score": -1.0,
     "status": "live"
   },
-  "timestamp": "2026-03-27T02:29:39.581172"
+  "timestamp": "2026-03-27T09:09:25.753108"
 }
