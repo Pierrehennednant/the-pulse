@@ -26,11 +26,35 @@ def run_pulse():
     pulse_logger.log("🔄 Running The Pulse refresh...")
     try:
         macro_data = macro_sentiment_pipeline.fetch()
-        econ_data = economic_calendar_pipeline.fetch()
-        inst_data = institutional_pipeline.fetch()
-        geo_data = geopolitical_pipeline.fetch()
-        news_data = news_sentiment_pipeline.fetch(geo_data=geo_data)
+    except Exception as e:
+        pulse_logger.log(f"⚠️ Macro failed: {e}", level="WARNING")
+        macro_data = {}
 
+    try:
+        econ_data = economic_calendar_pipeline.fetch()
+    except Exception as e:
+        pulse_logger.log(f"⚠️ Economic failed: {e}", level="WARNING")
+        econ_data = {}
+
+    try:
+        inst_data = institutional_pipeline.fetch()
+    except Exception as e:
+        pulse_logger.log(f"⚠️ Institutional failed: {e}", level="WARNING")
+        inst_data = {}
+
+    try:
+        geo_data = geopolitical_pipeline.fetch()
+    except Exception as e:
+        pulse_logger.log(f"⚠️ Geopolitical failed: {e}", level="WARNING")
+        geo_data = {}
+
+    try:
+        news_data = news_sentiment_pipeline.fetch(geo_data=geo_data)
+    except Exception as e:
+        pulse_logger.log(f"⚠️ News failed: {e}", level="WARNING")
+        news_data = {}
+
+    try:
         formatted_data = data_formatter.standardize({
             'macro': macro_data,
             'economic': econ_data,
@@ -38,13 +62,10 @@ def run_pulse():
             'geopolitical': geo_data,
             'news': news_data
         })
-
         bias_score = bias_calculator.compute(formatted_data)
         weekly_summary_pipeline.fetch(formatted_data=formatted_data, bias=bias_score)
         snapshot_id = snapshot_generator.save(bias_score, formatted_data)
-
         pulse_logger.log(f"✅ Pulse updated | {bias_score['bias_emoji']} {bias_score['bias']} | Confidence: {bias_score['confidence']}% | Snapshot: {snapshot_id}")
-
     except Exception as e:
         error_handler.handle(e, "Main Orchestrator")
 
