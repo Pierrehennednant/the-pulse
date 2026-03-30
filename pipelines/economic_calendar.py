@@ -1,5 +1,6 @@
+import os
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from config import TIMEZONE, STALE_THRESHOLDS
 from utils.cache import cache
@@ -32,11 +33,11 @@ class EconomicCalendarPipeline:
             return date_str
 
     def get_market_implication(self, title, actual, forecast, previous):
-        if actual in ['hawkish', 'dovish', 'neutral']:
-            if actual == 'hawkish':
-                return 'hawkish', 'bearish', f"{title} — Fed hawkish tone. Expect rate fears, bearish for equities."
-            elif actual == 'dovish':
-                return 'dovish', 'bullish', f"{title} — Fed dovish tone. Rate cut hopes, bullish for equities."
+        if actual in ['hawkish', 'dovish', 'neutral', 'bearish', 'bullish']:
+            if actual in ['hawkish', 'bearish']:
+                return 'bearish', 'bearish', f"{title} — Bearish tone detected. Rate fears or hawkish stance, bearish for equities."
+            elif actual in ['dovish', 'bullish']:
+                return 'bullish', 'bullish', f"{title} — Bullish tone detected. Dovish stance or supportive language, bullish for equities."
             else:
                 return 'neutral', 'neutral', f"{title} — Neutral tone. No major market repricing expected."
         if not actual or actual == '':
@@ -73,6 +74,48 @@ class EconomicCalendarPipeline:
             'statement', 'remarks', 'interview', 'appearance'
         ]
         return any(keyword in title.lower() for keyword in speech_keywords)
+
+    def auto_detect_speech_sentiment(self, speaker_name):
+        """Query TheNewsAPI 30min after speech starts, return bearish/bullish/neutral."""
+        api_key = os.environ.get('THENEWS_API_KEY', '')
+        if not api_key:
+            return None
+        try:
+            search_query = f"{speaker_name} hawkish dovish rate inflation cut hike hold tariff"
+            url = "https://api.thenewsapi.com/v1/news/all"
+            params = {
+                'api_token': api_key,
+                'search': search_query,
+                'language': 'en',
+                'limit': 10,
+                'published_after': (datetime.now(pytz.utc) - timedelta(hours=3)).strftime('%Y-%m-%dT%H:%M:%S')
+            }
+            response = requests.get(url, params=params, timeout=10)
+            articles = response.json().get('data', [])
+            if not articles:
+                return 'neutral'
+
+            bearish_keywords = ['hawkish', 'hike', 'tighten', 'inflation concern', 'higher for longer', 'no cuts', 'tariff', 'restrictive']
+            bullish_keywords = ['dovish', 'cut', 'ease', 'pivot', 'supportive', 'pause', 'accommodative', 'rate cut']
+
+            bearish_count = 0
+            bullish_count = 0
+            for article in articles:
+                text = (article.get('title', '') + ' ' + article.get('description', '')).lower()
+                if any(kw in text for kw in bearish_keywords):
+                    bearish_count += 1
+                if any(kw in text for kw in bullish_keywords):
+                    bullish_count += 1
+
+            if bearish_count > bullish_count:
+                return 'bearish'
+            elif bullish_count > bearish_count:
+                return 'bullish'
+            else:
+                return 'neutral'
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Speech auto-detect failed for {speaker_name}: {e}", level="WARNING")
+            return 'neutral'
 
     def calculate_score(self, events):
         if not events:
@@ -152,6 +195,35 @@ class EconomicCalendarPipeline:
                     event_row['result'] = 'speech'
                     event_row['market_impact'] = 'unknown'
                     event_row['reason'] = f"{event_row['title']} — No data to parse. Market will reprice on tone. No trade 30 minutes before."
+
+                    from pipelines.manual_input import manual_input_pipeline as mip
+                    TIER1_SPEAKERS = ['powell', 'fed chair', 'waller', 'williams', 'jefferson', 'kugler', 'cook', 'musalem', 'bessent', 'treasury']
+                    TIER2_SPEAKERS = ['trump', 'white house', 'president', 'lagarde', 'ecb']
+                    all_speakers = TIER1_SPEAKERS + TIER2_SPEAKERS
+
+                    title_lower = event_row['title'].lower()
+                    matched_speaker = next((s for s in all_speakers if s in title_lower), None)
+
+                    if matched_speaker and date_str:
+                        try:
+                            speech_dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                            if speech_dt.tzinfo is None:
+                                speech_dt = pytz.utc.localize(speech_dt)
+                            else:
+                                speech_dt = speech_dt.astimezone(pytz.utc)
+                            trigger_time = speech_dt + timedelta(minutes=30)
+                            now_utc = datetime.now(pytz.utc)
+
+                            if now_utc >= trigger_time and event_row['actual'] == 'Pending':
+                                existing = mip.get_inputs().get(event_row['title'])
+                                if not existing:
+                                    pulse_logger.log(f"🎙️ Auto-detecting speech sentiment for: {event_row['title']}")
+                                    sentiment = self.auto_detect_speech_sentiment(matched_speaker)
+                                    if sentiment:
+                                        mip.save_actual(event_row['title'], sentiment, None)
+                                        pulse_logger.log(f"✅ Auto-tagged {event_row['title']} as {sentiment}")
+                        except Exception as e:
+                            pulse_logger.log(f"⚠️ Speech trigger check failed: {e}", level="WARNING")
                 else:
                     event_row['is_speech'] = False
                 events.append(event_row)
