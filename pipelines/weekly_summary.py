@@ -41,6 +41,7 @@ class WeeklySummaryPipeline:
 
     def generate_summary(self, formatted_data):
         try:
+            pulse_logger.log("📋 Weekly summary step 1 — extracting data")
             econ = formatted_data.get('economic', {})
             inst = formatted_data.get('institutional', {})
             macro = formatted_data.get('macro', {})
@@ -48,6 +49,7 @@ class WeeklySummaryPipeline:
             bias = formatted_data.get('bias', {})
 
             # Economic — day by day, score what has actually landed
+            pulse_logger.log("📋 Weekly summary step 2 — economic events")
             events = econ.get('events', [])
             pending = [e for e in events if e.get('result') in ['pending', 'speech']]
             scored = [e for e in events if e.get('result') not in ['pending', 'speech', 'unknown']]
@@ -66,16 +68,19 @@ class WeeklySummaryPipeline:
                     econ_summary += f" Still watching: {', '.join(next_events)}."
 
             # Institutional
+            pulse_logger.log("📋 Weekly summary step 3 — institutional")
             nq = inst.get('nq_futures', {})
             es = inst.get('es_futures', {})
             inst_summary = f"Big money net {nq.get('direction', 'unknown')} on NQ ({nq.get('net_pct', 0)}%) and {es.get('direction', 'unknown')} on ES ({es.get('net_pct', 0)}%)."
 
             # Macro
+            pulse_logger.log("📋 Weekly summary step 4 — macro")
             vix = macro.get('vix', {})
             fg = macro.get('fear_greed', {})
             macro_summary = f"VIX at {vix.get('value', '--')}, Fear & Greed at {fg.get('score', '--')} ({fg.get('rating', 'N/A')})."
 
             # Geopolitical — 2 sentences max, clean boundary
+            pulse_logger.log("📋 Weekly summary step 5 — geopolitical")
             flags = geo.get('active_flags', [])
             if flags:
                 flag_texts = []
@@ -87,6 +92,7 @@ class WeeklySummaryPipeline:
                 geo_summary = "No major geopolitical flags active this week."
 
             # Overall bias
+            pulse_logger.log("📋 Weekly summary step 6 — overall bias")
             bias_direction = bias.get('bias', 'Neutral') if bias else 'Neutral'
             confidence = bias.get('confidence', 0) if bias else 0
             confidence_label = bias.get('confidence_label', '') if bias else ''
@@ -128,6 +134,7 @@ class WeeklySummaryPipeline:
                 if wow_summary:
                     overall += f" {wow_summary}"
 
+            pulse_logger.log("📋 Weekly summary step 7 — complete")
             return {
                 'generated_at': datetime.now(self.timezone).isoformat(),
                 'overall': overall,
