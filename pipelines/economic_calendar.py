@@ -149,7 +149,7 @@ class EconomicCalendarPipeline:
 
     def fetch(self):
         try:
-            response = requests.get(self.url, headers=self.headers, timeout=15)
+            response = requests.get(self.url, headers=self.headers, timeout=10)
 
             if response.status_code == 429:
                 pulse_logger.log("⚠️ Forex Factory rate limited — using cached data", level="WARNING")

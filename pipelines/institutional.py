@@ -89,7 +89,7 @@ class InstitutionalPipeline:
 
     def fetch_cot(self):
         try:
-            response = requests.get(self.cot_url, headers=self.headers, timeout=15)
+            response = requests.get(self.cot_url, headers=self.headers, timeout=10)
             soup = BeautifulSoup(response.content, 'html.parser')
             pre = soup.find('pre')
             if not pre:
