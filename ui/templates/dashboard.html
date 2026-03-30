@@ -307,13 +307,17 @@
 
     function renderEconomic(data) {
         if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
-        let html = data.status === 'stale' ? '<div class="stale-warning">⚠️ Stale data</div>' : '';
+        let html = '';
         const events = data.events || [];
         if (!events.length) return html + '<div class="data-row"><span class="data-label">No red folder events today</span></div>';
 
         events.forEach(e => {
             const isPending = e.result === 'pending';
-            const statusClass = isPending ? 'status-awaiting' : 'status-resolved';
+            const isSpeech = e.is_speech;
+            const statusClass = isPending ? 'status-awaiting' : isSpeech ? 
+                (e.actual === 'bearish' ? 'status-developing' : 
+                 e.actual === 'bullish' ? 'status-resolved' : 
+                 'status-awaiting') : 'status-resolved';
             const impactClass = valClass(e.market_impact);
             const eventId = e.title.replace(/[^a-zA-Z0-9]/g, '_');
 
@@ -333,7 +337,14 @@
                 ${e.reason ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${e.reason}</div>` : ''}
                 ${e.story_context ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4;border-top:1px solid #1e2d4a;padding-top:6px"><strong style="color:#4a9eff">Context:</strong> ${e.story_context}</div>` : ''}
 
-                ${e.is_speech ? `
+                ${e.is_speech ? (() => {
+                    const taggedRecently = e.actual !== 'Pending' && e.actual !== '' ? 
+                        (() => { try { 
+                            const eventDate = new Date(e.time_est); 
+                            return (Date.now() - eventDate) < 24 * 60 * 60 * 1000; 
+                        } catch(err) { return true; } })() : true;
+                    
+                    return taggedRecently ? `
 <div style="background:#1a0a2a;border:1px solid #4a1a7a;border-radius:8px;padding:10px;margin-top:8px;font-size:13px;color:#c084fc">
     🚫 Speech Event — No trade 30 min before. Auto-detection triggers 60 min after start. Override below if needed.
 </div>
@@ -341,7 +352,8 @@
     <button onclick="submitActual('${e.title}', '${eventId}', 'bearish')" style="flex:1;background:#3a1a1a;color:#e74c3c;border:1px solid #5a2a2a;border-radius:6px;padding:6px;font-size:12px;cursor:pointer">🔴 Bearish</button>
     <button onclick="submitActual('${e.title}', '${eventId}', 'neutral')" style="flex:1;background:#2a2a1a;color:#f39c12;border:1px solid #4a4a2a;border-radius:6px;padding:6px;font-size:12px;cursor:pointer">🟡 Neutral</button>
     <button onclick="submitActual('${e.title}', '${eventId}', 'bullish')" style="flex:1;background:#1a3a1a;color:#2ecc71;border:1px solid #2a5a2a;border-radius:6px;padding:6px;font-size:12px;cursor:pointer">🟢 Bullish</button>
-</div>` : ''}
+</div>` : '';
+                })() : ''}
 
                 ${isPending ? `
                 <div style="margin-top:10px;padding-top:10px;border-top:1px solid #1e2d4a">
