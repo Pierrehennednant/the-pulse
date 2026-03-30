@@ -211,7 +211,7 @@ class EconomicCalendarPipeline:
                                 speech_dt = pytz.utc.localize(speech_dt)
                             else:
                                 speech_dt = speech_dt.astimezone(pytz.utc)
-                            trigger_time = speech_dt + timedelta(minutes=30)
+                            trigger_time = speech_dt + timedelta(minutes=60)
                             now_utc = datetime.now(pytz.utc)
 
                             if now_utc >= trigger_time and event_row['actual'] == 'Pending':
