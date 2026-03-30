@@ -298,7 +298,7 @@
     function setGauge(gaugeValue, bias) {
         const rotation = (gaugeValue / 100) * 180 - 90;
         document.getElementById('gauge-needle').setAttribute('transform', `rotate(${rotation}, 130, 140)`);
-        document.getElementById('gauge-score-text').textContent = bias && bias.active_pillars ? bias.active_pillars + '/5' : '--';
+        document.getElementById('gauge-score-text').textContent = bias && bias.active_pillars !== undefined ? bias.active_pillars + '/5' : '--';
     }
 
     function scoreClass(s) { return s > 0.3 ? 'score-bullish' : s < -0.3 ? 'score-bearish' : 'score-neutral'; }
