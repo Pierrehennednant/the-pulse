@@ -56,20 +56,36 @@ class GeopoliticalPipeline:
             'bitcoin drops', 'crypto crash', 'nft', 'dogecoin', 'altcoin',
             'constitutional', 'historical background', 'legal analysis',
             'tax resistance', 'ice protests',
-            'epstein', 'jeffery epstein', 'ghislaine'
+            'epstein', 'jeffery epstein', 'ghislaine',
+            # Awards & non-market events
+            'honorary degree', 'awarded degree', 'awarded honorary',
+            'wins award', 'receives award', 'lifetime achievement',
+            'hall of fame', 'named ambassador', 'appointed ambassador',
+            'named honorary', 'commencement', 'graduation',
+            # Political non-market
+            'campaign rally', 'reelection campaign', 'polling numbers',
+            'approval rating', 'fundraiser', 'political ad',
+            # Human interest
+            'charity', 'donation', 'philanthropy', 'volunteering',
+            'community service', 'humanitarian award'
         ]
 
     def is_market_relevant(self, text):
         if not text:
             return False
         text_lower = text.lower()
+        
+        # Layer 1 — blocklist: explicit noise, always reject
         for ignore in self.ignore_keywords:
             if ignore in text_lower:
                 return False
-        for keyword in self.market_keywords:
-            if keyword in text_lower:
-                return True
-        return False
+        
+        # Layer 2 — allowlist: must contain at least one market keyword to proceed
+        has_market_keyword = any(keyword in text_lower for keyword in self.market_keywords)
+        if not has_market_keyword:
+            return False
+        
+        return True
 
     def get_sentiment_score(self, text):
         try:
