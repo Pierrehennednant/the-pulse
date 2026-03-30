@@ -333,6 +333,16 @@
                 ${e.reason ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${e.reason}</div>` : ''}
                 ${e.story_context ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4;border-top:1px solid #1e2d4a;padding-top:6px"><strong style="color:#4a9eff">Context:</strong> ${e.story_context}</div>` : ''}
 
+                ${e.is_speech ? `
+<div style="background:#1a0a2a;border:1px solid #4a1a7a;border-radius:8px;padding:10px;margin-top:8px;font-size:13px;color:#c084fc">
+    🚫 Speech Event — No trade 30 min before. Enter hawkish/dovish/neutral after speech.
+</div>
+<div style="margin-top:8px;display:flex;gap:6px">
+    <button onclick="submitActual('${e.title}', '${eventId}', 'hawkish')" style="flex:1;background:#3a1a1a;color:#e74c3c;border:1px solid #5a2a2a;border-radius:6px;padding:6px;font-size:12px;cursor:pointer">🔴 Hawkish</button>
+    <button onclick="submitActual('${e.title}', '${eventId}', 'neutral')" style="flex:1;background:#2a2a1a;color:#f39c12;border:1px solid #4a4a2a;border-radius:6px;padding:6px;font-size:12px;cursor:pointer">🟡 Neutral</button>
+    <button onclick="submitActual('${e.title}', '${eventId}', 'dovish')" style="flex:1;background:#1a3a1a;color:#2ecc71;border:1px solid #2a5a2a;border-radius:6px;padding:6px;font-size:12px;cursor:pointer">🟢 Dovish</button>
+</div>` : ''}
+
                 ${isPending ? `
                 <div style="margin-top:10px;padding-top:10px;border-top:1px solid #1e2d4a">
                     <div style="font-size:11px;color:#4a9eff;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">📝 Enter Actual</div>
@@ -347,6 +357,13 @@
                     <input type="text" id="story_${eventId}" placeholder="Paste Forex Factory story URL (optional)"
                         style="width:100%;background:#0a0e1a;border:1px solid #1e2d4a;border-radius:6px;padding:6px 10px;color:#7a8fa8;font-size:11px;outline:none;box-sizing:border-box"/>
                 </div>` : ''}
+                ${!isPending && e.title ? `
+<div style="margin-top:8px">
+    <button onclick="resetActual('${e.title}')"
+        style="background:#1a0a0a;color:#e74c3c;border:1px solid #3a1a1a;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">
+        ✕ Reset Actual
+    </button>
+</div>` : ''}
             </div>`;
         });
 
@@ -571,10 +588,12 @@
         return false;
     }
 
-    async function submitActual(eventTitle, eventId) {
+    async function submitActual(eventTitle, eventId, presetActual) {
         const actualInput = document.getElementById('actual_' + eventId);
         const storyInput = document.getElementById('story_' + eventId);
-        const actual = actualInput ? actualInput.value.trim() : '';
+        const actual = (presetActual != null && String(presetActual).trim() !== '')
+            ? String(presetActual).trim()
+            : (actualInput ? actualInput.value.trim() : '');
         const storyUrl = storyInput ? storyInput.value.trim() : '';
 
         if (!actual) {
@@ -602,6 +621,23 @@
                 setTimeout(() => window.location.reload(), 1500);
             } else {
                 alert('Failed to save. Try again.');
+            }
+        } catch(e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function resetActual(eventTitle) {
+        if (!confirm('Reset actual for ' + eventTitle + '?')) return;
+        try {
+            const response = await fetch('/api/reset_manual_input', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({event_title: eventTitle})
+            });
+            const result = await response.json();
+            if (result.status === 'reset') {
+                setTimeout(() => window.location.reload(), 500);
             }
         } catch(e) {
             alert('Error: ' + e.message);

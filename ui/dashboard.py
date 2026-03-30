@@ -1,3 +1,4 @@
+import json
 from flask import Flask, render_template, jsonify, request
 from processors.snapshot_generator import snapshot_generator
 from pipelines.manual_input import manual_input_pipeline
@@ -75,6 +76,23 @@ def manual_input():
 def get_manual_inputs():
     inputs = manual_input_pipeline.get_inputs()
     return jsonify(inputs)
+
+@app.route('/api/reset_manual_input', methods=['POST'])
+def reset_manual_input():
+    try:
+        data = request.get_json()
+        event_title = data.get('event_title')
+        if not event_title:
+            return jsonify({'error': 'Missing event_title'}), 400
+        with open('./data/permanent_manual_inputs.json', 'r') as f:
+            inputs = json.load(f)
+        if event_title in inputs:
+            del inputs[event_title]
+            with open('./data/permanent_manual_inputs.json', 'w') as f:
+                json.dump(inputs, f, indent=2)
+        return jsonify({'status': 'reset', 'event': event_title})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=False)

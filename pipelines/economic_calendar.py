@@ -32,6 +32,13 @@ class EconomicCalendarPipeline:
             return date_str
 
     def get_market_implication(self, title, actual, forecast, previous):
+        if actual in ['hawkish', 'dovish', 'neutral']:
+            if actual == 'hawkish':
+                return 'hawkish', 'bearish', f"{title} — Fed hawkish tone. Expect rate fears, bearish for equities."
+            elif actual == 'dovish':
+                return 'dovish', 'bullish', f"{title} — Fed dovish tone. Rate cut hopes, bullish for equities."
+            else:
+                return 'neutral', 'neutral', f"{title} — Neutral tone. No major market repricing expected."
         if not actual or actual == '':
             return 'pending', 'unknown', f'{title} not yet released'
         try:
@@ -57,24 +64,28 @@ class EconomicCalendarPipeline:
                 return 'unchanged', 'neutral', f'{title} unchanged from previous ({actual})'
         return 'pending', 'unknown', f'{title} — no comparison available'
 
+    def get_forward_guidance(self, title):
+        return f'{title} not yet released'
+
+    def is_speech_event(self, title):
+        speech_keywords = [
+            'speaks', 'speech', 'press conference', 'testimony',
+            'statement', 'remarks', 'interview', 'appearance'
+        ]
+        return any(keyword in title.lower() for keyword in speech_keywords)
+
     def calculate_score(self, events):
         if not events:
             return 0.0
-        
         score = 0.0
         count = 0
         impact_map = {'bullish': 1, 'bearish': -1, 'neutral': 0}
-        
         for event in events:
-            if event.get('market_impact') in impact_map:
-                score += impact_map[event['market_impact']]
-                count += 1
-        
-        pending_count = sum(1 for e in events if e['result'] == 'pending')
-        if pending_count > 0:
-            score -= 0.3 * pending_count
-        
-        return round(score / max(count, 1), 2)
+            if event.get('result') in ['beat', 'miss', 'inline', 'improved', 'declined', 'unchanged']:
+                if event.get('market_impact') in impact_map:
+                    score += impact_map[event['market_impact']]
+                    count += 1
+        return round(score / max(count, 1), 2) if count > 0 else 0.0
     
     def apply_manual_inputs(self, events):
         from pipelines.manual_input import manual_input_pipeline
@@ -122,22 +133,28 @@ class EconomicCalendarPipeline:
                 if not self.is_market_moving(event):
                     continue
                 title = event.get('title', '')
-                actual = event.get('actual', '')
                 forecast = event.get('forecast', '')
                 previous = event.get('previous', '')
                 date_str = event.get('date', '')
-                result, market_impact, reason = self.get_market_implication(title, actual, forecast, previous)
-                events.append({
+                event_row = {
                     'title': title,
                     'time_est': self.convert_to_est(date_str),
                     'forecast': forecast or 'N/A',
                     'previous': previous or 'N/A',
-                    'actual': actual or 'Pending',
+                    'actual': 'Pending',
                     'impact': event.get('impact', ''),
-                    'result': result,
-                    'market_impact': market_impact,
-                    'reason': reason
-                })
+                    'result': 'pending',
+                    'market_impact': 'unknown',
+                    'reason': self.get_forward_guidance(title)
+                }
+                if self.is_speech_event(event_row['title']):
+                    event_row['is_speech'] = True
+                    event_row['result'] = 'speech'
+                    event_row['market_impact'] = 'unknown'
+                    event_row['reason'] = f"{event_row['title']} — No data to parse. Market will reprice on tone. No trade 30 minutes before."
+                else:
+                    event_row['is_speech'] = False
+                events.append(event_row)
 
             events = self.apply_manual_inputs(events)
             score = self.calculate_score(events)
