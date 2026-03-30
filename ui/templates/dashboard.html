@@ -295,10 +295,10 @@
     setInterval(updateTime, 1000);
     updateTime();
 
-    function setGauge(gaugeValue) {
+    function setGauge(gaugeValue, bias) {
         const rotation = (gaugeValue / 100) * 180 - 90;
         document.getElementById('gauge-needle').setAttribute('transform', `rotate(${rotation}, 130, 140)`);
-        document.getElementById('gauge-score-text').textContent = gaugeValue;
+        document.getElementById('gauge-score-text').textContent = bias && bias.active_pillars ? bias.active_pillars + '/5' : '--';
     }
 
     function scoreClass(s) { return s > 0.3 ? 'score-bullish' : s < -0.3 ? 'score-bearish' : 'score-neutral'; }
@@ -514,11 +514,11 @@
         if (!snapshot) return;
         const bias = snapshot.bias || {};
         const pillars = snapshot.pillars || {};
-        setGauge(bias.gauge_value || 50);
+        setGauge(bias.gauge_value || 50, bias);
         const biasLabel = document.getElementById('bias-label');
         biasLabel.textContent = `${bias.bias_emoji || ''} ${bias.bias || 'Neutral'}`;
         biasLabel.className = `gauge-label ${(bias.bias || 'neutral').toLowerCase()}`;
-        document.getElementById('confidence-text').textContent = `Confidence: ${bias.confidence || 0}%`;
+        document.getElementById('confidence-text').textContent = `${bias.active_pillars || 0} of 5 pillars agree — ${bias.confidence || 0}% confidence`;
 
         // Trading directive
         const directive = document.getElementById('trading-directive');
