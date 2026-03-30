@@ -140,7 +140,7 @@ class GeopoliticalPipeline:
                     f"&limit=25"
                     f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,abcnews.go.com,washingtonpost.com,nytimes.com"
                 )
-                response = requests.get(url, timeout=15)
+                response = requests.get(url, timeout=10)
                 self._parse_articles(response.json(), seen_titles, items)
             except Exception as e:
                 errors += 1
@@ -157,7 +157,7 @@ class GeopoliticalPipeline:
                     f"&limit=25"
                     f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,washingtonpost.com,nytimes.com"
                 )
-                response = requests.get(url, timeout=15)
+                response = requests.get(url, timeout=10)
                 self._parse_articles(response.json(), seen_titles, items)
             except Exception as e:
                 errors += 1
