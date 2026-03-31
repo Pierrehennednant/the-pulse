@@ -630,7 +630,10 @@
                 actualInput.value = '✓ ' + actual + ' saved';
                 actualInput.disabled = true;
                 if (storyInput) storyInput.disabled = true;
-                setTimeout(() => fetchData(), 1500);
+                setTimeout(() => {
+                    fetchData();
+                    scheduleRefresh();
+                }, 1500);
             } else {
                 alert('Failed to save. Try again.');
             }
@@ -649,7 +652,10 @@
             });
             const result = await response.json();
             if (result.status === 'reset') {
-                setTimeout(() => fetchData(), 500);
+                setTimeout(() => {
+                    fetchData();
+                    scheduleRefresh();
+                }, 500);
             }
         } catch(e) {
             alert('Error: ' + e.message);
@@ -664,8 +670,15 @@
         } catch(e) { console.error('Fetch failed:', e); }
     }
 
+    let refreshTimer;
+
+    function scheduleRefresh() {
+        clearInterval(refreshTimer);
+        refreshTimer = setInterval(fetchData, 5 * 60 * 1000);
+    }
+
     fetchData();
-    setInterval(fetchData, 5 * 60 * 1000);
+    scheduleRefresh();
 </script>
 </body>
 </html>
