@@ -67,7 +67,26 @@ class GeopoliticalPipeline:
             'approval rating', 'fundraiser', 'political ad',
             # Human interest
             'charity', 'donation', 'philanthropy', 'volunteering',
-            'community service', 'humanitarian award'
+            'community service', 'humanitarian award',
+            # Opinion & Commentary
+            'investing club subscribers', 'sunday column for investing',
+            'cramer argues', 'jim cramer argues', 'according to cramer',
+            'mad money', 'fast money', 'options action', 'halftime report',
+            # Market Advice/Tips (not news)
+            "here's why you should", "here's what to do", 'what investors should',
+            'how to play', 'best stocks to buy', 'op stocks', 'stocks to watch', 'buy dip',
+            # Earnings that aren't macro-moving
+            'quarterly earnings beat', 'quarterly earnings miss', 'revenue guidance',
+            'eps beat', 'eps miss',
+            # Lifestyle/Consumer disguised as business
+            'dream home', 'luxury real estate', 'mansion', 'yacht',
+            'billionaire lifestyle', 'net worth revealed', 'richest people', 'wealthiest',
+            # Crypto noise
+            'bitcoin price today', 'ethereum price', 'crypto rally', 'altcoin',
+            'memecoin', 'dogecoin', 'shiba inu', 'nft mint',
+            # Social media/viral
+            'goes viral', 'twitter reacts', 'social media reacts', 'tiktok trend',
+            'reddit thread'
         ]
 
     def is_market_relevant(self, text):
