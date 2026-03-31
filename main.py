@@ -3,6 +3,7 @@ import time
 import threading
 from datetime import datetime
 import pytz
+import concurrent.futures
 
 from config import TIMEZONE, REFRESH_INTERVAL_MINUTES
 
@@ -42,14 +43,26 @@ def run_pulse():
         pulse_logger.log(f"⚠️ Institutional failed: {e}", level="WARNING")
         inst_data = {}
 
+    # Geopolitical with hard 15s thread timeout
     try:
-        geo_data = geopolitical_pipeline.fetch()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(geopolitical_pipeline.fetch)
+            geo_data = future.result(timeout=15)
+    except concurrent.futures.TimeoutError:
+        pulse_logger.log("⚠️ Geopolitical timed out after 15s — using cache", level="WARNING")
+        geo_data = {}
     except Exception as e:
         pulse_logger.log(f"⚠️ Geopolitical failed: {e}", level="WARNING")
         geo_data = {}
 
+    # News sentiment with hard 15s thread timeout
     try:
-        news_data = news_sentiment_pipeline.fetch(geo_data=geo_data)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(news_sentiment_pipeline.fetch, geo_data)
+            news_data = future.result(timeout=15)
+    except concurrent.futures.TimeoutError:
+        pulse_logger.log("⚠️ News sentiment timed out after 15s — using cache", level="WARNING")
+        news_data = {}
     except Exception as e:
         pulse_logger.log(f"⚠️ News failed: {e}", level="WARNING")
         news_data = {}
