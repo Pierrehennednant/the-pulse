@@ -78,7 +78,7 @@ class GeopoliticalPipeline:
             'mad money', 'fast money', 'options action', 'halftime report',
             # Market Advice/Tips (not news)
             "here's why you should", "here's what to do", 'what investors should',
-            'how to play', 'best stocks to buy', 'op stocks', 'stocks to watc', 'buy the dip',
+            'how to play', 'best stocks to buy', 'top stocks', 'stocks to watch', 'buy the dip',
             # Earnings that aren't macro-moving
             'quarterly earnings beat', 'quarterly earnings miss', 'revenue guidance',
             'eps beat', 'eps miss',
