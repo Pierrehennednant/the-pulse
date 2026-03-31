@@ -155,9 +155,9 @@ class GeopoliticalPipeline:
                     last_seen = pytz.utc.localize(last_seen)
                 age_hours = (now - last_seen).total_seconds() / 3600
 
-                if age_hours > 48:
+                if age_hours > 24:
                     continue  # Expired — drop it
-                elif age_hours > 24:
+                elif age_hours > 6:
                     flag = {**flag, 'status': 'Monitoring', 'last_seen_label': f'Last seen {int(age_hours)}h ago'}
                 else:
                     flag = {**flag, 'status': 'Developing', 'last_seen_label': None}
@@ -170,7 +170,7 @@ class GeopoliticalPipeline:
         return active[:5]
 
     def _clean_expired_flags(self, stored):
-        """Remove flags older than 48 hours from persistent storage."""
+        """Remove flags older than 24 hours from persistent storage."""
         now = datetime.now(pytz.utc)
         cleaned = {}
         for key, flag in stored.items():
@@ -179,7 +179,7 @@ class GeopoliticalPipeline:
                 if last_seen.tzinfo is None:
                     last_seen = pytz.utc.localize(last_seen)
                 age_hours = (now - last_seen).total_seconds() / 3600
-                if age_hours <= 48:
+                if age_hours <= 24:
                     cleaned[key] = flag
             except:
                 cleaned[key] = flag
