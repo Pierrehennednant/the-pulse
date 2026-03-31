@@ -1,5 +1,7 @@
+import json
+import os
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from transformers import pipeline as hf_pipeline
 from config import TIMEZONE, SENTIMENT_MODEL, THENEWS_API_KEY
@@ -11,7 +13,9 @@ class GeopoliticalPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "geopolitical"
+        self.persistent_file = "./data/persistent_flags.json"
         self.sentiment_analyzer = hf_pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
+        self._ensure_persistent_file()
         self.market_keywords = [
             'federal reserve', 'fomc', 'interest rate', 'rate hike', 'rate cut',
             'powell', 'inflation', 'cpi', 'ppi', 'gdp', 'jobs report', 'nonfarm',
@@ -87,7 +91,101 @@ class GeopoliticalPipeline:
             # Investor commentary
             'warren buffett says', 'buffett says', 'berkshire hathaway', 'charlie munger',
             'sold too soon', 'flags tiny new buy', 'making calls on investments', 'still making calls',
+            'barbie', 'dreamhouse', 'roller-skating', 'dream fest',
+            'warehouse event', 'nightmare warehouse',
         ]
+
+    # ── Persistent flag memory ──────────────────────────────────────────────
+
+    def _ensure_persistent_file(self):
+        if not os.path.exists('./data'):
+            os.makedirs('./data')
+        if not os.path.exists(self.persistent_file):
+            with open(self.persistent_file, 'w') as f:
+                json.dump({}, f)
+
+    def _load_persistent_flags(self):
+        try:
+            with open(self.persistent_file, 'r') as f:
+                return json.load(f)
+        except:
+            return {}
+
+    def _save_persistent_flags(self, flags_dict):
+        try:
+            with open(self.persistent_file, 'w') as f:
+                json.dump(flags_dict, f, indent=2)
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to save persistent flags: {e}", level="WARNING")
+
+    def _merge_into_persistent(self, live_flags):
+        """Merge live flags into persistent storage. Refresh timestamp if seen again."""
+        stored = self._load_persistent_flags()
+        now = datetime.now(pytz.utc).isoformat()
+
+        for flag in live_flags:
+            key = flag['flag_type'] + '_' + flag['title'][:50]
+            if key in stored:
+                # Refresh last seen timestamp
+                stored[key]['last_seen'] = now
+                stored[key]['status'] = 'Developing'
+                stored[key]['title'] = flag['title']
+                stored[key]['context'] = flag['context']
+                stored[key]['link'] = flag['link']
+            else:
+                # New flag — store it
+                stored[key] = {
+                    **flag,
+                    'first_seen': now,
+                    'last_seen': now,
+                }
+
+        self._save_persistent_flags(stored)
+        return stored
+
+    def _get_active_persistent_flags(self, stored):
+        """Return flags with time decay applied. Drop anything older than 48 hours."""
+        now = datetime.now(pytz.utc)
+        active = []
+
+        for key, flag in stored.items():
+            try:
+                last_seen = datetime.fromisoformat(flag['last_seen'])
+                if last_seen.tzinfo is None:
+                    last_seen = pytz.utc.localize(last_seen)
+                age_hours = (now - last_seen).total_seconds() / 3600
+
+                if age_hours > 48:
+                    continue  # Expired — drop it
+                elif age_hours > 24:
+                    flag = {**flag, 'status': 'Monitoring', 'last_seen_label': f'Last seen {int(age_hours)}h ago'}
+                else:
+                    flag = {**flag, 'status': 'Developing', 'last_seen_label': None}
+
+                active.append(flag)
+            except:
+                continue
+
+        active.sort(key=lambda x: x['priority'], reverse=True)
+        return active[:5]
+
+    def _clean_expired_flags(self, stored):
+        """Remove flags older than 48 hours from persistent storage."""
+        now = datetime.now(pytz.utc)
+        cleaned = {}
+        for key, flag in stored.items():
+            try:
+                last_seen = datetime.fromisoformat(flag['last_seen'])
+                if last_seen.tzinfo is None:
+                    last_seen = pytz.utc.localize(last_seen)
+                age_hours = (now - last_seen).total_seconds() / 3600
+                if age_hours <= 48:
+                    cleaned[key] = flag
+            except:
+                cleaned[key] = flag
+        return cleaned
+
+    # ── Existing methods (unchanged) ────────────────────────────────────────
 
     def is_market_relevant(self, text):
         if not text:
@@ -276,21 +374,44 @@ class GeopoliticalPipeline:
 
     def fetch(self):
         try:
+            # Check cache first
             existing = cache.load(self.cache_key)
             age_minutes = cache.get_age_minutes(self.cache_key)
             if existing and age_minutes < 3:
                 pulse_logger.log("↺ Geopolitical — using cache (TheNewsAPI refresh every 3min)")
                 return existing['data']
 
+            # Fetch live news
             items = self.fetch_news()
 
-            if not items and existing:
-                pulse_logger.log(f"↺ Geopolitical — fetch returned empty (API timeout?), keeping last good cache ({age_minutes:.0f}min old)")
-                existing['data']['status'] = 'cached'
-                return existing['data']
+            # Load persistent flags regardless of whether live fetch succeeded
+            stored = self._load_persistent_flags()
 
-            flags = self.identify_flags(items)
-            score = self.calculate_score(items, flags)
+            if not items:
+                # API returned nothing — use persistent flags as fallback
+                pulse_logger.log(f"↺ Geopolitical — live fetch empty, serving persistent flags", level="WARNING")
+                stored = self._clean_expired_flags(stored)
+                self._save_persistent_flags(stored)
+                active_flags = self._get_active_persistent_flags(stored)
+                score = self.calculate_score([], active_flags)
+                result = {
+                    'pillar': 'geopolitical',
+                    'timestamp': datetime.now(self.timezone).isoformat(),
+                    'news_items': [],
+                    'active_flags': active_flags,
+                    'total_items': 0,
+                    'pillar_score': score,
+                    'status': 'persistent'
+                }
+                return result
+
+            # Live fetch succeeded — identify flags and merge into persistent memory
+            live_flags = self.identify_flags(items)
+            stored = self._merge_into_persistent(live_flags)
+            stored = self._clean_expired_flags(stored)
+            self._save_persistent_flags(stored)
+            active_flags = self._get_active_persistent_flags(stored)
+            score = self.calculate_score(items, active_flags)
 
             result = {
                 'pillar': 'geopolitical',
@@ -298,16 +419,34 @@ class GeopoliticalPipeline:
                 'news_items': items[:10],
                 'financial_juice_items': items[:10],
                 'unbiased_network_items': [],
-                'active_flags': flags,
+                'active_flags': active_flags,
                 'total_items': len(items),
                 'pillar_score': score,
                 'status': 'live'
             }
             cache.save(self.cache_key, result)
-            pulse_logger.log(f"✓ Geopolitical updated | {len(flags)} active flags | {len(items)} articles | Score: {score}")
+            pulse_logger.log(f"✓ Geopolitical updated | {len(active_flags)} active flags | {len(items)} articles | Score: {score}")
             return result
+
         except Exception as e:
             error_handler.handle(e, "Geopolitical")
+            # Last resort — serve persistent flags
+            try:
+                stored = self._load_persistent_flags()
+                active_flags = self._get_active_persistent_flags(stored)
+                if active_flags:
+                    pulse_logger.log(f"↺ Geopolitical — exception fallback, serving {len(active_flags)} persistent flags")
+                    return {
+                        'pillar': 'geopolitical',
+                        'timestamp': datetime.now(self.timezone).isoformat(),
+                        'news_items': [],
+                        'active_flags': active_flags,
+                        'total_items': 0,
+                        'pillar_score': self.calculate_score([], active_flags),
+                        'status': 'persistent'
+                    }
+            except:
+                pass
             cached = cache.load(self.cache_key)
             if cached:
                 cached['data']['status'] = 'stale'
