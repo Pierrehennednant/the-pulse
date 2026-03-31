@@ -84,9 +84,9 @@ class GeopoliticalPipeline:
             # Crypto noise
             'bitcoin price today', 'ethereum price', 'crypto rally', 'altcoin',
             'memecoin', 'dogecoin', 'shiba inu', 'nft mint',
-            # Social media/viral
-            'goes viral', 'twitter reacts', 'social media reacts', 'tiktok trend',
-            'reddit thread'
+            # Investor commentary
+            'warren buffett says', 'buffett says', 'berkshire hathaway', 'charlie munger',
+            'sold too soon', 'flags tiny new buy', 'making calls on investments', 'still making calls',
         ]
 
     def is_market_relevant(self, text):
