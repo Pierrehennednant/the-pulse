@@ -1,6 +1,7 @@
 import json
 import os
 import requests
+import concurrent.futures
 from datetime import datetime, timedelta
 import pytz
 import google.generativeai as genai
@@ -16,7 +17,7 @@ class GeopoliticalPipeline:
         self.cache_key = "geopolitical"
         self.persistent_file = "./data/persistent_flags.json"
         genai.configure(api_key=os.environ.get('GEMINI_API_KEY', ''))
-        self.gemini = genai.GenerativeModel('gemini-1.5-flash')
+        self.gemini = genai.GenerativeModel('gemini-2.0-flash')
         self.sentiment_analyzer = hf_pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
         self._ensure_persistent_file()
         self.market_keywords = [
@@ -319,9 +320,9 @@ Articles to classify:
         ]
         items = []
         seen_titles = set()
-        errors = 0
+        errors = []
 
-        for category in categories:
+        def fetch_category(category):
             try:
                 url = (
                     f"https://api.thenewsapi.com/v1/news/top"
@@ -332,12 +333,11 @@ Articles to classify:
                     f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,abcnews.go.com,washingtonpost.com,nytimes.com"
                 )
                 response = requests.get(url, timeout=10)
-                self._parse_articles(response.json(), seen_titles, items)
+                return ('category', category, response.json())
             except Exception as e:
-                errors += 1
-                error_handler.handle(e, f"TheNewsAPI category:{category}")
+                return ('error', f"TheNewsAPI category:{category}", e)
 
-        for query in search_queries:
+        def fetch_search(query):
             try:
                 url = (
                     f"https://api.thenewsapi.com/v1/news/all"
@@ -349,14 +349,31 @@ Articles to classify:
                     f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,washingtonpost.com,nytimes.com"
                 )
                 response = requests.get(url, timeout=10)
-                self._parse_articles(response.json(), seen_titles, items)
+                return ('search', query, response.json())
             except Exception as e:
-                errors += 1
-                error_handler.handle(e, f"TheNewsAPI search:{query[:30]}")
+                return ('error', f"TheNewsAPI search:{query[:30]}", e)
+
+        # Parallel fetch all categories and queries
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            futures = []
+            for category in categories:
+                futures.append(executor.submit(fetch_category, category))
+            for query in search_queries:
+                futures.append(executor.submit(fetch_search, query))
+
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
+                if result[0] == 'error':
+                    errors.append(result[2])
+                    error_handler.handle(result[2], result[1])
+                elif result[0] == 'category':
+                    self._parse_articles(result[2], seen_titles, items)
+                elif result[0] == 'search':
+                    self._parse_articles(result[2], seen_titles, items)
 
         if not items:
-            if errors > 0:
-                error_handler.handle(Exception(f"All {errors} TheNewsAPI requests failed"), "TheNewsAPI Fetcher")
+            if errors:
+                error_handler.handle(Exception(f"All {len(errors)} TheNewsAPI requests failed"), "TheNewsAPI Fetcher")
             return []
 
         # Stage 2 — Gemini relevance classifier
