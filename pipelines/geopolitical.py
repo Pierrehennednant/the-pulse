@@ -4,7 +4,8 @@ import requests
 import concurrent.futures
 from datetime import datetime, timedelta
 import pytz
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from transformers import pipeline as hf_pipeline
 from config import TIMEZONE, SENTIMENT_MODEL, THENEWS_API_KEY
 from utils.cache import cache
@@ -16,8 +17,7 @@ class GeopoliticalPipeline:
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "geopolitical"
         self.persistent_file = "./data/persistent_flags.json"
-        genai.configure(api_key=os.environ.get('GEMINI_API_KEY', ''))
-        self.gemini = genai.GenerativeModel('gemini-2.0-flash')
+        self.gemini_client = genai.Client(api_key=os.environ.get('GEMINI_API_KEY', ''))
         self.sentiment_analyzer = hf_pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
         self._ensure_persistent_file()
         self.market_keywords = [
@@ -231,7 +231,10 @@ Articles to classify:
 {article_list}"""
 
         try:
-            response = self.gemini.generate_content(prompt)
+            response = self.gemini_client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt
+            )
             text = response.text.strip()
             # Strip markdown if present
             if '```' in text:
