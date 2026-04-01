@@ -3,6 +3,7 @@ import os
 import requests
 from datetime import datetime, timedelta
 import pytz
+import google.generativeai as genai
 from transformers import pipeline as hf_pipeline
 from config import TIMEZONE, SENTIMENT_MODEL, THENEWS_API_KEY
 from utils.cache import cache
@@ -14,6 +15,8 @@ class GeopoliticalPipeline:
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "geopolitical"
         self.persistent_file = "./data/persistent_flags.json"
+        genai.configure(api_key=os.environ.get('GEMINI_API_KEY', ''))
+        self.gemini = genai.GenerativeModel('gemini-1.5-flash')
         self.sentiment_analyzer = hf_pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
         self._ensure_persistent_file()
         self.market_keywords = [
@@ -185,6 +188,61 @@ class GeopoliticalPipeline:
                 cleaned[key] = flag
         return cleaned
 
+    # ── Gemini AI Relevance Classifier ─────────────────────────────────────
+
+    def classify_relevance_batch(self, articles):
+        """Use Gemini Flash to classify which articles are genuinely market-moving for NQ/ES futures."""
+        if not articles:
+            return []
+
+        # Build batch input
+        article_list = ""
+        for i, article in enumerate(articles):
+            article_list += f"{i+1}. TITLE: {article['headline']}\n   DESC: {article.get('description', '')[:150]}\n\n"
+
+        prompt = f"""You are a professional NQ and ES futures trader doing pre-market prep. 
+    
+Your job: Review each headline and decide if it represents NEW INFORMATION that would cause you to materially change your directional bias for today's futures session.
+
+PASS if the article is about:
+- Federal Reserve policy, FOMC decisions, Fed official speeches on rates/inflation
+- Geopolitical escalation or de-escalation affecting oil, risk sentiment, or global stability
+- Major economic data surprises (GDP, CPI, jobs, PMI)
+- Systemic financial risk (bank failures, debt crisis, sovereign default)
+- Significant government policy with immediate market impact (tariffs, sanctions, shutdowns)
+- War escalation or ceasefire that moves energy markets
+- Major central bank actions globally
+
+FAIL if the article is about:
+- Opinion, commentary, or analysis of past market moves
+- Newsletter formats, investing tips, or advice columns
+- Personal finance, consumer behavior, retirement savings
+- Corporate earnings unless systemic (single stock, not macro)
+- Celebrity investors commenting on markets (Buffett, Cramer, etc.)
+- Crypto, NFT, or non-equity asset classes unless systemic
+- Human interest stories tangentially related to economy
+- Recaps or summaries of what already happened
+
+Return ONLY a JSON array with no markdown, no explanation, just this exact format:
+[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "reason": "Iran war escalation directly affects oil and risk sentiment"}}, ...]
+
+Articles to classify:
+{article_list}"""
+
+        try:
+            response = self.gemini.generate_content(prompt)
+            text = response.text.strip()
+            # Strip markdown if present
+            if '```' in text:
+                text = text.split('```')[1]
+                if text.startswith('json'):
+                    text = text[4:]
+            results = json.loads(text)
+            return results
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Gemini classifier failed: {e}", level="WARNING")
+            return []
+
     # ── Existing methods (unchanged) ────────────────────────────────────────
 
     def is_market_relevant(self, text):
@@ -296,9 +354,28 @@ class GeopoliticalPipeline:
                 errors += 1
                 error_handler.handle(e, f"TheNewsAPI search:{query[:30]}")
 
-        if errors > 0 and not items:
-            error_handler.handle(Exception(f"All {errors} TheNewsAPI requests failed"), "TheNewsAPI Fetcher")
-        return items
+        if not items:
+            if errors > 0:
+                error_handler.handle(Exception(f"All {errors} TheNewsAPI requests failed"), "TheNewsAPI Fetcher")
+            return []
+
+        # Stage 2 — Gemini relevance classifier
+        pulse_logger.log(f"🤖 Gemini classifying {len(items)} articles for market relevance...")
+        classifications = self.classify_relevance_batch(items)
+
+        if classifications:
+            relevant_ids = {
+                r['id'] - 1
+                for r in classifications
+                if r.get('relevant') and r.get('confidence', 0) >= 0.75
+            }
+            filtered_items = [items[i] for i in relevant_ids if i < len(items)]
+            pulse_logger.log(f"✅ Gemini kept {len(filtered_items)} of {len(items)} articles as market-relevant")
+            return filtered_items
+        else:
+            # Gemini failed — fall back to keyword filter
+            pulse_logger.log("⚠️ Gemini unavailable — falling back to keyword filter", level="WARNING")
+            return [item for item in items if self.is_market_relevant(item['headline'])]
 
     def identify_flags(self, items):
         flags = []
