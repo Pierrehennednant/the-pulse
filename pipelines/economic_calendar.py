@@ -124,7 +124,14 @@ class EconomicCalendarPipeline:
         count = 0
         impact_map = {'bullish': 1, 'bearish': -1, 'neutral': 0}
         for event in events:
-            if event.get('result') in ['beat', 'miss', 'inline', 'improved', 'declined', 'unchanged']:
+            # Skip pending and unknown
+            if event.get('result') in ['pending', 'unknown', 'speech']:
+                continue
+            # Skip neutral speech — no new info, nothing changed
+            if event.get('is_speech') and event.get('market_impact') == 'neutral':
+                continue
+            # Only count speech if it has a directional tag
+            if event.get('result') in ['beat', 'miss', 'inline', 'improved', 'declined', 'unchanged', 'bearish', 'bullish']:
                 if event.get('market_impact') in impact_map:
                     score += impact_map[event['market_impact']]
                     count += 1
