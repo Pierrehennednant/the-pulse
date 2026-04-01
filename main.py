@@ -43,29 +43,37 @@ def run_pulse():
         pulse_logger.log(f"⚠️ Institutional failed: {e}", level="WARNING")
         inst_data = {}
 
-    # Geopolitical with hard 15s thread timeout
+    # Geopolitical with hard 20s thread timeout
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(geopolitical_pipeline.fetch)
-            geo_data = future.result(timeout=60)
+            geo_data = future.result(timeout=20)
     except concurrent.futures.TimeoutError:
-        pulse_logger.log("⚠️ Geopolitical timed out after 60s — using cache", level="WARNING")
-        geo_data = {}
+        pulse_logger.log("⚠️ Geopolitical timed out after 20s — using cache", level="WARNING")
+        from utils.cache import cache as _cache
+        cached = _cache.load("geopolitical")
+        geo_data = cached['data'] if cached else {}
     except Exception as e:
         pulse_logger.log(f"⚠️ Geopolitical failed: {e}", level="WARNING")
-        geo_data = {}
+        from utils.cache import cache as _cache
+        cached = _cache.load("geopolitical")
+        geo_data = cached['data'] if cached else {}
 
-    # News sentiment with hard 15s thread timeout
+    # News sentiment with hard 20s thread timeout
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(news_sentiment_pipeline.fetch, geo_data)
-            news_data = future.result(timeout=60)
+            news_data = future.result(timeout=20)
     except concurrent.futures.TimeoutError:
-        pulse_logger.log("⚠️ News sentiment timed out after 60s — using cache", level="WARNING")
-        news_data = {}
+        pulse_logger.log("⚠️ News timed out after 20s — using cache", level="WARNING")
+        from utils.cache import cache as _cache
+        cached = _cache.load("news_sentiment")
+        news_data = cached['data'] if cached else {}
     except Exception as e:
         pulse_logger.log(f"⚠️ News failed: {e}", level="WARNING")
-        news_data = {}
+        from utils.cache import cache as _cache
+        cached = _cache.load("news_sentiment")
+        news_data = cached['data'] if cached else {}
 
     try:
         formatted_data = data_formatter.standardize({

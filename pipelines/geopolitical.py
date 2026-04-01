@@ -313,6 +313,7 @@ Articles to classify:
             })
 
     def fetch_news(self):
+        import threading
         categories = ['business', 'politics', 'tech']
         search_queries = [
             'federal reserve OR FOMC OR interest rate OR inflation',
@@ -349,11 +350,10 @@ Articles to classify:
 
         items = []
         seen_titles = set()
-        seen_lock = __import__('threading').Lock()
+        seen_lock = threading.Lock()
 
         def safe_parse(data):
             local_items = []
-            local_seen = set()
             for article in data.get('data', []):
                 title = article.get('title', '')
                 if not title:
@@ -362,19 +362,31 @@ Articles to classify:
                 full_check_text = f"{title} {description}"
                 if not self.is_market_relevant(full_check_text):
                     continue
+                published = article.get('published_at', '')
+                try:
+                    dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
+                    est = dt.astimezone(pytz.timezone(TIMEZONE))
+                    timestamp = est.strftime('%b %d, %I:%M %p EST')
+                    date = est.strftime('%Y-%m-%d')
+                    age_days = (datetime.now(pytz.UTC) - dt).days
+                    if age_days > 7:
+                        continue
+                except:
+                    timestamp = published
+                    date = datetime.now(self.timezone).strftime('%Y-%m-%d')
                 local_items.append({
                     'headline': title,
                     'description': ' '.join(description[:300].split()),
                     'source': article.get('source', 'TheNewsAPI'),
+                    'timestamp': timestamp,
+                    'date': date,
                     'link': article.get('url', ''),
-                    'published_at': article.get('published_at', ''),
                     'sentiment_score': self.get_sentiment_score(f"{title} {description}"),
                     'market_relevant': True
                 })
             return local_items
 
-        # Run all 8 API calls in parallel
-        all_futures = []
+        # Run all API calls in parallel — max 12s total
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
             cat_futures = [executor.submit(fetch_category, cat) for cat in categories]
             qry_futures = [executor.submit(fetch_query, q) for q in search_queries]
@@ -388,20 +400,7 @@ Articles to classify:
                         for item in batch:
                             if item['headline'] not in seen_titles:
                                 seen_titles.add(item['headline'])
-                                # Add timestamp fields
-                                published = item.get('published_at', '')
-                                try:
-                                    dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
-                                    est = dt.astimezone(pytz.timezone(TIMEZONE))
-                                    item['timestamp'] = est.strftime('%b %d, %I:%M %p EST')
-                                    item['date'] = est.strftime('%Y-%m-%d')
-                                    age_days = (datetime.now(pytz.UTC) - dt).days
-                                    if age_days <= 7:
-                                        items.append(item)
-                                except:
-                                    item['timestamp'] = published
-                                    item['date'] = datetime.now(self.timezone).strftime('%Y-%m-%d')
-                                    items.append(item)
+                                items.append(item)
                 except Exception as e:
                     pulse_logger.log(f"⚠️ Parallel fetch failed: {e}", level="WARNING")
 
@@ -409,22 +408,62 @@ Articles to classify:
             pulse_logger.log("⚠️ All parallel fetches returned empty", level="WARNING")
             return []
 
-        # Stage 2 — Gemini relevance classifier
-        pulse_logger.log(f"🤖 Gemini classifying {len(items)} articles for market relevance...")
-        classifications = self.classify_relevance_batch(items)
+        # Load Gemini classification cache
+        gemini_cache_file = "./data/gemini_classifications.json"
+        try:
+            if os.path.exists(gemini_cache_file):
+                with open(gemini_cache_file, 'r') as f:
+                    gemini_cache = json.load(f)
+            else:
+                gemini_cache = {}
+        except:
+            gemini_cache = {}
 
-        if classifications:
-            relevant_ids = {
-                r['id'] - 1
-                for r in classifications
-                if r.get('relevant') and r.get('confidence', 0) >= 0.75
-            }
-            filtered_items = [items[i] for i in relevant_ids if i < len(items)]
-            pulse_logger.log(f"✅ Gemini kept {len(filtered_items)} of {len(items)} articles as market-relevant")
-            return filtered_items
-        else:
-            pulse_logger.log("⚠️ Gemini unavailable — falling back to keyword filter", level="WARNING")
-            return [item for item in items if self.is_market_relevant(item['headline'])]
+        # Split into already classified vs new
+        new_items = [i for i in items if i['headline'] not in gemini_cache]
+        known_relevant = [
+            i for i in items
+            if gemini_cache.get(i['headline'], {}).get('relevant')
+            and gemini_cache.get(i['headline'], {}).get('confidence', 0) >= 0.75
+        ]
+
+        # Articles not yet classified — use keyword filter as temporary pass
+        keyword_passed = [
+            i for i in new_items
+            if self.is_market_relevant(i['headline'])
+        ]
+
+        # Return immediately — known relevant + keyword-passed new articles
+        immediately_available = known_relevant + keyword_passed
+        pulse_logger.log(f"⚡ Returning {len(immediately_available)} articles instantly ({len(known_relevant)} Gemini-verified, {len(keyword_passed)} keyword-passed)")
+
+        # Run Gemini on new items in background
+        if new_items:
+            def background_classify():
+                try:
+                    pulse_logger.log(f"🤖 Gemini background classifying {len(new_items)} new articles...")
+                    classifications = self.classify_relevance_batch(new_items)
+                    if classifications:
+                        for r in classifications:
+                            idx = r['id'] - 1
+                            if idx < len(new_items):
+                                gemini_cache[new_items[idx]['headline']] = {
+                                    'relevant': r.get('relevant', False),
+                                    'confidence': r.get('confidence', 0),
+                                    'category': r.get('category', ''),
+                                    'reason': r.get('reason', ''),
+                                    'classified_at': datetime.now().isoformat()
+                                }
+                        with open(gemini_cache_file, 'w') as f:
+                            json.dump(gemini_cache, f, indent=2)
+                        pulse_logger.log(f"✅ Gemini background done — {len(classifications)} articles classified and cached")
+                except Exception as e:
+                    pulse_logger.log(f"⚠️ Background Gemini failed: {e}", level="WARNING")
+
+            bg_thread = threading.Thread(target=background_classify, daemon=True)
+            bg_thread.start()
+
+        return immediately_available
 
     def identify_flags(self, items):
         flags = []
