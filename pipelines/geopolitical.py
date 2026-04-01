@@ -318,62 +318,92 @@ Articles to classify:
             'government shutdown OR debt ceiling OR congress',
             'recession OR GDP OR unemployment OR jobs'
         ]
-        items = []
-        seen_titles = set()
-        errors = []
 
         def fetch_category(category):
-            try:
-                url = (
-                    f"https://api.thenewsapi.com/v1/news/top"
-                    f"?api_token={THENEWS_API_KEY}"
-                    f"&language=en"
-                    f"&categories={category}"
-                    f"&limit=25"
-                    f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,abcnews.go.com,washingtonpost.com,nytimes.com"
-                )
-                response = requests.get(url, timeout=10)
-                return ('category', category, response.json())
-            except Exception as e:
-                return ('error', f"TheNewsAPI category:{category}", e)
+            url = (
+                f"https://api.thenewsapi.com/v1/news/top"
+                f"?api_token={THENEWS_API_KEY}"
+                f"&language=en"
+                f"&categories={category}"
+                f"&limit=25"
+                f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,abcnews.go.com,washingtonpost.com,nytimes.com"
+            )
+            response = requests.get(url, timeout=10)
+            return response.json()
 
-        def fetch_search(query):
-            try:
-                url = (
-                    f"https://api.thenewsapi.com/v1/news/all"
-                    f"?api_token={THENEWS_API_KEY}"
-                    f"&language=en"
-                    f"&search={requests.utils.quote(query)}"
-                    f"&sort=published_at"
-                    f"&limit=25"
-                    f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,washingtonpost.com,nytimes.com"
-                )
-                response = requests.get(url, timeout=10)
-                return ('search', query, response.json())
-            except Exception as e:
-                return ('error', f"TheNewsAPI search:{query[:30]}", e)
+        def fetch_query(query):
+            url = (
+                f"https://api.thenewsapi.com/v1/news/all"
+                f"?api_token={THENEWS_API_KEY}"
+                f"&language=en"
+                f"&search={requests.utils.quote(query)}"
+                f"&sort=published_at"
+                f"&limit=25"
+                f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,washingtonpost.com,nytimes.com"
+            )
+            response = requests.get(url, timeout=10)
+            return response.json()
 
-        # Parallel fetch all categories and queries
+        items = []
+        seen_titles = set()
+        seen_lock = __import__('threading').Lock()
+
+        def safe_parse(data):
+            local_items = []
+            local_seen = set()
+            for article in data.get('data', []):
+                title = article.get('title', '')
+                if not title:
+                    continue
+                description = article.get('description', '') or ''
+                full_check_text = f"{title} {description}"
+                if not self.is_market_relevant(full_check_text):
+                    continue
+                local_items.append({
+                    'headline': title,
+                    'description': ' '.join(description[:300].split()),
+                    'source': article.get('source', 'TheNewsAPI'),
+                    'link': article.get('url', ''),
+                    'published_at': article.get('published_at', ''),
+                    'sentiment_score': self.get_sentiment_score(f"{title} {description}"),
+                    'market_relevant': True
+                })
+            return local_items
+
+        # Run all 8 API calls in parallel
+        all_futures = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-            futures = []
-            for category in categories:
-                futures.append(executor.submit(fetch_category, category))
-            for query in search_queries:
-                futures.append(executor.submit(fetch_search, query))
+            cat_futures = [executor.submit(fetch_category, cat) for cat in categories]
+            qry_futures = [executor.submit(fetch_query, q) for q in search_queries]
+            all_futures = cat_futures + qry_futures
 
-            for future in concurrent.futures.as_completed(futures):
-                result = future.result()
-                if result[0] == 'error':
-                    errors.append(result[2])
-                    error_handler.handle(result[2], result[1])
-                elif result[0] == 'category':
-                    self._parse_articles(result[2], seen_titles, items)
-                elif result[0] == 'search':
-                    self._parse_articles(result[2], seen_titles, items)
+            for future in concurrent.futures.as_completed(all_futures, timeout=12):
+                try:
+                    data = future.result()
+                    batch = safe_parse(data)
+                    with seen_lock:
+                        for item in batch:
+                            if item['headline'] not in seen_titles:
+                                seen_titles.add(item['headline'])
+                                # Add timestamp fields
+                                published = item.get('published_at', '')
+                                try:
+                                    dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
+                                    est = dt.astimezone(pytz.timezone(TIMEZONE))
+                                    item['timestamp'] = est.strftime('%b %d, %I:%M %p EST')
+                                    item['date'] = est.strftime('%Y-%m-%d')
+                                    age_days = (datetime.now(pytz.UTC) - dt).days
+                                    if age_days <= 7:
+                                        items.append(item)
+                                except:
+                                    item['timestamp'] = published
+                                    item['date'] = datetime.now(self.timezone).strftime('%Y-%m-%d')
+                                    items.append(item)
+                except Exception as e:
+                    pulse_logger.log(f"⚠️ Parallel fetch failed: {e}", level="WARNING")
 
         if not items:
-            if errors:
-                error_handler.handle(Exception(f"All {len(errors)} TheNewsAPI requests failed"), "TheNewsAPI Fetcher")
+            pulse_logger.log("⚠️ All parallel fetches returned empty", level="WARNING")
             return []
 
         # Stage 2 — Gemini relevance classifier
@@ -390,7 +420,6 @@ Articles to classify:
             pulse_logger.log(f"✅ Gemini kept {len(filtered_items)} of {len(items)} articles as market-relevant")
             return filtered_items
         else:
-            # Gemini failed — fall back to keyword filter
             pulse_logger.log("⚠️ Gemini unavailable — falling back to keyword filter", level="WARNING")
             return [item for item in items if self.is_market_relevant(item['headline'])]
 
