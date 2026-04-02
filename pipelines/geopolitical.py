@@ -243,7 +243,17 @@ FAIL if the article is about:
 - Recaps or summaries of what already happened
 
 Return ONLY a JSON array with no markdown, no explanation, just this exact format:
-[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "reason": "Iran war escalation directly affects oil and risk sentiment"}}, ...]
+[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Iran war driving oil prices higher, bearish for equities"}}, ...]
+
+For "direction" use only: "bearish", "bullish", or "neutral"
+Direction must reflect impact on NQ/ES equity futures specifically:
+- Higher oil/energy costs = bearish for equities
+- Ceasefire/peace = bullish for equities  
+- Fed hawkish = bearish for equities
+- Fed dovish = bullish for equities
+- War escalation = bearish for equities
+- Strong economic data = bullish for equities
+- Weak economic data = bearish for equities
 
 Articles to classify:
 {article_list}"""
@@ -439,11 +449,16 @@ Articles to classify:
 
         # Split into already classified vs new
         new_items = [i for i in items if i['headline'] not in gemini_cache]
-        known_relevant = [
-            i for i in items
-            if gemini_cache.get(i['headline'], {}).get('relevant')
-            and gemini_cache.get(i['headline'], {}).get('confidence', 0) >= 0.75
-        ]
+        known_relevant = []
+        for i in items:
+            cached = gemini_cache.get(i['headline'], {})
+            if cached.get('relevant') and cached.get('confidence', 0) >= 0.75:
+                # Apply Gemini's direction if available, otherwise keep DistilBERT score
+                if cached.get('direction'):
+                    direction = cached['direction']
+                    i['sentiment_score'] = 0.8 if direction == 'bullish' else -0.8 if direction == 'bearish' else 0.0
+                    i['gemini_direction'] = direction
+                known_relevant.append(i)
 
         # Articles not yet classified — use keyword filter as temporary pass
         keyword_passed = [
@@ -469,6 +484,7 @@ Articles to classify:
                                     'relevant': r.get('relevant', False),
                                     'confidence': r.get('confidence', 0),
                                     'category': r.get('category', ''),
+                                    'direction': r.get('direction', None),
                                     'reason': r.get('reason', ''),
                                     'classified_at': datetime.now().isoformat()
                                 }
