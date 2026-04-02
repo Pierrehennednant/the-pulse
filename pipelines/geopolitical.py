@@ -115,6 +115,12 @@ class GeopoliticalPipeline:
             'corporate turnaround', 'store closures',
             'layoffs at', 'hiring freeze', 'return to office',
             'work from home policy', 'corporate restructuring',
+            # Market navigation/advice disguised as news
+            'how to navigate', 'how to invest during',
+            'what investors should do', 'navigating the confusion',
+            'navigating uncertainty', 'how to protect',
+            'investor playbook', 'what to do now',
+            'mood of the stock market',
         ]
 
     # ── Persistent flag memory ──────────────────────────────────────────────
