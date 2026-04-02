@@ -97,6 +97,17 @@ class GeopoliticalPipeline:
             'sold too soon', 'flags tiny new buy', 'making calls on investments', 'still making calls',
             'barbie', 'dreamhouse', 'roller-skating', 'dream fest',
             'warehouse event', 'nightmare warehouse',
+            # Political commentary without market impact
+            'senator slams', 'sen. warren', 'warren slams',
+            'slams trump', 'slams administration',
+            'pressuring eu', 'tech regulations',
+            'relaxing regulations', 'eu regulations',
+            'congress slams', 'lawmaker slams',
+            'representative slams', 'politician slams',
+            # General political noise
+            'pressuring allies', 'diplomatic spat',
+            'strongly condemns', 'harshly criticizes',
+            'blasts white house', 'attacks policy',
         ]
 
     # ── Persistent flag memory ──────────────────────────────────────────────
