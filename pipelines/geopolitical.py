@@ -225,41 +225,41 @@ class GeopoliticalPipeline:
         for i, article in enumerate(articles):
             article_list += f"{i+1}. TITLE: {article['headline']}\n   DESC: {article.get('description', '')[:150]}\n\n"
 
-        prompt = f"""You are a professional NQ and ES futures trader doing pre-market prep. 
-    
-Your job: Review each headline and decide if it represents NEW INFORMATION that would cause you to materially change your directional bias for today's futures session.
+        prompt = f"""You are assisting a professional NQ and ES futures day trader with pre-market preparation.
 
-PASS if the article is about:
-- Federal Reserve policy, FOMC decisions, Fed official speeches on rates/inflation
-- Geopolitical escalation or de-escalation affecting oil, risk sentiment, or global stability
-- Major economic data surprises (GDP, CPI, jobs, PMI)
-- Systemic financial risk (bank failures, debt crisis, sovereign default)
-- Significant government policy with immediate market impact (tariffs, sanctions, shutdowns)
-- War escalation or ceasefire that moves energy markets
-- Major central bank actions globally
+Your job is to read each headline and description, then make two decisions:
 
-FAIL if the article is about:
-- Opinion, commentary, or analysis of past market moves
-- Newsletter formats, investing tips, or advice columns
-- Personal finance, consumer behavior, retirement savings
-- Corporate earnings unless systemic (single stock, not macro)
-- Celebrity investors commenting on markets (Buffett, Cramer, etc.)
-- Crypto, NFT, or non-equity asset classes unless systemic
-- Human interest stories tangentially related to economy
-- Recaps or summaries of what already happened
+DECISION 1 — RELEVANCE
+Is this genuinely new, market-moving information that would cause a futures trader to reconsider their directional bias for today's session? 
 
-Return ONLY a JSON array with no markdown, no explanation, just this exact format:
-[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Iran war driving oil prices higher, bearish for equities"}}, ...]
+Think like a trader sitting down at 8AM asking: "Does this change anything about how I trade today?"
 
-For "direction" use only: "bearish", "bullish", or "neutral"
-Direction must reflect impact on NQ/ES equity futures specifically:
-- Higher oil/energy costs = bearish for equities
-- Ceasefire/peace = bullish for equities  
-- Fed hawkish = bearish for equities
-- Fed dovish = bullish for equities
-- War escalation = bearish for equities
-- Strong economic data = bullish for equities
-- Weak economic data = bearish for equities
+Pass if it involves: Federal Reserve policy or official commentary, geopolitical escalation or resolution affecting global risk sentiment, major economic data surprises, energy market shocks, trade policy changes with immediate impact, systemic financial risk, or significant government actions with direct market consequences.
+
+Fail if it involves: opinion or commentary on past market moves, investment advice or tips, personal finance stories, single company news unless systemically important, celebrity investor quotes, lifestyle or consumer behavior stories, newsletter recap formats, or anything that describes what already happened rather than new information.
+
+DECISION 2 — MARKET DIRECTION
+If relevant, what is the directional impact on NQ and ES equity futures specifically?
+
+Think like this: You are a trader. You just read this headline. Do you lean long or short on NQ right now?
+
+Consider the full chain of consequences:
+- War escalating → oil up → inflation up → Fed stays hawkish → equities down → BEARISH
+- Ceasefire → oil down → inflation eases → Fed pivots → equities up → BULLISH  
+- Company adding surcharges due to war → costs rise → margins compress → BEARISH
+- Gas prices hitting new highs → consumer spending squeezed → BEARISH
+- Strong jobs data → Fed stays hawkish → rates stay high → BEARISH for growth stocks
+- Weak jobs data → Fed cuts sooner → BULLISH for equities
+- Trump hawkish on trade → tariffs → supply chain costs → BEARISH
+- Trump ceasefire deal → geopolitical risk off → BULLISH
+
+Do not look at whether the headline sounds positive or negative in tone. Look at the downstream consequence for equity futures. A company "soaring" in surcharges is bearish. Markets "recovering on hopes" is bullish. Always think: what does this mean for the trader holding NQ right now?
+
+Return ONLY a JSON array with no markdown, no explanation, no preamble. Exactly this format:
+[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Amazon surcharge signals cost-push inflation and margin compression — bearish for equities"}}, ...]
+
+Use only "bearish", "bullish", or "neutral" for direction.
+Use confidence between 0.0 and 1.0.
 
 Articles to classify:
 {article_list}"""
