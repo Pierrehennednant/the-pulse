@@ -108,6 +108,13 @@ class GeopoliticalPipeline:
             'pressuring allies', 'diplomatic spat',
             'strongly condemns', 'harshly criticizes',
             'blasts white house', 'attacks policy',
+            # Single company labor/HR news
+            'award bonuses', 'bonuses to baristas', 'expand tipping',
+            'turnaround efforts', 'employee experience',
+            'customer experience', 'barista', 'tipping policy',
+            'corporate turnaround', 'store closures',
+            'layoffs at', 'hiring freeze', 'return to office',
+            'work from home policy', 'corporate restructuring',
         ]
 
     # ── Persistent flag memory ──────────────────────────────────────────────
