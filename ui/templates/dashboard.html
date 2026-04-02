@@ -548,7 +548,11 @@
         const biasLabel = document.getElementById('bias-label');
         biasLabel.textContent = `${bias.bias_emoji || ''} ${bias.bias || 'Neutral'}`;
         biasLabel.className = `gauge-label ${(bias.bias || 'neutral').toLowerCase()}`;
-        document.getElementById('confidence-text').textContent = `${bias.active_pillars || 0} of 5 pillars agree — ${bias.confidence || 0}% confidence`;
+        const signals = bias.pillar_signals || [];
+        const bullCount = signals.filter(s => s === 'bullish').length;
+        const bearCount = signals.filter(s => s === 'bearish').length;
+        const neutCount = signals.filter(s => s === 'neutral').length;
+        document.getElementById('confidence-text').textContent = `🟢 ${bullCount} · 🔴 ${bearCount} · 🟡 ${neutCount} — ${bias.confidence || 0}% confidence`;
 
         // Trading directive
         const directive = document.getElementById('trading-directive');
