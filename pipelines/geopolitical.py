@@ -238,6 +238,32 @@ Pass if it involves: Federal Reserve policy or official commentary, geopolitical
 
 Fail if it involves: opinion or commentary on past market moves, investment advice or tips, personal finance stories, single company news unless systemically important, celebrity investor quotes, lifestyle or consumer behavior stories, newsletter recap formats, or anything that describes what already happened rather than new information.
 
+Before passing any article, run it through these six filters. If it fails any one of them, reject it:
+
+FILTER 1 — SOURCE VS ECHO
+Is this the event itself or a reaction to an event that already happened? Source events are new — the market hasn't priced them in yet. Echo events are corporate, institutional, or personal reactions to known macro situations. Ask: "Is this the cause or the effect?" If it's the effect — fail it. 
+Examples: "Iran attacks oil tanker" = source, pass. "Amazon adds surcharge due to Iran war" = echo of a known event, fail. "Fed raises rates" = source, pass. "Airlines raise prices due to Fed hike" = echo, fail. Corporate adaptation to a known macro event is always an echo — never pass it regardless of how macro the language sounds.
+
+FILTER 2 — RECENCY TEST
+Is this reporting something happening RIGHT NOW or recapping something that already happened? Recaps, week-in-review pieces, "after X weeks of..." articles, and historical context pieces are not new information. The market already knows. Fail anything that describes past events rather than breaking developments.
+Examples: "All Eyes on Wall St. After 5 Weeks of Losses" = recap, fail. "Iran war enters fifth week" = recap, fail. "Trump announces new tariffs today" = breaking, pass.
+
+FILTER 3 — SPECIFICITY TEST
+Is this about a specific actionable event or a general mood/sentiment piece? Vibe articles, market psychology pieces, and "how to navigate" content are not tradeable information. A trader needs facts, not feelings.
+Examples: "The mood of the stock market is changing" = vibe, fail. "How to navigate the confusion" = advice, fail. "Fed Chair signals rate pause" = specific event, pass.
+
+FILTER 4 — ACTOR TEST
+Is the person or organization in this headline someone who directly moves markets through their decisions? Federal Reserve officials, heads of state, treasury secretaries, central bank chiefs, and major geopolitical actors = yes. State governors, backbench senators, corporate executives reacting to macro events, NASA, local officials = no, unless their specific action is systemically important to financial markets.
+Examples: "Fed's Powell signals dovish shift" = market-moving actor, pass. "Maryland Governor warns of forever war" = state-level actor, fail. "Treasury Secretary Bessent announces new policy" = market-moving actor, pass.
+
+FILTER 5 — MARKET DOMAIN TEST
+Does this article exist within the domain of financial markets, geopolitics affecting markets, energy, trade, or monetary policy? Articles about space missions, scientific discoveries, social policy, healthcare unless market-moving, and non-financial government activity should be rejected even if they use financial language.
+Examples: "Artemis II gets OK to fly to the moon" = wrong domain, fail. "NASA budget cut affects defense contractors" = market domain, pass. "Trump signs healthcare bill" = depends on market impact, evaluate carefully.
+
+FILTER 6 — CONFIRMATION TRAP TEST
+Is this article just confirming something the market already knows and has already priced in? If the macro situation is already established and this is just another data point piling on — it adds no new directional information. Fail it.
+Examples: Iran war is already flagged as bearish → "Another company raises prices due to Iran war" = confirmation of known narrative, fail. Fed is already known hawkish → "Analyst says Fed will stay hawkish" = confirmation, fail. New ceasefire talks announced → "Markets react to ceasefire hopes" = new development, pass.
+
 DECISION 2 — MARKET DIRECTION
 If relevant, what is the directional impact on NQ and ES equity futures specifically?
 
