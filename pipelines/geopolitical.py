@@ -16,7 +16,7 @@ class GeopoliticalPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "geopolitical"
-        self.persistent_file = "./data/persistent_flags.json"
+        self.persistent_file = "/data/persistent_flags.json"
         self.gemini_client = genai.Client(api_key=os.environ.get('GEMINI_API_KEY', ''))
         self.sentiment_analyzer = hf_pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
         self._ensure_persistent_file()
@@ -443,7 +443,7 @@ Articles to classify:
             return []
 
         # Load Gemini classification cache
-        gemini_cache_file = "./data/gemini_classifications.json"
+        gemini_cache_file = "/data/gemini_classifications.json"
         try:
             if os.path.exists(gemini_cache_file):
                 with open(gemini_cache_file, 'r') as f:
