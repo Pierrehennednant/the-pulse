@@ -119,6 +119,10 @@ class GeopoliticalPipeline:
             'navigating uncertainty', 'how to protect',
             'investor playbook', 'what to do now',
             'mood of the stock market',
+            # Corporate surcharge and price reaction (echo events)
+            'fuel surcharge', 'logistics surcharge', 'adds surcharge',
+            'adding surcharge', 'energy surcharge', 'war surcharge',
+            'raises prices due', 'higher prices due to',
         ]
 
     # ── Gemini AI Relevance Classifier ─────────────────────────────────────
