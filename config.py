@@ -49,5 +49,5 @@ COT_UPDATE_DAY = "Friday"
 SENTIMENT_MODEL = "distilbert-base-uncased-finetuned-sst-2-english"
 
 # Cache Settings
-CACHE_DIR = "./data"
-COT_CACHE_FILE = "./data/weekly_cot.json"
+CACHE_DIR = "/data"
+COT_CACHE_FILE = "/data/weekly_cot.json"

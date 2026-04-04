@@ -8,7 +8,7 @@ from utils.logger import pulse_logger
 from utils.cache import cache
 
 class SnapshotGenerator:
-    def __init__(self, snapshot_dir="./data/snapshots"):
+    def __init__(self, snapshot_dir="/data/snapshots"):
         self.snapshot_dir = snapshot_dir
         self.timezone = pytz.timezone(TIMEZONE)
         self._ensure_exists()
@@ -25,7 +25,7 @@ class SnapshotGenerator:
         snapshot_id = self.generate_id(timestamp)
         weekly = None
         try:
-            with open('./data/permanent_weekly_summary.json', 'r') as f:
+            with open('/data/permanent_weekly_summary.json', 'r') as f:
                 weekly = json.load(f)
         except:
             pass

@@ -84,11 +84,11 @@ def reset_manual_input():
         event_title = data.get('event_title')
         if not event_title:
             return jsonify({'error': 'Missing event_title'}), 400
-        with open('./data/permanent_manual_inputs.json', 'r') as f:
+        with open('/data/permanent_manual_inputs.json', 'r') as f:
             inputs = json.load(f)
         if event_title in inputs:
             del inputs[event_title]
-            with open('./data/permanent_manual_inputs.json', 'w') as f:
+            with open('/data/permanent_manual_inputs.json', 'w') as f:
                 json.dump(inputs, f, indent=2)
         return jsonify({'status': 'reset', 'event': event_title})
     except Exception as e:
