@@ -20,9 +20,17 @@ class EconomicCalendarPipeline:
         if event.get('country', '').upper() != 'USD':
             return False
         impact = event.get('impact', '').lower()
-        if impact not in ['high', 'medium']:
-            return False
-        return True
+        if impact == 'high':
+            return True
+        if impact == 'medium':
+            # Only keep medium impact if it's a speech event
+            title = event.get('title', '').lower()
+            speech_keywords = [
+                'speaks', 'speech', 'press conference', 'testimony',
+                'statement', 'remarks', 'interview', 'appearance'
+            ]
+            return any(keyword in title for keyword in speech_keywords)
+        return False
 
     def convert_to_est(self, date_str):
         try:
