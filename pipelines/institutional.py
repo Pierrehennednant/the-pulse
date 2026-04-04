@@ -11,7 +11,7 @@ from utils.error_handler import error_handler
 class InstitutionalPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
-        self.permanent_file = "./data/permanent_cot.json"
+        self.permanent_file = "/data/permanent_cot.json"
         self.cot_url = "https://www.cftc.gov/dea/futures/financial_lf.htm"
         self.headers = {'User-Agent': 'Mozilla/5.0'}
         self._ensure_exists()

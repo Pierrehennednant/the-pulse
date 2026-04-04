@@ -13,13 +13,13 @@ class ManualInputPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "manual_inputs"
-        self.permanent_file = "./data/permanent_manual_inputs.json"
+        self.permanent_file = "/data/permanent_manual_inputs.json"
         self.headers = {'User-Agent': 'Mozilla/5.0'}
         self._ensure_exists()
 
     def _ensure_exists(self):
-        if not os.path.exists('./data'):
-            os.makedirs('./data')
+        if not os.path.exists('/data'):
+            os.makedirs('/data')
         if not os.path.exists(self.permanent_file):
             with open(self.permanent_file, 'w') as f:
                 json.dump({}, f)

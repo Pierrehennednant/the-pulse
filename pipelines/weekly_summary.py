@@ -9,7 +9,7 @@ from utils.error_handler import error_handler
 class WeeklySummaryPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
-        self.permanent_file = "./data/permanent_weekly_summary.json"
+        self.permanent_file = "/data/permanent_weekly_summary.json"
         self._ensure_exists()
 
     def _ensure_exists(self):
