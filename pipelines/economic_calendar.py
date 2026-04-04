@@ -77,7 +77,17 @@ class EconomicCalendarPipeline:
         return f'{title} not yet released'
 
     def get_revised_values(self, title):
-        """Manual corrections for Forex Factory revised previous/expected values."""
+        """Manual corrections for Forex Factory revised previous/expected values.
+        Clear this dict every Monday for the new week."""
+        from datetime import datetime
+        import pytz
+        now = datetime.now(pytz.timezone(self.timezone.zone))
+        # Only apply revisions during the week they were made (Mar 30 - Apr 4, 2026)
+        week_start = datetime(2026, 3, 30, tzinfo=pytz.timezone(self.timezone.zone) if hasattr(pytz.timezone(self.timezone.zone), 'localize') else pytz.utc)
+        week_end = datetime(2026, 4, 4, tzinfo=pytz.utc)
+        now_utc = datetime.now(pytz.utc)
+        if now_utc > week_end:
+            return {}
         revisions = {
             'ADP Non-Farm Employment Change': {'previous': '66K'},
             'Retail Sales m/m': {'previous': '-0.1%'},
