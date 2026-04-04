@@ -76,6 +76,15 @@ class EconomicCalendarPipeline:
     def get_forward_guidance(self, title):
         return f'{title} not yet released'
 
+    def get_revised_values(self, title):
+        """Manual corrections for Forex Factory revised previous/expected values."""
+        revisions = {
+            'ADP Non-Farm Employment Change': {'previous': '66K'},
+            'Retail Sales m/m': {'previous': '-0.1%'},
+            'Unemployment Claims': {'previous': '211K'},
+        }
+        return revisions.get(title, {})
+
     def is_speech_event(self, title):
         speech_keywords = [
             'speaks', 'speech', 'press conference', 'testimony',
@@ -205,6 +214,11 @@ class EconomicCalendarPipeline:
                     'market_impact': 'unknown',
                     'reason': self.get_forward_guidance(title)
                 }
+                revisions = self.get_revised_values(event_row['title'])
+                if revisions.get('previous'):
+                    event_row['previous'] = revisions['previous']
+                if revisions.get('forecast'):
+                    event_row['forecast'] = revisions['forecast']
                 if self.is_speech_event(event_row['title']):
                     event_row['is_speech'] = True
                     event_row['result'] = 'speech'
