@@ -131,7 +131,7 @@ class GeopoliticalPipeline:
         # Build batch input
         article_list = ""
         for i, article in enumerate(articles):
-            article_list += f"{i+1}. TITLE: {article['headline']}\n   DESC: {article.get('description', '')[:150]}\n\n"
+            article_list += f"{i+1}. TITLE: {article['headline']}\n   DESC: {article.get('description', '')[:800]}\n\n"
 
         prompt = f"""You are assisting a professional NQ and ES futures day trader with pre-market preparation.
 
@@ -149,8 +149,29 @@ Fail if it involves: opinion or commentary on past market moves, investment advi
 Before passing any article, run it through these six filters. If it fails any one of them, reject it:
 
 FILTER 1 — SOURCE VS ECHO
-Is this the event itself or a reaction to an event that already happened? Source events are new — the market hasn't priced them in yet. Echo events are corporate, institutional, or personal reactions to known macro situations. Ask: "Is this the cause or the effect?" If it's the effect — fail it. 
-Examples: "Iran attacks oil tanker" = source, pass. "Amazon adds surcharge due to Iran war" = echo of a known event, fail. "Fed raises rates" = source, pass. "Airlines raise prices due to Fed hike" = echo, fail. Corporate adaptation to a known macro event is always an echo — never pass it regardless of how macro the language sounds.
+Is this the event itself or a reaction to an event that already happened?
+
+A SOURCE event is new information the market hasn't priced in yet. It originates from a primary actor — a government, central bank, military, or natural force.
+
+An ECHO event is any person, company, or institution RESPONDING to or REPORTING ON a known macro situation. The key test: "Could I already predict this would happen given what I know?" If yes — it's an echo.
+
+Critical rule: If a company name appears as the subject of the headline and the headline describes them REACTING to a macro event (adding fees, raising prices, cutting jobs, warning of impacts, adjusting operations) — it is ALWAYS an echo. Reject it.
+
+Examples of ECHOES disguised with macro language (always reject):
+- "Amazon adds surcharge due to Iran war energy prices" → Amazon reacting = echo
+- "Airlines raise ticket prices as oil costs soar" → Airlines reacting = echo  
+- "Walmart warns of higher prices due to tariffs" → Walmart reacting = echo
+- "Fed officials say they're watching inflation" → recap of known Fed stance = echo
+- "Companies brace for recession impact" → corporate reaction = echo
+
+Examples of TRUE SOURCES (pass if relevant):
+- "Iran attacks oil tanker in Strait of Hormuz" → new military event = source
+- "Fed raises rates by 50bps" → new policy decision = source
+- "Trump announces 25% tariff on all imports" → new policy = source
+- "GDP misses forecast by 0.8%" → new data = source
+- "Iran authorities offer reward for capture of American aircrew" → new geopolitical development = source
+
+The presence of macro keywords like "war", "energy", "Iran", "tariff" in a headline does NOT make it a source event. Ask: who is the ACTOR and what ACTION did they take? If the actor is a corporation reacting to an existing situation — it's an echo regardless of the macro language surrounding it.
 
 FILTER 2 — RECENCY TEST
 Is this reporting something happening RIGHT NOW or recapping something that already happened? Recaps, week-in-review pieces, "after X weeks of..." articles, and historical context pieces are not new information. The market already knows. Fail anything that describes past events rather than breaking developments.
@@ -271,7 +292,7 @@ Articles to classify:
                 pass
             items.append({
                 'headline': title,
-                'description': ' '.join(description[:300].split()),
+                'description': ' '.join(description[:800].split()),
                 'source': article.get('source', 'TheNewsAPI'),
                 'timestamp': timestamp,
                 'date': date,
@@ -344,7 +365,7 @@ Articles to classify:
                     date = datetime.now(self.timezone).strftime('%Y-%m-%d')
                 local_items.append({
                     'headline': title,
-                    'description': ' '.join(description[:300].split()),
+                    'description': ' '.join(description[:800].split()),
                     'source': article.get('source', 'TheNewsAPI'),
                     'timestamp': timestamp,
                     'date': date,
