@@ -128,21 +128,25 @@ class GeopoliticalPipeline:
     # ── Gemini AI Relevance Classifier ─────────────────────────────────────
 
     def classify_relevance_batch(self, articles):
-        """Use Gemini Flash to classify which articles are genuinely market-moving for NQ/ES futures."""
+        """Use Gemini Flash to classify articles with full article context and generate clean summaries."""
         if not articles:
             return []
 
-        # Build batch input
+        # Build batch input with full article text
         article_list = ""
         for i, article in enumerate(articles):
-            article_list += f"{i+1}. TITLE: {article['headline']}\n   DESC: {article.get('description', '')[:800]}\n\n"
+            full_text = self.fetch_full_article(
+                article.get('link', ''),
+                article.get('description', '')
+            )
+            article_list += f"{i+1}. TITLE: {article['headline']}\n   FULL TEXT: {full_text}\n\n"
 
         prompt = f"""You are assisting a professional NQ and ES futures day trader with pre-market preparation.
 
-Your job is to read each headline and description, then make two decisions:
+Your job is to read each full article, then make three decisions:
 
 DECISION 1 — RELEVANCE
-Is this genuinely new, market-moving information that would cause a futures trader to reconsider their directional bias for today's session? 
+Is this genuinely new, market-moving information that would cause a futures trader to reconsider their directional bias for today's session?
 
 Think like a trader sitting down at 8AM asking: "Does this change anything about how I trade today?"
 
@@ -153,72 +157,56 @@ Fail if it involves: opinion or commentary on past market moves, investment advi
 Before passing any article, run it through these six filters. If it fails any one of them, reject it:
 
 FILTER 1 — SOURCE VS ECHO
-Is this the event itself or a reaction to an event that already happened?
-
-A SOURCE event is new information the market hasn't priced in yet. It originates from a primary actor — a government, central bank, military, or natural force.
-
-An ECHO event is any person, company, or institution RESPONDING to or REPORTING ON a known macro situation. The key test: "Could I already predict this would happen given what I know?" If yes — it's an echo.
+Is this the event itself or a reaction to an event that already happened? A SOURCE event is new information the market hasn't priced in yet. It originates from a primary actor — a government, central bank, military, or natural force. An ECHO event is any person, company, or institution RESPONDING to or REPORTING ON a known macro situation.
 
 Critical rule: If a company name appears as the subject of the headline and the headline describes them REACTING to a macro event (adding fees, raising prices, cutting jobs, warning of impacts, adjusting operations) — it is ALWAYS an echo. Reject it.
-
-Examples of ECHOES disguised with macro language (always reject):
-- "Amazon adds surcharge due to Iran war energy prices" → Amazon reacting = echo
-- "Airlines raise ticket prices as oil costs soar" → Airlines reacting = echo  
-- "Walmart warns of higher prices due to tariffs" → Walmart reacting = echo
-- "Fed officials say they're watching inflation" → recap of known Fed stance = echo
-- "Companies brace for recession impact" → corporate reaction = echo
-
-Examples of TRUE SOURCES (pass if relevant):
-- "Iran attacks oil tanker in Strait of Hormuz" → new military event = source
-- "Fed raises rates by 50bps" → new policy decision = source
-- "Trump announces 25% tariff on all imports" → new policy = source
-- "GDP misses forecast by 0.8%" → new data = source
-- "Iran authorities offer reward for capture of American aircrew" → new geopolitical development = source
 
 The presence of macro keywords like "war", "energy", "Iran", "tariff" in a headline does NOT make it a source event. Ask: who is the ACTOR and what ACTION did they take? If the actor is a corporation reacting to an existing situation — it's an echo regardless of the macro language surrounding it.
 
 FILTER 2 — RECENCY TEST
-Is this reporting something happening RIGHT NOW or recapping something that already happened? Recaps, week-in-review pieces, "after X weeks of..." articles, and historical context pieces are not new information. The market already knows. Fail anything that describes past events rather than breaking developments.
-Examples: "All Eyes on Wall St. After 5 Weeks of Losses" = recap, fail. "Iran war enters fifth week" = recap, fail. "Trump announces new tariffs today" = breaking, pass.
+Is this reporting something happening RIGHT NOW or recapping something that already happened? Recaps, week-in-review pieces, "after X weeks of..." articles, and historical context pieces are not new information.
 
 FILTER 3 — SPECIFICITY TEST
-Is this about a specific actionable event or a general mood/sentiment piece? Vibe articles, market psychology pieces, and "how to navigate" content are not tradeable information. A trader needs facts, not feelings.
-Examples: "The mood of the stock market is changing" = vibe, fail. "How to navigate the confusion" = advice, fail. "Fed Chair signals rate pause" = specific event, pass.
+Is this about a specific actionable event or a general mood/sentiment piece? Vibe articles, market psychology pieces, and "how to navigate" content are not tradeable information.
 
 FILTER 4 — ACTOR TEST
 Is the person or organization in this headline someone who directly moves markets through their decisions? Federal Reserve officials, heads of state, treasury secretaries, central bank chiefs, and major geopolitical actors = yes. State governors, backbench senators, corporate executives reacting to macro events, NASA, local officials = no, unless their specific action is systemically important to financial markets.
-Examples: "Fed's Powell signals dovish shift" = market-moving actor, pass. "Maryland Governor warns of forever war" = state-level actor, fail. "Treasury Secretary Bessent announces new policy" = market-moving actor, pass.
 
 FILTER 5 — MARKET DOMAIN TEST
-Does this article exist within the domain of financial markets, geopolitics affecting markets, energy, trade, or monetary policy? Articles about space missions, scientific discoveries, social policy, healthcare unless market-moving, and non-financial government activity should be rejected even if they use financial language.
-Examples: "Artemis II gets OK to fly to the moon" = wrong domain, fail. "NASA budget cut affects defense contractors" = market domain, pass. "Trump signs healthcare bill" = depends on market impact, evaluate carefully.
+Does this article exist within the domain of financial markets, geopolitics affecting markets, energy, trade, or monetary policy? Articles about space missions, scientific discoveries, social policy, and non-financial government activity should be rejected even if they use financial language.
 
 FILTER 6 — CONFIRMATION TRAP TEST
 Is this article just confirming something the market already knows and has already priced in? If the macro situation is already established and this is just another data point piling on — it adds no new directional information. Fail it.
-Examples: Iran war is already flagged as bearish → "Another company raises prices due to Iran war" = confirmation of known narrative, fail. Fed is already known hawkish → "Analyst says Fed will stay hawkish" = confirmation, fail. New ceasefire talks announced → "Markets react to ceasefire hopes" = new development, pass.
 
 DECISION 2 — MARKET DIRECTION
 If relevant, what is the directional impact on NQ and ES equity futures specifically?
 
-Think like this: You are a trader. You just read this headline. Do you lean long or short on NQ right now?
+Read the FULL article text carefully before deciding direction. Do not base direction on the headline alone.
 
 Consider the full chain of consequences:
 - War escalating → oil up → inflation up → Fed stays hawkish → equities down → BEARISH
-- Ceasefire → oil down → inflation eases → Fed pivots → equities up → BULLISH  
+- Ceasefire → oil down → inflation eases → Fed pivots → equities up → BULLISH
 - Company adding surcharges due to war → costs rise → margins compress → BEARISH
 - Gas prices hitting new highs → consumer spending squeezed → BEARISH
 - Strong jobs data → Fed stays hawkish → rates stay high → BEARISH for growth stocks
 - Weak jobs data → Fed cuts sooner → BULLISH for equities
 - Trump hawkish on trade → tariffs → supply chain costs → BEARISH
 - Trump ceasefire deal → geopolitical risk off → BULLISH
+- Government shutdown ongoing → fiscal uncertainty → economic drag → BEARISH
+- Government shutdown resolved → fiscal clarity → BULLISH
+- Fed hawkish nominee → higher rates longer → BEARISH for NQ
+- Fed independence threatened → institutional uncertainty → BEARISH
+- Paying workers via executive order while shutdown continues → band-aid not resolution → BEARISH
 
-Do not look at whether the headline sounds positive or negative in tone. Look at the downstream consequence for equity futures. A company "soaring" in surcharges is bearish. Markets "recovering on hopes" is bullish. Always think: what does this mean for the trader holding NQ right now?
+DECISION 3 — SUMMARY
+Write a clean 3-4 sentence market-focused summary of the article. Cover: what happened, who the key actor is, what the immediate consequence is, and what it means for NQ/ES traders today. Write it as if briefing a trader in 30 seconds. Do not use jargon. Be direct and specific.
 
 Return ONLY a JSON array with no markdown, no explanation, no preamble. Exactly this format:
-[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Amazon surcharge signals cost-push inflation and margin compression — bearish for equities"}}, ...]
+[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Iran war escalation directly affects oil and risk sentiment", "summary": "Your 3-4 sentence market summary here."}}]
 
 Use only "bearish", "bullish", or "neutral" for direction.
 Use confidence between 0.0 and 1.0.
+If relevant is false, still provide a summary field but it can be empty string.
 
 Articles to classify:
 {article_list}"""
@@ -229,7 +217,6 @@ Articles to classify:
                 contents=prompt
             )
             text = response.text.strip()
-            # Strip markdown if present
             if '```' in text:
                 text = text.split('```')[1]
                 if text.startswith('json'):
@@ -266,6 +253,26 @@ Articles to classify:
             return round(score, 3)
         except:
             return 0.0
+
+    def fetch_full_article(self, url, fallback_description):
+        """Fetch full article text for Gemini context. Falls back to description if paywalled."""
+        try:
+            response = requests.get(url, headers=self.headers, timeout=8)
+            if response.status_code != 200:
+                return fallback_description
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(response.content, 'html.parser')
+            # Remove script, style, nav elements
+            for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside']):
+                tag.decompose()
+            # Get paragraph text
+            paragraphs = soup.find_all('p')
+            text = ' '.join([p.get_text(strip=True) for p in paragraphs[:15]])
+            if len(text) < 200:
+                return fallback_description
+            return text[:3000]
+        except Exception:
+            return fallback_description
 
     def _parse_articles(self, data, seen_titles, items):
         for article in data.get('data', []):
@@ -418,11 +425,12 @@ Articles to classify:
         for i in items:
             cached = gemini_cache.get(i['headline'], {})
             if cached.get('relevant') and cached.get('confidence', 0) >= 0.75:
-                # Apply Gemini's direction if available, otherwise keep DistilBERT score
                 if cached.get('direction'):
                     direction = cached['direction']
                     i['sentiment_score'] = 0.8 if direction == 'bullish' else -0.8 if direction == 'bearish' else 0.0
                     i['gemini_direction'] = direction
+                if cached.get('summary'):
+                    i['description'] = cached['summary']
                 known_relevant.append(i)
 
         # Articles not yet classified — use keyword filter as temporary pass
@@ -439,7 +447,7 @@ Articles to classify:
         if new_items:
             def background_classify():
                 try:
-                    pulse_logger.log(f"🤖 Gemini background classifying {len(new_items)} new articles...")
+                    pulse_logger.log(f"🤖 Gemini background classifying {len(new_items)} new articles with full text...")
                     classifications = self.classify_relevance_batch(new_items)
                     if classifications:
                         for r in classifications:
@@ -451,11 +459,12 @@ Articles to classify:
                                     'category': r.get('category', ''),
                                     'direction': r.get('direction', None),
                                     'reason': r.get('reason', ''),
+                                    'summary': r.get('summary', ''),
                                     'classified_at': datetime.now().isoformat()
                                 }
                         with open(gemini_cache_file, 'w') as f:
                             json.dump(gemini_cache, f, indent=2)
-                        pulse_logger.log(f"✅ Gemini background done — {len(classifications)} articles classified and cached")
+                        pulse_logger.log(f"✅ Gemini background done — {len(classifications)} articles classified with summaries")
                 except Exception as e:
                     pulse_logger.log(f"⚠️ Background Gemini failed: {e}", level="WARNING")
 
