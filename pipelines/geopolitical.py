@@ -526,7 +526,7 @@ Articles to classify:
                     'link': item['link'],
                     'sentiment': item['sentiment_score'],
                     'predicted_impact': 'bearish' if item['sentiment_score'] < -0.3 else 'bullish' if item['sentiment_score'] > 0.3 else 'neutral',
-                    'context': item.get('description', '')[:200]
+                    'context': item.get('description', '')
                 })
 
         flags.sort(key=lambda x: x['priority'], reverse=True)
