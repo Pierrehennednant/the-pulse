@@ -330,6 +330,7 @@ Articles to classify:
                 f"&language=en"
                 f"&categories={category}"
                 f"&limit=25"
+                f"&published_after={(datetime.now(pytz.utc) - __import__('datetime').timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M:%S')}"
                 f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,abcnews.go.com,washingtonpost.com,nytimes.com"
             )
             response = requests.get(url, timeout=10)
@@ -343,6 +344,7 @@ Articles to classify:
                 f"&search={requests.utils.quote(query)}"
                 f"&sort=published_at"
                 f"&limit=25"
+                f"&published_after={(datetime.now(pytz.utc) - __import__('datetime').timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M:%S')}"
                 f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,washingtonpost.com,nytimes.com"
             )
             response = requests.get(url, timeout=10)
@@ -425,6 +427,18 @@ Articles to classify:
         for i in items:
             cached = gemini_cache.get(i['headline'], {})
             if cached.get('relevant') and cached.get('confidence', 0) >= 0.75:
+                from datetime import timezone
+                classified_at = cached.get('classified_at', '')
+                if classified_at:
+                    try:
+                        classified_dt = datetime.fromisoformat(classified_at)
+                        if classified_dt.tzinfo is None:
+                            classified_dt = classified_dt.replace(tzinfo=timezone.utc)
+                        age_hours = (datetime.now(timezone.utc) - classified_dt).total_seconds() / 3600
+                        if age_hours > 48:
+                            continue
+                    except:
+                        pass
                 if cached.get('direction'):
                     direction = cached['direction']
                     i['sentiment_score'] = 0.8 if direction == 'bullish' else -0.8 if direction == 'bearish' else 0.0
