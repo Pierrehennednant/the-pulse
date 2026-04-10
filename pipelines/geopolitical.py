@@ -563,7 +563,7 @@ Articles to classify:
                     'timestamp': item['timestamp'],
                     'link': item['link'],
                     'sentiment': item['sentiment_score'],
-                    'predicted_impact': 'bearish' if item['sentiment_score'] < -0.3 else 'bullish' if item['sentiment_score'] > 0.3 else 'neutral',
+                    'predicted_impact': item.get('gemini_direction') if item.get('gemini_direction') else ('bearish' if item['sentiment_score'] < -0.3 else 'bullish' if item['sentiment_score'] > 0.3 else 'neutral'),
                     'context': item.get('description', '')
                 })
 
@@ -573,7 +573,12 @@ Articles to classify:
     def calculate_score(self, items, flags):
         if not items:
             return 0.0
-        scores = [item['sentiment_score'] for item in items]
+        scores = []
+        for item in items:
+            if item.get('gemini_direction'):
+                scores.append(0.8 if item['gemini_direction'] == 'bullish' else -0.8 if item['gemini_direction'] == 'bearish' else 0.0)
+            else:
+                scores.append(item['sentiment_score'])
         base_score = sum(scores) / len(scores) if scores else 0
         flag_adjustment = 0
         for flag in flags:
