@@ -223,7 +223,8 @@
         </div>
         <div class="gauge-label" id="bias-label">Loading...</div>
         <div class="confidence" id="confidence-text"></div>
-        <div id="trading-directive" style="margin-top:10px;padding:10px 16px;border-radius:8px;background:#0d1224;border:1px solid #1e2d4a;font-size:14px;font-weight:600;text-align:center"></div>
+        <div id="trading-directive" style="margin-top:10px;padding:10px 16px;border-radius:8px;background:#0d1224;border:1px solid #1e2d4a;font-size:14px;font-weight:600;text-align:center;white-space:pre-line"></div>
+        <div id="edi-narratives" style="margin-top:8px;display:none;background:#0d1224;border:1px solid #1e2d4a;border-radius:8px;padding:10px 16px;font-size:12px;color:#7a8fa8"></div>
         <div class="last-updated"><span class="live-dot"></span><span id="last-updated-text">Fetching data...</span></div>
     </div>
     <div id="weekly-summary-card" class="why-today" style="border-left-color: #9b59b6; display:none;">
@@ -560,6 +561,20 @@
             directive.style.color = bias.directive_color;
             directive.style.borderColor = bias.directive_color + '40';
             directive.style.background = bias.directive_color + '15';
+        }
+
+        // EDI narrative display
+        const edi = bias.edi;
+        const narrativeDiv = document.getElementById('edi-narratives');
+        if (edi && edi.narratives && edi.narratives.length > 0) {
+            const statusEmoji = { intensifying: '📈', emerging: '🆕', stable: '➡️', fading: '📉' };
+            const rows = edi.narratives.map(n =>
+                `${statusEmoji[n.status] || '•'} <strong>${n.name}</strong> — ${n.status}${n.days > 1 ? ` (day ${n.days})` : ''} · ${n.direction}`
+            ).join('<br>');
+            narrativeDiv.innerHTML = `<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#4a9eff;margin-bottom:6px">Active Narratives</div>${rows}`;
+            narrativeDiv.style.display = 'block';
+        } else {
+            narrativeDiv.style.display = 'none';
         }
 
         document.getElementById('last-updated-text').textContent = `Last updated: ${new Date(snapshot.timestamp).toLocaleTimeString('en-US', {timeZone: 'America/New_York'})} EST`;
