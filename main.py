@@ -88,7 +88,8 @@ def run_pulse():
         # Compute EDI first using macro and geo data
         edi_result = execution_difficulty_index.compute(
             formatted_data.get('macro', {}),
-            formatted_data.get('geopolitical', {})
+            formatted_data.get('geopolitical', {}),
+            formatted_data.get('economic', {})
         )
 
         # Pass EDI into bias calculator
