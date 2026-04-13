@@ -307,13 +307,19 @@ class ExecutionDifficultyIndex:
                     'consecutive_days': 1,
                     'peak_priority': priority,
                     'last_priority': priority,
-                    'status': 'emerging'
+                    'status': 'emerging',
+                    'direction': flag.get('predicted_impact', 'unknown')
                 }
 
+        stale_keys = []
         for key in narratives:
             if not narratives[key].get('seen_today', False):
                 narratives[key]['status'] = 'fading'
                 narratives[key]['consecutive_days'] = max(0, narratives[key].get('consecutive_days', 1) - 1)
+                if narratives[key]['consecutive_days'] == 0:
+                    stale_keys.append(key)
+        for key in stale_keys:
+            del narratives[key]
 
         memory['narratives'] = narratives
         self._save_memory(memory)
@@ -446,7 +452,8 @@ class ExecutionDifficultyIndex:
                     narrative_summary.append({
                         'name': key,
                         'status': n['status'],
-                        'days': n.get('consecutive_days', 0)
+                        'days': n.get('consecutive_days', 0),
+                        'direction': n.get('direction', 'unknown')
                     })
 
             result = {
