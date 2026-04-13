@@ -5,7 +5,7 @@ class BiasCalculator:
     def __init__(self):
         self.weights = PILLAR_WEIGHTS
 
-    def compute(self, formatted_data, edi_result=None):
+    def compute(self, formatted_data, size_mode='quarter'):
         total_score = 0.0
         pillar_contributions = {}
         active_pillars = 0
@@ -90,64 +90,55 @@ class BiasCalculator:
                 confidence_color = 'red'
                 threshold_warning = f"🚫 Very low confidence ({confidence}%) — pillars conflicting. Sit out."
 
-        # EDI integration — determine execution regime
-        edi_regime = edi_result.get('regime', 'Normal') if edi_result else 'Normal'
-        edi_reason = edi_result.get('reason', '') if edi_result else ''
-        edi_emoji = edi_result.get('regime_emoji', '✅') if edi_result else '✅'
-        edi_color = edi_result.get('regime_color', '#2ecc71') if edi_result else '#2ecc71'
-
-        # Unified directive — direction from bias, sizing from EDI
-        # Extreme volatility always overrides to sit out
-        if edi_regime == 'Extreme':
-            directive = f"🔴 Extreme Volatility — Sit out. No trade regardless of direction.\nReason: {edi_reason}"
-            directive_color = '#e74c3c'
-        elif bias == 'Neutral':
+        # Trading Directive — two size modes: quarter and normal (half)
+        if bias == 'Neutral':
             directive = "🟡 Neutral — No trade today. Sit out."
             directive_color = "#f39c12"
         elif confidence < 20:
             directive = "⚫ Regime conflicted — Sit out."
             directive_color = "#7a8fa8"
-        elif edi_regime == 'Elevated':
+        elif size_mode == 'quarter':
+            # Quarter size mode
             if bias == 'Bearish' and confidence >= 70:
-                directive = f"🔴 Bearish — Quarter size first entry. Scale to half only when confirmed. No full size today.\n{edi_emoji} Elevated volatility: {edi_reason}"
+                directive = "🔴 Bearish — Quarter size first entry. Scale to half on confirmation. Scale to full only when structure confirms. Full size is your max."
                 directive_color = "#e74c3c"
             elif bias == 'Bearish' and confidence >= 50:
-                directive = f"🔴 Bearish — Quarter size only. No scaling until volatility drops.\n{edi_emoji} Elevated volatility: {edi_reason}"
+                directive = "🔴 Bearish — Quarter size first entry. Scale to half on confirmation only. No full size until regime strengthens."
                 directive_color = "#e74c3c"
             elif bias == 'Bearish' and confidence >= 20:
-                directive = f"� Bearish lean — Quarter size only. Elevated volatility limits execution.\n{edi_emoji} {edi_reason}"
+                directive = "🟠 Bearish lean — Quarter size only. No scaling today. Regime unclear."
                 directive_color = "#ff8c00"
             elif bias == 'Bullish' and confidence >= 70:
-                directive = f"🟢 Bullish — Quarter size first entry. Scale to half only when confirmed. No full size today.\n{edi_emoji} Elevated volatility: {edi_reason}"
+                directive = "🟢 Bullish — Quarter size first entry. Scale to half on confirmation. Scale to full only when structure confirms. Full size is your max."
                 directive_color = "#2ecc71"
             elif bias == 'Bullish' and confidence >= 50:
-                directive = f"🟢 Bullish — Quarter size only. No scaling until volatility drops.\n{edi_emoji} Elevated volatility: {edi_reason}"
+                directive = "🟢 Bullish — Quarter size first entry. Scale to half on confirmation only. No full size until regime strengthens."
                 directive_color = "#2ecc71"
             elif bias == 'Bullish' and confidence >= 20:
-                directive = f"� Bullish lean — Quarter size only. Elevated volatility limits execution.\n{edi_emoji} {edi_reason}"
+                directive = "🟠 Bullish lean — Quarter size only. No scaling today. Regime unclear."
                 directive_color = "#ff8c00"
             else:
                 directive = "⚫ Regime conflicted — Sit out."
                 directive_color = "#7a8fa8"
         else:
-            # Normal conditions
+            # Normal mode (half size)
             if bias == 'Bearish' and confidence >= 70:
-                directive = "🔴 Bearish — Half size first entry. Scale to full only when confirmed."
+                directive = "🔴 Bearish — Half size first entry. Scale to full on confirmation. Full size is your max."
                 directive_color = "#e74c3c"
             elif bias == 'Bearish' and confidence >= 50:
-                directive = "🔴 Bearish — Half size first entry. No full size until confirmed."
+                directive = "🔴 Bearish — Half size first entry. Scale to full on confirmation only."
                 directive_color = "#e74c3c"
             elif bias == 'Bearish' and confidence >= 20:
-                directive = "🟠 Bearish lean — Half size only. No scaling today."
+                directive = "🟠 Bearish lean — Half size only. No scaling today. Regime unclear."
                 directive_color = "#ff8c00"
             elif bias == 'Bullish' and confidence >= 70:
-                directive = "🟢 Bullish — Half size first entry. Scale to full only when confirmed."
+                directive = "🟢 Bullish — Half size first entry. Scale to full on confirmation. Full size is your max."
                 directive_color = "#2ecc71"
             elif bias == 'Bullish' and confidence >= 50:
-                directive = "🟢 Bullish — Half size first entry. No full size until confirmed."
+                directive = "🟢 Bullish — Half size first entry. Scale to full on confirmation only."
                 directive_color = "#2ecc71"
             elif bias == 'Bullish' and confidence >= 20:
-                directive = "🟠 Bullish lean — Half size only. No scaling today."
+                directive = "🟠 Bullish lean — Half size only. No scaling today. Regime unclear."
                 directive_color = "#ff8c00"
             else:
                 directive = "⚫ Regime conflicted — Sit out."
@@ -167,10 +158,10 @@ class BiasCalculator:
             'gauge_value': int((final_score + 2) / 4 * 100),
             'directive': directive,
             'directive_color': directive_color,
-            'edi': edi_result
+            'size_mode': size_mode
         }
 
-        pulse_logger.log(f"📊 Bias: {bias_emoji} {bias} | Confidence: {confidence}% | EDI: {edi_regime} | Directive set")
+        pulse_logger.log(f"📊 Bias: {bias_emoji} {bias} | Confidence: {confidence}% ({confidence_label}) | Active Pillars: {active_pillars}/5 | Mode: {size_mode}")
         return result
 
 bias_calculator = BiasCalculator()

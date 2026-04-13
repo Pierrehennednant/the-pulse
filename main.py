@@ -14,7 +14,6 @@ from pipelines.institutional import institutional_pipeline
 from pipelines.geopolitical import geopolitical_pipeline
 from pipelines.news_sentiment import news_sentiment_pipeline
 from pipelines.weekly_summary import weekly_summary_pipeline
-from pipelines.execution_difficulty import execution_difficulty_index
 
 from processors.data_formatter import data_formatter
 from processors.bias_calculator import bias_calculator
@@ -85,15 +84,17 @@ def run_pulse():
             'geopolitical': geo_data,
             'news': news_data
         })
-        # Compute EDI first using macro and geo data
-        edi_result = execution_difficulty_index.compute(
-            formatted_data.get('macro', {}),
-            formatted_data.get('geopolitical', {}),
-            formatted_data.get('economic', {})
-        )
 
-        # Pass EDI into bias calculator
-        bias_score = bias_calculator.compute(formatted_data, edi_result=edi_result)
+        # Load size mode from persistent storage
+        import json
+        size_mode_file = '/data/size_mode.json'
+        try:
+            with open(size_mode_file, 'r') as f:
+                size_mode = json.load(f).get('mode', 'quarter')
+        except:
+            size_mode = 'quarter'
+
+        bias_score = bias_calculator.compute(formatted_data, size_mode=size_mode)
         weekly_summary_pipeline.fetch(formatted_data=formatted_data, bias=bias_score)
         snapshot_id = snapshot_generator.save(bias_score, formatted_data)
         pulse_logger.log(f"✅ Pulse updated | {bias_score['bias_emoji']} {bias_score['bias']} | Confidence: {bias_score['confidence']}% | Snapshot: {snapshot_id}")

@@ -94,5 +94,20 @@ def reset_manual_input():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/size_mode', methods=['POST'])
+def set_size_mode():
+    import json
+    data = request.get_json()
+    mode = data.get('mode', 'quarter')
+    if mode not in ['quarter', 'normal']:
+        return jsonify({'status': 'error', 'message': 'Invalid mode'}), 400
+    size_mode_file = '/data/size_mode.json'
+    try:
+        with open(size_mode_file, 'w') as f:
+            json.dump({'mode': mode}, f)
+        return jsonify({'status': 'saved', 'mode': mode})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=False)
