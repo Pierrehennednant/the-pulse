@@ -45,13 +45,13 @@ def run_pulse():
         pulse_logger.log(f"⚠️ Institutional failed: {e}", level="WARNING")
         inst_data = {}
 
-    # Geopolitical with hard 20s thread timeout
+    # Geopolitical with 45s thread timeout — parallel fetching + Gemini needs time
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(geopolitical_pipeline.fetch)
-            geo_data = future.result(timeout=20)
+            geo_data = future.result(timeout=45)
     except concurrent.futures.TimeoutError:
-        pulse_logger.log("⚠️ Geopolitical timed out after 20s — using cache", level="WARNING")
+        pulse_logger.log("⚠️ Geopolitical timed out after 45s — using cache", level="WARNING")
         from utils.cache import cache as _cache
         cached = _cache.load("geopolitical")
         geo_data = cached['data'] if cached else {}
@@ -102,7 +102,6 @@ def run_pulse():
 
 def run_scheduler():
     schedule.every(REFRESH_INTERVAL_MINUTES).minutes.do(run_pulse)
-    schedule.every(30).minutes.do(lambda: geopolitical_pipeline.fetch())
     while True:
         schedule.run_pending()
         time.sleep(1)

@@ -425,6 +425,18 @@
     function renderGeopolitical(data) {
         if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
         let html = data.status === 'stale' ? '<div class="stale-warning">⚠️ Stale data</div>' : '';
+
+        // Weekend warning — limited news data Saturday/Sunday
+        const now = new Date();
+        const dayOfWeek = now.toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'long' });
+        const isWeekend = dayOfWeek === 'Saturday' || dayOfWeek === 'Sunday';
+        const articleCount = (data.news_items || []).length;
+        if (isWeekend && articleCount < 3) {
+            html += `<div style="background:#1a1a0a;border:1px solid #4a4a1a;border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px;color:#f39c12">
+            ⚠️ Weekend — limited news data available. Verify conditions manually before Monday open.
+        </div>`;
+        }
+
         const flags = data.active_flags || [];
         if (!flags.length) return html + '<div class="data-row"><span class="data-label">No active flags</span></div>';
         flags.forEach(flag => {
