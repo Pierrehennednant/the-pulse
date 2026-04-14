@@ -40,6 +40,19 @@ class EconomicCalendarPipeline:
         except:
             return date_str
 
+    # Inflation metrics — higher = more inflation = bearish for equities
+    # Beat/miss logic inverts: miss = less inflation = bullish, beat = more inflation = bearish
+    INFLATION_METRICS = [
+        'ppi m/m', 'core ppi m/m',
+        'cpi m/m', 'core cpi m/m',
+        'cpi y/y', 'core cpi y/y',
+        'ppi y/y', 'core ppi y/y',
+        'pce price index m/m', 'core pce price index m/m',
+    ]
+
+    def is_inflation_metric(self, title):
+        return title.lower().strip() in self.INFLATION_METRICS
+
     def get_market_implication(self, title, actual, forecast, previous):
         if actual in ['hawkish', 'dovish', 'neutral', 'bearish', 'bullish']:
             if actual in ['hawkish', 'bearish']:
@@ -57,17 +70,27 @@ class EconomicCalendarPipeline:
         except:
             return 'pending', 'unknown', f'{title} — cannot parse values'
 
+        inverted = self.is_inflation_metric(title)
+
         if forecast_val is not None:
             if actual_val > forecast_val:
+                if inverted:
+                    return 'beat', 'bearish', f'{title} came in hot ({actual} vs {forecast} expected) — higher inflation, bearish for equities'
                 return 'beat', 'bullish', f'{title} beat forecast ({actual} vs {forecast})'
             elif actual_val < forecast_val:
+                if inverted:
+                    return 'miss', 'bullish', f'{title} came in cool ({actual} vs {forecast} expected) — lower inflation, bullish for equities'
                 return 'miss', 'bearish', f'{title} missed forecast ({actual} vs {forecast})'
             else:
                 return 'inline', 'neutral', f'{title} inline with forecast ({actual})'
         elif previous_val is not None:
             if actual_val > previous_val:
+                if inverted:
+                    return 'improved', 'bearish', f'{title} rose from previous ({actual} vs {previous}) — rising inflation, bearish for equities'
                 return 'improved', 'bullish', f'{title} improved from previous ({actual} vs {previous})'
             elif actual_val < previous_val:
+                if inverted:
+                    return 'declined', 'bullish', f'{title} fell from previous ({actual} vs {previous}) — cooling inflation, bullish for equities'
                 return 'declined', 'bearish', f'{title} declined from previous ({actual} vs {previous})'
             else:
                 return 'unchanged', 'neutral', f'{title} unchanged from previous ({actual})'
