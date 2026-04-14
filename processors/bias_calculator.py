@@ -1,4 +1,6 @@
-from config import PILLAR_WEIGHTS
+from datetime import datetime
+import pytz
+from config import PILLAR_WEIGHTS, TIMEZONE
 from utils.logger import pulse_logger
 
 class BiasCalculator:
@@ -25,6 +27,16 @@ class BiasCalculator:
             score = pillar_data.get('pillar_score', 0)
             weight = self.weights.get(config_key, 0)
             status = pillar_data.get('status', 'unavailable')
+
+            # COT decay — stale weekly data weighs less as the week progresses
+            if config_key == 'institutional' and status != 'live':
+                today = datetime.now(pytz.timezone(TIMEZONE)).weekday()
+                # Friday=4: 100%, Mon=0: 80%, Tue=1: 60%, Wed=2: 40%, Thu=3: 20%
+                cot_decay = {4: 1.0, 0: 0.8, 1: 0.6, 2: 0.4, 3: 0.2}
+                decay_factor = cot_decay.get(today, 0.5)
+                weight = weight * decay_factor
+                pulse_logger.log(f"📉 COT decay applied — {int(decay_factor * 100)}% weight ({weight:.1f}% effective)")
+
             contribution = score * (weight / 100)
             total_score += contribution
 
