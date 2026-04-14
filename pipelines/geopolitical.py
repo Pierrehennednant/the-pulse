@@ -202,11 +202,34 @@ DECISION 3 — SUMMARY
 Write a clean 3-4 sentence market-focused summary of the article. Cover: what happened, who the key actor is, what the immediate consequence is, and what it means for NQ/ES traders today. Write it as if briefing a trader in 30 seconds. Do not use jargon. Be direct and specific.
 
 Return ONLY a JSON array with no markdown, no explanation, no preamble. Exactly this format:
-[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Iran war escalation directly affects oil and risk sentiment", "summary": "Your 3-4 sentence market summary here."}}]
+[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Iran war escalation directly affects oil and risk sentiment", "summary": "Your 3-4 sentence market summary here.", "uncertainty_score": 85}}]
 
 Use only "bearish", "bullish", or "neutral" for direction.
 Use confidence between 0.0 and 1.0.
 If relevant is false, still provide a summary field but it can be empty string.
+
+DECISION 4 — UNCERTAINTY SCORE
+Rate how much uncertainty and execution difficulty this event creates for a day trader on a scale of 0-100.
+This is NOT about how bearish or bullish the event is. This is ONLY about whether the event creates fragmented, unpredictable price action that makes clean entries difficult.
+
+Score high (70-100) when:
+- Event is unresolved and market doesn't know which way to price it
+- Multiple conflicting actors or outcomes are possible
+- Event is rapidly evolving with new developments expected today
+- Market is in reaction mode — random spikes, no clean structure
+
+Score medium (40-69) when:
+- Event is significant but direction is becoming clearer
+- Credible threat from major actor but not yet confirmed action
+- Market has partially priced it in but uncertainty remains
+
+Score low (0-39) when:
+- Event confirms existing market direction — bearish or bullish, doesn't matter
+- Resolution or ceasefire — uncertainty is reducing
+- Market has clearly priced this in already
+- Rumor with no confirmation and no market reaction yet
+
+Key rule: A confirmed bearish event with clear direction scores LOW uncertainty even if it's very negative for markets. Uncertainty means the market doesn't know what to do — not that it's going down.
 
 Articles to classify:
 {article_list}"""
@@ -340,11 +363,7 @@ Articles to classify:
         import threading
         categories = ['business', 'politics', 'tech']
         search_queries = [
-            'federal reserve OR FOMC OR interest rate OR inflation',
-            'tariff OR trade war OR sanctions OR trump economy',
-            'war OR military OR nuclear OR iran OR russia OR china',
-            'government shutdown OR debt ceiling OR congress',
-            'recession OR GDP OR unemployment OR jobs'
+            'federal reserve OR tariff OR war OR iran OR sanctions OR recession OR trump'
         ]
 
         def fetch_category(category):
@@ -412,13 +431,13 @@ Articles to classify:
                 })
             return local_items
 
-        # Run all API calls in parallel — max 12s total
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        # Run 4 API calls in parallel — 3 categories + 1 combined search query
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
             cat_futures = [executor.submit(fetch_category, cat) for cat in categories]
             qry_futures = [executor.submit(fetch_query, q) for q in search_queries]
             all_futures = cat_futures + qry_futures
 
-            for future in concurrent.futures.as_completed(all_futures, timeout=12):
+            for future in concurrent.futures.as_completed(all_futures, timeout=20):
                 try:
                     data = future.result()
                     batch = safe_parse(data)
@@ -469,6 +488,8 @@ Articles to classify:
                     i['gemini_direction'] = direction
                 if cached.get('summary'):
                     i['description'] = cached['summary']
+                if cached.get('uncertainty_score') is not None:
+                    i['uncertainty_score'] = cached['uncertainty_score']
                 known_relevant.append(i)
 
         # Articles not yet classified — use keyword filter as temporary pass
@@ -498,6 +519,7 @@ Articles to classify:
                                     'direction': r.get('direction', None),
                                     'reason': r.get('reason', ''),
                                     'summary': r.get('summary', ''),
+                                    'uncertainty_score': r.get('uncertainty_score', 0),
                                     'classified_at': datetime.now().isoformat()
                                 }
                         with open(gemini_cache_file, 'w') as f:

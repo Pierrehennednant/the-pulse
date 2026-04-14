@@ -95,6 +95,16 @@ def run_pulse():
             size_mode = 'quarter'
 
         bias_score = bias_calculator.compute(formatted_data, size_mode=size_mode)
+
+        # Compute size recommendation
+        from pipelines.recommendation import recommendation_engine
+        recommendation = recommendation_engine.compute(
+            bias_score,
+            formatted_data.get('geopolitical', {}),
+            formatted_data.get('macro', {})
+        )
+        bias_score['recommendation'] = recommendation
+
         weekly_summary_pipeline.fetch(formatted_data=formatted_data, bias=bias_score)
         snapshot_id = snapshot_generator.save(bias_score, formatted_data)
         pulse_logger.log(f"✅ Pulse updated | {bias_score['bias_emoji']} {bias_score['bias']} | Confidence: {bias_score['confidence']}% | Snapshot: {snapshot_id}")

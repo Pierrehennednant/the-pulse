@@ -229,6 +229,10 @@
             <button id="mode-quarter" onclick="setSizeMode('quarter')" style="padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #2a4a7a;background:#1a2d4a;color:#4a9eff">Quarter</button>
             <button id="mode-normal" onclick="setSizeMode('normal')" style="padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #1e2d4a;background:#0d1224;color:#4a5a70">Normal</button>
         </div>
+        <div id="recommendation-card" style="display:none;margin-top:8px;padding:10px 16px;border-radius:8px;background:#0d1224;border:1px solid #1e2d4a;text-align:center">
+            <div id="recommendation-label" style="font-size:13px;font-weight:600;color:#4a9eff;margin-bottom:4px"></div>
+            <div id="recommendation-reason" style="font-size:11px;color:#7a8fa8;line-height:1.5"></div>
+        </div>
         <div class="last-updated"><span class="live-dot"></span><span id="last-updated-text">Fetching data...</span></div>
     </div>
     <div id="weekly-summary-card" class="why-today" style="border-left-color: #9b59b6; display:none;">
@@ -581,6 +585,22 @@
 
         if (bias.size_mode) {
             updateSizeModeButtons(bias.size_mode);
+        }
+
+        // Recommendation display
+        const rec = bias.recommendation;
+        const recCard = document.getElementById('recommendation-card');
+        const recLabel = document.getElementById('recommendation-label');
+        const recReason = document.getElementById('recommendation-reason');
+        if (rec && rec.label) {
+            const recColor = rec.mode === 'normal' ? '#2ecc71' : '#f39c12';
+            recLabel.style.color = recColor;
+            recLabel.textContent = '💡 ' + rec.label;
+            recReason.textContent = rec.reason;
+            recCard.style.borderColor = recColor + '40';
+            recCard.style.display = 'block';
+        } else {
+            recCard.style.display = 'none';
         }
 
         document.getElementById('last-updated-text').textContent = `Last updated: ${new Date(snapshot.timestamp).toLocaleTimeString('en-US', {timeZone: 'America/New_York'})} EST`;
