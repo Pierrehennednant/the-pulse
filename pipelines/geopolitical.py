@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import pytz
 from google import genai
 from google.genai import types
+import anthropic
 from transformers import pipeline as hf_pipeline
 from config import TIMEZONE, SENTIMENT_MODEL, THENEWS_API_KEY
 from utils.cache import cache
@@ -17,6 +18,7 @@ class GeopoliticalPipeline:
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "geopolitical"
         self.gemini_client = genai.Client(api_key=os.environ.get('GEMINI_API_KEY', ''))
+        self.anthropic_client = anthropic.Anthropic(api_key=os.environ.get('ANTHROPIC_API_KEY', ''))
         self.sentiment_analyzer = hf_pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
         self.market_keywords = [
             'federal reserve', 'fomc', 'interest rate', 'rate hike', 'rate cut',
@@ -235,19 +237,21 @@ Articles to classify:
 {article_list}"""
 
         try:
-            response = self.gemini_client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=prompt
+            response = self.anthropic_client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=4096,
+                messages=[{"role": "user", "content": prompt}]
             )
-            text = response.text.strip()
+            text = response.content[0].text.strip()
             if '```' in text:
                 text = text.split('```')[1]
                 if text.startswith('json'):
                     text = text[4:]
             results = json.loads(text)
+            pulse_logger.log(f"✅ Claude Haiku classified {len(results)} articles")
             return results
         except Exception as e:
-            pulse_logger.log(f"⚠️ Gemini classifier failed: {e}", level="WARNING")
+            pulse_logger.log(f"⚠️ Claude Haiku classifier failed: {e}", level="WARNING")
             return []
 
     # ── Existing methods (unchanged) ────────────────────────────────────────
