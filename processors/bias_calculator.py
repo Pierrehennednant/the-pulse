@@ -92,56 +92,56 @@ class BiasCalculator:
 
         # Trading Directive — two size modes: quarter and normal (half)
         if bias == 'Neutral':
-            directive = "🟡 Neutral — No trade today. Sit out."
+            directive = "🟡 Neutral — Sit out."
             directive_color = "#f39c12"
         elif confidence < 20:
-            directive = "⚫ Regime conflicted — Sit out."
+            directive = "⚫ Conflicted — Sit out."
             directive_color = "#7a8fa8"
         elif size_mode == 'quarter':
             # Quarter size mode
             if bias == 'Bearish' and confidence >= 70:
-                directive = "🔴 Bearish — Quarter size first entry. Scale to half on confirmation. Scale to full only when structure confirms. Full size is your max."
+                directive = "🔴 Bearish — Quarter first. Scale to half, then full on confirmation."
                 directive_color = "#e74c3c"
             elif bias == 'Bearish' and confidence >= 50:
-                directive = "🔴 Bearish — Quarter size first entry. Scale to half on confirmation only. No full size until regime strengthens."
+                directive = "🔴 Bearish — Quarter first. Scale to half on confirmation only."
                 directive_color = "#e74c3c"
             elif bias == 'Bearish' and confidence >= 20:
-                directive = "🟠 Bearish lean — Quarter size only. No scaling today. Regime unclear."
+                directive = "🟠 Bearish lean — Quarter only. No scaling."
                 directive_color = "#ff8c00"
             elif bias == 'Bullish' and confidence >= 70:
-                directive = "🟢 Bullish — Quarter size first entry. Scale to half on confirmation. Scale to full only when structure confirms. Full size is your max."
+                directive = "🟢 Bullish — Quarter first. Scale to half, then full on confirmation."
                 directive_color = "#2ecc71"
             elif bias == 'Bullish' and confidence >= 50:
-                directive = "🟢 Bullish — Quarter size first entry. Scale to half on confirmation only. No full size until regime strengthens."
+                directive = "🟢 Bullish — Quarter first. Scale to half on confirmation only."
                 directive_color = "#2ecc71"
             elif bias == 'Bullish' and confidence >= 20:
-                directive = "🟠 Bullish lean — Quarter size only. No scaling today. Regime unclear."
+                directive = "🟠 Bullish lean — Quarter only. No scaling."
                 directive_color = "#ff8c00"
             else:
-                directive = "⚫ Regime conflicted — Sit out."
+                directive = "⚫ Conflicted — Sit out."
                 directive_color = "#7a8fa8"
         else:
             # Normal mode (half size)
             if bias == 'Bearish' and confidence >= 70:
-                directive = "🔴 Bearish — Half size first entry. Scale to full on confirmation. Full size is your max."
+                directive = "🔴 Bearish — Half first. Scale to full on confirmation."
                 directive_color = "#e74c3c"
             elif bias == 'Bearish' and confidence >= 50:
-                directive = "🔴 Bearish — Half size first entry. Scale to full on confirmation only."
+                directive = "🔴 Bearish — Half first. Scale to full on confirmation only."
                 directive_color = "#e74c3c"
             elif bias == 'Bearish' and confidence >= 20:
-                directive = "🟠 Bearish lean — Half size only. No scaling today. Regime unclear."
+                directive = "🟠 Bearish lean — Half only. No scaling."
                 directive_color = "#ff8c00"
             elif bias == 'Bullish' and confidence >= 70:
-                directive = "🟢 Bullish — Half size first entry. Scale to full on confirmation. Full size is your max."
+                directive = "🟢 Bullish — Half first. Scale to full on confirmation."
                 directive_color = "#2ecc71"
             elif bias == 'Bullish' and confidence >= 50:
-                directive = "🟢 Bullish — Half size first entry. Scale to full on confirmation only."
+                directive = "🟢 Bullish — Half first. Scale to full on confirmation only."
                 directive_color = "#2ecc71"
             elif bias == 'Bullish' and confidence >= 20:
-                directive = "🟠 Bullish lean — Half size only. No scaling today. Regime unclear."
+                directive = "🟠 Bullish lean — Half only. No scaling."
                 directive_color = "#ff8c00"
             else:
-                directive = "⚫ Regime conflicted — Sit out."
+                directive = "⚫ Conflicted — Sit out."
                 directive_color = "#7a8fa8"
 
         result = {
