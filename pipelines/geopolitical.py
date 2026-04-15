@@ -4,8 +4,6 @@ import requests
 import concurrent.futures
 from datetime import datetime, timedelta
 import pytz
-from google import genai
-from google.genai import types
 import anthropic
 from transformers import pipeline as hf_pipeline
 from config import TIMEZONE, SENTIMENT_MODEL, THENEWS_API_KEY
@@ -17,7 +15,6 @@ class GeopoliticalPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "geopolitical"
-        self.gemini_client = genai.Client(api_key=os.environ.get('GEMINI_API_KEY', ''))
         self.anthropic_client = anthropic.Anthropic(api_key=os.environ.get('ANTHROPIC_API_KEY', ''))
         self.sentiment_analyzer = hf_pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
         self.market_keywords = [
@@ -130,7 +127,7 @@ class GeopoliticalPipeline:
     # ── Gemini AI Relevance Classifier ─────────────────────────────────────
 
     def classify_relevance_batch(self, articles):
-        """Use Gemini Flash to classify articles with full article context and generate clean summaries."""
+        """Use Claude Haiku to classify articles with full article context and generate clean summaries."""
         if not articles:
             return []
 
@@ -504,13 +501,13 @@ Articles to classify:
 
         # Return immediately — known relevant + keyword-passed new articles
         immediately_available = known_relevant + keyword_passed
-        pulse_logger.log(f"⚡ Returning {len(immediately_available)} articles instantly ({len(known_relevant)} Gemini-verified, {len(keyword_passed)} keyword-passed)")
+        pulse_logger.log(f"⚡ Returning {len(immediately_available)} articles instantly ({len(known_relevant)} Haiku-verified, {len(keyword_passed)} keyword-passed)")
 
         # Run Gemini on new items in background
         if new_items:
             def background_classify():
                 try:
-                    pulse_logger.log(f"🤖 Gemini background classifying {len(new_items)} new articles with full text...")
+                    pulse_logger.log(f"🤖 Haiku background classifying {len(new_items)} new articles with full text...")
                     classifications = self.classify_relevance_batch(new_items)
                     if classifications:
                         for r in classifications:
@@ -528,9 +525,9 @@ Articles to classify:
                                 }
                         with open(gemini_cache_file, 'w') as f:
                             json.dump(gemini_cache, f, indent=2)
-                        pulse_logger.log(f"✅ Gemini background done — {len(classifications)} articles classified with summaries")
+                        pulse_logger.log(f"✅ Haiku background done — {len(classifications)} articles classified with summaries")
                 except Exception as e:
-                    pulse_logger.log(f"⚠️ Background Gemini failed: {e}", level="WARNING")
+                    pulse_logger.log(f"⚠️ Background Haiku failed: {e}", level="WARNING")
 
             bg_thread = threading.Thread(target=background_classify, daemon=True)
             bg_thread.start()
