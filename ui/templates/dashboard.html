@@ -446,7 +446,26 @@
         }
 
         const flags = data.active_flags || [];
-        if (!flags.length) return html + '<div class="data-row"><span class="data-label">No active flags</span></div>';
+        const newsItems = data.news_items || [];
+
+        if (!flags.length && !newsItems.length) return html + '<div class="data-row"><span class="data-label">No active flags</span></div>';
+
+        newsItems.forEach(item => {
+            if (flags.some(f => f.title === item.headline)) return;
+            const dirClass = item.gemini_direction ? valClass(item.gemini_direction) : '';
+            const dirLabel = item.gemini_direction ? item.gemini_direction.toUpperCase() : '';
+            html += `<div class="flag-item">
+                <div class="flag-title">${item.headline}</div>
+                <div class="flag-meta">
+                    <span class="flag-source">${item.source}</span>
+                    <span class="flag-source">${item.timestamp}</span>
+                </div>
+                ${dirLabel ? `<div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${dirClass}">${dirLabel}</span></div>` : ''}
+                ${item.description ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${item.description}</div>` : ''}
+                ${item.link ? `<div style="margin-top:8px"><a class="flag-link" href="${item.link}" target="_blank">🔗 View Source →</a></div>` : ''}
+            </div>`;
+        });
+
         flags.forEach(flag => {
             const sc = 'status-developing';
             html += `<div class="flag-item">
