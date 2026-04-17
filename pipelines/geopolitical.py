@@ -16,6 +16,7 @@ class GeopoliticalPipeline:
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "geopolitical"
         self.anthropic_client = anthropic.Anthropic(api_key=os.environ.get('ANTHROPIC_API_KEY', ''))
+        self.pinned_store_file = "/data/pinned_stories.json"
         self.sentiment_analyzer = hf_pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
         self.market_keywords = [
             'federal reserve', 'fomc', 'interest rate', 'rate hike', 'rate cut',
@@ -250,6 +251,97 @@ Articles to classify:
         except Exception as e:
             pulse_logger.log(f"⚠️ Claude Haiku classifier failed: {e}", level="WARNING")
             return []
+
+    # ── Pinned Stories Store ─────────────────────────────────────────────────
+
+    def load_pinned_stories(self):
+        """Load pinned stories, dropping any older than 48 hours."""
+        try:
+            if not os.path.exists(self.pinned_store_file):
+                return []
+            with open(self.pinned_store_file, 'r') as f:
+                pinned = json.load(f)
+            from datetime import timezone
+            now = datetime.now(timezone.utc)
+            valid = []
+            for story in pinned:
+                try:
+                    pinned_at = datetime.fromisoformat(story.get('pinned_at', ''))
+                    if pinned_at.tzinfo is None:
+                        pinned_at = pinned_at.replace(tzinfo=timezone.utc)
+                    age_hours = (now - pinned_at).total_seconds() / 3600
+                    if age_hours <= 48:
+                        valid.append(story)
+                except:
+                    continue
+            return valid
+        except:
+            return []
+
+    def save_pinned_stories(self, pinned):
+        """Save pinned stories to disk."""
+        try:
+            with open(self.pinned_store_file, 'w') as f:
+                json.dump(pinned, f, indent=2)
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to save pinned stories: {e}", level="WARNING")
+
+    def update_pinned_store(self, new_items, classifications):
+        """Update pinned store with newly Haiku-verified high-confidence articles."""
+        pinned = self.load_pinned_stories()
+
+        for r in classifications:
+            idx = r['id'] - 1
+            if idx >= len(new_items):
+                continue
+            if not r.get('relevant') or r.get('confidence', 0) < 0.75:
+                continue
+            if r.get('direction', 'neutral') == 'neutral':
+                continue
+
+            article = new_items[idx]
+            headline = article.get('headline', '')
+            headline_words = set(headline.lower().split())
+
+            # Check if same story as existing pin — replace if overlap > 40%
+            replaced = False
+            for i, pin in enumerate(pinned):
+                pin_words = set(pin.get('headline', '').lower().split())
+                union = len(headline_words | pin_words)
+                overlap = len(headline_words & pin_words) / max(union, 1)
+                if overlap > 0.4:
+                    pinned[i] = {
+                        'headline': headline,
+                        'summary': r.get('summary', article.get('description', '')),
+                        'direction': r.get('direction'),
+                        'confidence': r.get('confidence', 0),
+                        'uncertainty_score': r.get('uncertainty_score', 0),
+                        'source': article.get('source', ''),
+                        'timestamp': article.get('timestamp', ''),
+                        'date': article.get('date', ''),
+                        'link': article.get('link', ''),
+                        'pinned_at': datetime.now().isoformat()
+                    }
+                    replaced = True
+                    pulse_logger.log(f"📌 Pinned story updated: {headline[:60]}")
+                    break
+
+            if not replaced and len(pinned) < 5:
+                pinned.append({
+                    'headline': headline,
+                    'summary': r.get('summary', article.get('description', '')),
+                    'direction': r.get('direction'),
+                    'confidence': r.get('confidence', 0),
+                    'uncertainty_score': r.get('uncertainty_score', 0),
+                    'source': article.get('source', ''),
+                    'timestamp': article.get('timestamp', ''),
+                    'date': article.get('date', ''),
+                    'link': article.get('link', ''),
+                    'pinned_at': datetime.now().isoformat()
+                })
+                pulse_logger.log(f"📌 New story pinned: {headline[:60]}")
+
+        self.save_pinned_stories(pinned)
 
     # ── Existing methods (unchanged) ────────────────────────────────────────
 
@@ -501,7 +593,30 @@ Articles to classify:
 
         # Return immediately — known relevant + keyword-passed new articles
         immediately_available = known_relevant + keyword_passed
-        pulse_logger.log(f"⚡ Returning {len(immediately_available)} articles instantly ({len(known_relevant)} Haiku-verified, {len(keyword_passed)} keyword-passed)")
+
+        # Inject pinned stories not already in current batch
+        pinned_stories = self.load_pinned_stories()
+        current_headlines = {i['headline'] for i in immediately_available}
+        injected = 0
+        for pin in pinned_stories:
+            if pin.get('headline', '') not in current_headlines:
+                immediately_available.append({
+                    'headline': pin['headline'],
+                    'description': pin.get('summary', ''),
+                    'source': pin.get('source', ''),
+                    'timestamp': pin.get('timestamp', ''),
+                    'date': pin.get('date', ''),
+                    'link': pin.get('link', ''),
+                    'sentiment_score': 0.8 if pin.get('direction') == 'bullish' else -0.8 if pin.get('direction') == 'bearish' else 0.0,
+                    'gemini_direction': pin.get('direction'),
+                    'uncertainty_score': pin.get('uncertainty_score', 0),
+                    'market_relevant': True,
+                    'pinned': True
+                })
+                current_headlines.add(pin['headline'])
+                injected += 1
+
+        pulse_logger.log(f"⚡ Returning {len(immediately_available)} articles instantly ({len(known_relevant)} Haiku-verified, {len(keyword_passed)} keyword-passed, {injected} pinned)")
 
         # Run Gemini on new items in background
         if new_items:
@@ -525,6 +640,7 @@ Articles to classify:
                                 }
                         with open(gemini_cache_file, 'w') as f:
                             json.dump(gemini_cache, f, indent=2)
+                        self.update_pinned_store(new_items, classifications)
                         pulse_logger.log(f"✅ Haiku background done — {len(classifications)} articles classified with summaries")
                 except Exception as e:
                     pulse_logger.log(f"⚠️ Background Haiku failed: {e}", level="WARNING")
