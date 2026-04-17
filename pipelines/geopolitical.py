@@ -286,6 +286,38 @@ Articles to classify:
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to save pinned stories: {e}", level="WARNING")
 
+    def is_same_story(self, new_headline, pinned_headline):
+        """Ask Haiku whether a new article supersedes a pinned story."""
+        try:
+            prompt = f"""You are evaluating whether two news headlines are about the same underlying geopolitical or market story.
+
+NEW ARTICLE: {new_headline}
+PINNED STORY: {pinned_headline}
+
+Are these two headlines covering the same underlying story or event — even if the outcome has changed or the angle is different?
+
+Examples of SAME story:
+- "Hormuz blockade tightens" and "Iran opens Hormuz to commercial vessels" — same story, outcome changed
+- "U.S.-Iran talks stall" and "Iran agrees to ceasefire terms" — same story, new development
+- "Fed signals rate hike" and "Fed raises rates by 25bps" — same story, event occurred
+
+Examples of DIFFERENT story:
+- "Iran blockade" and "China tariffs escalate" — different geopolitical events
+- "Fed rate decision" and "CPI data surprise" — different market events
+
+Respond with only one word: SAME or DIFFERENT"""
+
+            response = self.anthropic_client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=10,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            result = response.content[0].text.strip().upper()
+            return result == "SAME"
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Haiku story comparison failed: {e}", level="WARNING")
+            return False
+
     def update_pinned_store(self, new_items, classifications):
         """Update pinned store with newly Haiku-verified high-confidence articles."""
         pinned = self.load_pinned_stories()
@@ -301,44 +333,31 @@ Articles to classify:
 
             article = new_items[idx]
             headline = article.get('headline', '')
-            headline_words = set(headline.lower().split())
 
-            # Check if same story as existing pin — replace if overlap > 40%
+            new_entry = {
+                'headline': headline,
+                'summary': r.get('summary', article.get('description', '')),
+                'direction': r.get('direction'),
+                'confidence': r.get('confidence', 0),
+                'uncertainty_score': r.get('uncertainty_score', 0),
+                'source': article.get('source', ''),
+                'timestamp': article.get('timestamp', ''),
+                'date': article.get('date', ''),
+                'link': article.get('link', ''),
+                'pinned_at': datetime.now().isoformat()
+            }
+
+            # Ask Haiku whether this supersedes any existing pinned story
             replaced = False
             for i, pin in enumerate(pinned):
-                pin_words = set(pin.get('headline', '').lower().split())
-                union = len(headline_words | pin_words)
-                overlap = len(headline_words & pin_words) / max(union, 1)
-                if overlap > 0.4:
-                    pinned[i] = {
-                        'headline': headline,
-                        'summary': r.get('summary', article.get('description', '')),
-                        'direction': r.get('direction'),
-                        'confidence': r.get('confidence', 0),
-                        'uncertainty_score': r.get('uncertainty_score', 0),
-                        'source': article.get('source', ''),
-                        'timestamp': article.get('timestamp', ''),
-                        'date': article.get('date', ''),
-                        'link': article.get('link', ''),
-                        'pinned_at': datetime.now().isoformat()
-                    }
+                if self.is_same_story(headline, pin.get('headline', '')):
+                    pinned[i] = new_entry
                     replaced = True
-                    pulse_logger.log(f"📌 Pinned story updated: {headline[:60]}")
+                    pulse_logger.log(f"📌 Pinned story superseded: {headline[:60]}")
                     break
 
             if not replaced and len(pinned) < 5:
-                pinned.append({
-                    'headline': headline,
-                    'summary': r.get('summary', article.get('description', '')),
-                    'direction': r.get('direction'),
-                    'confidence': r.get('confidence', 0),
-                    'uncertainty_score': r.get('uncertainty_score', 0),
-                    'source': article.get('source', ''),
-                    'timestamp': article.get('timestamp', ''),
-                    'date': article.get('date', ''),
-                    'link': article.get('link', ''),
-                    'pinned_at': datetime.now().isoformat()
-                })
+                pinned.append(new_entry)
                 pulse_logger.log(f"📌 New story pinned: {headline[:60]}")
 
         self.save_pinned_stories(pinned)
