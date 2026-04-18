@@ -54,14 +54,11 @@ def manual_input():
             macro_cached = cache.load('macro_sentiment')
             inst_cached = cache.load('institutional')
             geo_cached = cache.load('geopolitical')
-            news_cached = cache.load('news_sentiment')
-
             formatted_data = data_formatter.standardize({
                 'macro': macro_cached['data'] if macro_cached else None,
                 'economic': econ_data,
                 'institutional': inst_cached['data'] if inst_cached else None,
                 'geopolitical': geo_cached['data'] if geo_cached else None,
-                'news': news_cached['data'] if news_cached else None
             })
 
             bias_score = bias_calculator.compute(formatted_data)
