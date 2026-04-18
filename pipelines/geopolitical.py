@@ -24,6 +24,7 @@ class GeopoliticalPipeline:
         else:
             self.anthropic_client = anthropic.Anthropic(api_key=api_key)
         self.pinned_store_file = "/data/pinned_stories.json"
+        self.headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
         self.sentiment_analyzer = hf_pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
         self.market_keywords = [
             'federal reserve', 'fomc', 'interest rate', 'rate hike', 'rate cut',
