@@ -630,27 +630,46 @@ Respond with only one word: SAME or DIFFERENT"""
         # Return immediately — known relevant + keyword-passed new articles
         immediately_available = known_relevant + keyword_passed
 
-        # Inject pinned stories not already in current batch
+        # Inject pinned stories not already covered by a live article
         pinned_stories = self.load_pinned_stories()
         current_headlines = {i['headline'] for i in immediately_available}
         injected = 0
+        retired = 0
+        surviving_pins = []
         for pin in pinned_stories:
-            if pin.get('headline', '') not in current_headlines:
-                immediately_available.append({
-                    'headline': pin['headline'],
-                    'description': pin.get('summary', ''),
-                    'source': pin.get('source', ''),
-                    'timestamp': pin.get('timestamp', ''),
-                    'date': pin.get('date', ''),
-                    'link': pin.get('link', ''),
-                    'sentiment_score': 0.8 if pin.get('direction') == 'bullish' else -0.8 if pin.get('direction') == 'bearish' else 0.0,
-                    'gemini_direction': pin.get('direction'),
-                    'uncertainty_score': pin.get('uncertainty_score', 0),
-                    'market_relevant': True,
-                    'pinned': True
-                })
-                current_headlines.add(pin['headline'])
-                injected += 1
+            pin_headline = pin.get('headline', '')
+            # Exact headline already present — skip without retiring
+            if pin_headline in current_headlines:
+                surviving_pins.append(pin)
+                continue
+            # Check if any live article covers the same underlying story
+            superseded = any(
+                self.is_same_story(live['headline'], pin_headline)
+                for live in immediately_available
+            )
+            if superseded:
+                pulse_logger.log(f"📌 Pinned story retired — covered by live article: {pin_headline[:60]}")
+                retired += 1
+                continue
+            # No live coverage — inject the pin
+            immediately_available.append({
+                'headline': pin_headline,
+                'description': pin.get('summary', ''),
+                'source': pin.get('source', ''),
+                'timestamp': pin.get('timestamp', ''),
+                'date': pin.get('date', ''),
+                'link': pin.get('link', ''),
+                'sentiment_score': 0.8 if pin.get('direction') == 'bullish' else -0.8 if pin.get('direction') == 'bearish' else 0.0,
+                'gemini_direction': pin.get('direction'),
+                'uncertainty_score': pin.get('uncertainty_score', 0),
+                'market_relevant': True,
+                'pinned': True
+            })
+            current_headlines.add(pin_headline)
+            surviving_pins.append(pin)
+            injected += 1
+        if retired:
+            self.save_pinned_stories(surviving_pins)
 
         pulse_logger.log(f"⚡ Returning {len(immediately_available)} articles instantly ({len(known_relevant)} Haiku-verified, {len(keyword_passed)} keyword-passed, {injected} pinned)")
 
