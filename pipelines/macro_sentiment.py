@@ -1,7 +1,7 @@
-import requests
 from datetime import datetime
 import pytz
 from config import TIMEZONE, FRED_API_KEY
+from utils.retry import fetch_with_retry
 from utils.cache import cache
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
@@ -14,7 +14,7 @@ class MacroSentimentPipeline:
     def fetch_vix(self):
         try:
             url = f"https://api.stlouisfed.org/fred/series/observations?series_id=VIXCLS&api_key={FRED_API_KEY}&sort_order=desc&limit=10&file_type=json"
-            response = requests.get(url, timeout=10)
+            response = fetch_with_retry(url, timeout=10)
             data = response.json()
             observations = [o for o in data.get('observations', []) if o['value'] != '.']
             if not observations:
@@ -37,7 +37,7 @@ class MacroSentimentPipeline:
     def fetch_vxn(self):
         try:
             url = f"https://api.stlouisfed.org/fred/series/observations?series_id=VXNCLS&api_key={FRED_API_KEY}&sort_order=desc&limit=10&file_type=json"
-            response = requests.get(url, timeout=10)
+            response = fetch_with_retry(url, timeout=10)
             data = response.json()
             observations = [o for o in data.get('observations', []) if o['value'] != '.']
             if not observations:
@@ -60,7 +60,7 @@ class MacroSentimentPipeline:
     def fetch_fear_greed(self):
         try:
             url = "https://api.alternative.me/fng/?limit=1"
-            response = requests.get(url, timeout=10)
+            response = fetch_with_retry(url, timeout=10)
             data = response.json()
             score = int(data['data'][0]['value'])
             rating = data['data'][0]['value_classification']

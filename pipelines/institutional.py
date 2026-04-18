@@ -1,10 +1,10 @@
 import json
 import os
-import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 import pytz
 from config import TIMEZONE
+from utils.retry import fetch_with_retry
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
 
@@ -89,7 +89,7 @@ class InstitutionalPipeline:
 
     def fetch_cot(self):
         try:
-            response = requests.get(self.cot_url, headers=self.headers, timeout=10)
+            response = fetch_with_retry(self.cot_url, headers=self.headers, timeout=10)
             soup = BeautifulSoup(response.content, 'html.parser')
             pre = soup.find('pre')
             if not pre:

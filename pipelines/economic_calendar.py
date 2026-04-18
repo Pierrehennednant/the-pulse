@@ -1,8 +1,8 @@
 import os
-import requests
 from datetime import datetime, timedelta
 import pytz
 from config import TIMEZONE, STALE_THRESHOLDS
+from utils.retry import fetch_with_retry
 from utils.cache import cache
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
@@ -121,7 +121,7 @@ class EconomicCalendarPipeline:
                 'limit': 10,
                 'published_after': (datetime.now(pytz.utc) - timedelta(hours=3)).strftime('%Y-%m-%dT%H:%M:%S')
             }
-            response = requests.get(url, params=params, timeout=10)
+            response = fetch_with_retry(url, params=params, timeout=10)
             articles = response.json().get('data', [])
             if not articles:
                 return 'neutral'
@@ -187,7 +187,7 @@ class EconomicCalendarPipeline:
 
     def fetch(self):
         try:
-            response = requests.get(self.url, headers=self.headers, timeout=10)
+            response = fetch_with_retry(self.url, headers=self.headers, timeout=10)
 
             if response.status_code == 429:
                 pulse_logger.log("⚠️ Forex Factory rate limited — using cached data", level="WARNING")

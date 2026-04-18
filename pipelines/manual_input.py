@@ -3,10 +3,10 @@ import os
 from datetime import datetime
 import pytz
 from config import TIMEZONE
+from utils.retry import fetch_with_retry
 from utils.cache import cache
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
-import requests
 from bs4 import BeautifulSoup
 
 class ManualInputPipeline:
@@ -51,7 +51,7 @@ class ManualInputPipeline:
 
     def fetch_story_context(self, url):
         try:
-            response = requests.get(url, headers=self.headers, timeout=10)
+            response = fetch_with_retry(url, headers=self.headers, timeout=10)
             soup = BeautifulSoup(response.content, 'html.parser')
             paragraphs = soup.find_all('p')
             text = ' '.join([p.get_text(strip=True) for p in paragraphs[:5]])

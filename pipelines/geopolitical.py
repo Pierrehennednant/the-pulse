@@ -7,6 +7,7 @@ import pytz
 import anthropic
 from transformers import pipeline as hf_pipeline
 from config import TIMEZONE, SENTIMENT_MODEL, THENEWS_API_KEY
+from utils.retry import fetch_with_retry
 from utils.cache import cache
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
@@ -392,7 +393,7 @@ Respond with only one word: SAME or DIFFERENT"""
     def fetch_full_article(self, url, fallback_description):
         """Fetch full article text for Gemini context. Falls back to description if paywalled."""
         try:
-            response = requests.get(url, headers=self.headers, timeout=8)
+            response = fetch_with_retry(url, headers=self.headers, timeout=8)
             if response.status_code != 200:
                 return fallback_description
             from bs4 import BeautifulSoup
@@ -488,7 +489,7 @@ Respond with only one word: SAME or DIFFERENT"""
                 f"&published_after={(datetime.now(pytz.utc) - __import__('datetime').timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M:%S')}"
                 f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,abcnews.go.com,washingtonpost.com,nytimes.com"
             )
-            response = requests.get(url, timeout=10)
+            response = fetch_with_retry(url, timeout=10)
             return response.json()
 
         def fetch_query(query):
@@ -502,7 +503,7 @@ Respond with only one word: SAME or DIFFERENT"""
                 f"&published_after={(datetime.now(pytz.utc) - __import__('datetime').timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M:%S')}"
                 f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,washingtonpost.com,nytimes.com"
             )
-            response = requests.get(url, timeout=10)
+            response = fetch_with_retry(url, timeout=10)
             return response.json()
 
         items = []
