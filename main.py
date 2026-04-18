@@ -1,4 +1,5 @@
-# v3.2 - Railway volume persistence verification
+import json
+import os
 import schedule
 import time
 import threading
@@ -14,6 +15,7 @@ from pipelines.institutional import institutional_pipeline
 from pipelines.geopolitical import geopolitical_pipeline
 from pipelines.weekly_summary import weekly_summary_pipeline
 from pipelines.manual_input import manual_input_pipeline
+from pipelines.recommendation import recommendation_engine
 
 from processors.data_formatter import data_formatter
 from processors.bias_calculator import bias_calculator
@@ -21,6 +23,7 @@ from processors.snapshot_generator import snapshot_generator
 
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
+from utils.cache import cache
 
 from ui.dashboard import app as dashboard_app
 
@@ -44,20 +47,18 @@ def run_pulse():
         pulse_logger.log(f"⚠️ Institutional failed: {e}", level="WARNING")
         inst_data = {}
 
-    # Geopolitical with 45s thread timeout — parallel fetching + Gemini needs time
+    # Geopolitical with 45s thread timeout — parallel fetching + Haiku needs time
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(geopolitical_pipeline.fetch)
             geo_data = future.result(timeout=45)
     except concurrent.futures.TimeoutError:
         pulse_logger.log("⚠️ Geopolitical timed out after 45s — using cache", level="WARNING")
-        from utils.cache import cache as _cache
-        cached = _cache.load("geopolitical")
+        cached = cache.load("geopolitical")
         geo_data = cached['data'] if cached else {}
     except Exception as e:
         pulse_logger.log(f"⚠️ Geopolitical failed: {e}", level="WARNING")
-        from utils.cache import cache as _cache
-        cached = _cache.load("geopolitical")
+        cached = cache.load("geopolitical")
         geo_data = cached['data'] if cached else {}
 
     try:
@@ -68,11 +69,8 @@ def run_pulse():
             'geopolitical': geo_data
         })
 
-        # Load size mode from persistent storage
-        import json
-        size_mode_file = '/data/size_mode.json'
         try:
-            with open(size_mode_file, 'r') as f:
+            with open('/data/size_mode.json', 'r') as f:
                 size_mode = json.load(f).get('mode', 'quarter')
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to load size_mode.json, defaulting to quarter: {e}", level="WARNING")
@@ -80,8 +78,6 @@ def run_pulse():
 
         bias_score = bias_calculator.compute(formatted_data, size_mode=size_mode)
 
-        # Compute size recommendation
-        from pipelines.recommendation import recommendation_engine
         recommendation = recommendation_engine.compute(
             bias_score,
             formatted_data.get('geopolitical', {}),
@@ -104,17 +100,16 @@ def run_scheduler():
 
 if __name__ == '__main__':
     pulse_logger.log("🚀 The Pulse is starting...")
-    
-    import os
+
     port = int(os.environ.get('PORT', 8080))
-    
+
     # Start first pulse refresh in background so Flask starts immediately
     first_run_thread = threading.Thread(target=run_pulse, daemon=True)
     first_run_thread.start()
-    
+
     # Start scheduler in background
     scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
     scheduler_thread.start()
-    
+
     pulse_logger.log(f"🌐 Dashboard running on http://0.0.0.0:{port}")
     dashboard_app.run(host='0.0.0.0', port=port, debug=False)
