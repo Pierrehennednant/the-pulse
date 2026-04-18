@@ -63,7 +63,8 @@ class ManualInputPipeline:
         try:
             with open(self.permanent_file, 'r') as f:
                 return json.load(f)
-        except:
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to load manual inputs file: {e}", level="WARNING")
             return {}
 
     def clear_old_inputs(self):
@@ -79,8 +80,8 @@ class ManualInputPipeline:
                         ts = self.timezone.localize(ts)
                     if (now - ts).total_seconds() < 86400:
                         fresh[title] = data
-                except:
-                    pass
+                except Exception as e:
+                    pulse_logger.log(f"⚠️ Failed to parse timestamp for manual input '{title}': {e}", level="WARNING")
             atomic_write_json(self.permanent_file, fresh)
         except Exception as e:
             error_handler.handle(e, "Manual Input Cleanup")

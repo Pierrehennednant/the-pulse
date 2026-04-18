@@ -23,7 +23,8 @@ class WeeklySummaryPipeline:
         try:
             with open(self.permanent_file, 'r') as f:
                 return json.load(f)
-        except:
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to load weekly summary permanent file: {e}", level="WARNING")
             return {}
 
     def _save(self, data):

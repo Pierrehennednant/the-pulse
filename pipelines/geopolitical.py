@@ -281,10 +281,12 @@ Articles to classify:
                     age_hours = (now - pinned_at).total_seconds() / 3600
                     if age_hours <= 48:
                         valid.append(story)
-                except:
+                except Exception as e:
+                    pulse_logger.log(f"⚠️ Failed to parse pinned story timestamp: {e}", level="WARNING")
                     continue
             return valid
-        except:
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to load pinned stories: {e}", level="WARNING")
             return []
 
     def save_pinned_stories(self, pinned):
@@ -396,7 +398,8 @@ Respond with only one word: SAME or DIFFERENT"""
             result = self.sentiment_analyzer(text[:512])[0]
             score = result['score'] if result['label'] == 'POSITIVE' else -result['score']
             return round(score, 3)
-        except:
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Sentiment analyzer failed: {e}", level="WARNING")
             return 0.0
 
     def fetch_full_article(self, url, fallback_description):
@@ -442,8 +445,8 @@ Respond with only one word: SAME or DIFFERENT"""
                             if overlap > 0.3:
                                 is_source_duplicate = True
                                 break
-                    except:
-                        pass
+                    except Exception as e:
+                        pulse_logger.log(f"⚠️ Failed to parse article timestamp for dedup: {e}", level="WARNING")
             if is_source_duplicate:
                 continue
 
@@ -459,7 +462,8 @@ Respond with only one word: SAME or DIFFERENT"""
                 est = dt.astimezone(pytz.timezone(TIMEZONE))
                 timestamp = est.strftime('%b %d, %I:%M %p EST')
                 date = est.strftime('%Y-%m-%d')
-            except:
+            except Exception as e:
+                pulse_logger.log(f"⚠️ Failed to parse article publish date: {e}", level="WARNING")
                 timestamp = published
                 date = datetime.now(self.timezone).strftime('%Y-%m-%d')
             try:
@@ -467,8 +471,8 @@ Respond with only one word: SAME or DIFFERENT"""
                 age_days = (datetime.now(pytz.UTC) - dt.replace(tzinfo=pytz.UTC) if dt.tzinfo is None else datetime.now(pytz.UTC) - dt).days
                 if age_days > 7:
                     continue
-            except:
-                pass
+            except Exception as e:
+                pulse_logger.log(f"⚠️ Failed to compute article age, including anyway: {e}", level="WARNING")
             items.append({
                 'headline': title,
                 'description': ' '.join(description[:800].split()),
@@ -538,7 +542,8 @@ Respond with only one word: SAME or DIFFERENT"""
                     age_days = (datetime.now(pytz.UTC) - dt).days
                     if age_days > 7:
                         continue
-                except:
+                except Exception as e:
+                    pulse_logger.log(f"⚠️ Failed to parse article date in parallel fetch: {e}", level="WARNING")
                     timestamp = published
                     date = datetime.now(self.timezone).strftime('%Y-%m-%d')
                 local_items.append({
@@ -583,7 +588,8 @@ Respond with only one word: SAME or DIFFERENT"""
                     gemini_cache = json.load(f)
             else:
                 gemini_cache = {}
-        except:
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to load Haiku classification cache: {e}", level="WARNING")
             gemini_cache = {}
 
         # Split into already classified vs new
@@ -602,8 +608,8 @@ Respond with only one word: SAME or DIFFERENT"""
                         age_hours = (datetime.now(timezone.utc) - classified_dt).total_seconds() / 3600
                         if age_hours > 48:
                             continue
-                    except:
-                        pass
+                    except Exception as e:
+                        pulse_logger.log(f"⚠️ Failed to parse classified_at timestamp in cache: {e}", level="WARNING")
                 if cached.get('direction'):
                     direction = cached['direction']
                     i['sentiment_score'] = 0.8 if direction == 'bullish' else -0.8 if direction == 'bearish' else 0.0

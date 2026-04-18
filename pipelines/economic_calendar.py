@@ -37,7 +37,8 @@ class EconomicCalendarPipeline:
             dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
             est = dt.astimezone(pytz.timezone(TIMEZONE))
             return est.strftime('%a %b %d, %I:%M %p EST')
-        except:
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to parse event date '{date_str}': {e}", level="WARNING")
             return date_str
 
     # Inflation metrics — higher = more inflation = bearish for equities
@@ -67,7 +68,8 @@ class EconomicCalendarPipeline:
             actual_val = float(actual.replace('%', '').replace('K', '').replace('M', '').replace('B', '').replace('T', ''))
             forecast_val = float(forecast.replace('%', '').replace('K', '').replace('M', '').replace('B', '').replace('T', '')) if forecast else None
             previous_val = float(previous.replace('%', '').replace('K', '').replace('M', '').replace('B', '').replace('T', '')) if previous else None
-        except:
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to parse values for '{title}': {e}", level="WARNING")
             return 'pending', 'unknown', f'{title} — cannot parse values'
 
         inverted = self.is_inflation_metric(title)

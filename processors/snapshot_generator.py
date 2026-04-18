@@ -28,8 +28,8 @@ class SnapshotGenerator:
         try:
             with open('/data/permanent_weekly_summary.json', 'r') as f:
                 weekly = json.load(f)
-        except:
-            pass
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to load weekly summary for snapshot: {e}", level="WARNING")
         snapshot = {
             'id': snapshot_id,
             'timestamp': timestamp,
