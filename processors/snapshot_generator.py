@@ -1,6 +1,7 @@
 import json
 import os
-import hashlib
+import uuid
+from utils.file_lock import atomic_write_json
 from datetime import datetime
 import pytz
 from config import TIMEZONE
@@ -17,12 +18,12 @@ class SnapshotGenerator:
         if not os.path.exists(self.snapshot_dir):
             os.makedirs(self.snapshot_dir)
 
-    def generate_id(self, timestamp):
-        return hashlib.md5(timestamp.encode()).hexdigest()[:8].upper()
+    def generate_id(self):
+        return str(uuid.uuid4())
 
     def save(self, bias_score, formatted_data):
         timestamp = datetime.now(self.timezone).isoformat()
-        snapshot_id = self.generate_id(timestamp)
+        snapshot_id = self.generate_id()
         weekly = None
         try:
             with open('/data/permanent_weekly_summary.json', 'r') as f:
@@ -37,8 +38,7 @@ class SnapshotGenerator:
             'weekly_summary': weekly if weekly else None
         }
         snapshot_file = os.path.join(self.snapshot_dir, f"snapshot_{snapshot_id}.json")
-        with open(snapshot_file, 'w') as f:
-            json.dump(snapshot, f, indent=2)
+        atomic_write_json(snapshot_file, snapshot)
         pulse_logger.log(f"📸 Snapshot saved | ID: {snapshot_id}")
 
         # Keep only last 50 snapshots

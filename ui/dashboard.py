@@ -1,5 +1,6 @@
 import json
 from flask import Flask, render_template, jsonify, request
+from utils.file_lock import atomic_write_json
 from processors.snapshot_generator import snapshot_generator
 from pipelines.manual_input import manual_input_pipeline
 
@@ -88,23 +89,20 @@ def reset_manual_input():
             inputs = json.load(f)
         if event_title in inputs:
             del inputs[event_title]
-            with open('/data/permanent_manual_inputs.json', 'w') as f:
-                json.dump(inputs, f, indent=2)
+            atomic_write_json('/data/permanent_manual_inputs.json', inputs)
         return jsonify({'status': 'reset', 'event': event_title})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/size_mode', methods=['POST'])
 def set_size_mode():
-    import json
     data = request.get_json()
     mode = data.get('mode', 'quarter')
     if mode not in ['quarter', 'normal']:
         return jsonify({'status': 'error', 'message': 'Invalid mode'}), 400
     size_mode_file = '/data/size_mode.json'
     try:
-        with open(size_mode_file, 'w') as f:
-            json.dump({'mode': mode}, f)
+        atomic_write_json(size_mode_file, {'mode': mode})
         return jsonify({'status': 'saved', 'mode': mode})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500

@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import datetime
+from utils.file_lock import atomic_write_json
 
 class Cache:
     def __init__(self, cache_dir="./data"):
@@ -17,8 +18,7 @@ class Cache:
             'data': data,
             'timestamp': datetime.now().isoformat()
         }
-        with open(cache_file, 'w') as f:
-            json.dump(payload, f, indent=2)
+        atomic_write_json(cache_file, payload)
     
     def load(self, key):
         cache_file = os.path.join(self.cache_dir, f"{key}.json")

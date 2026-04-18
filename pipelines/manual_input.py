@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 import pytz
 from config import TIMEZONE
+from utils.file_lock import atomic_write_json
 from utils.retry import fetch_with_retry
 from utils.cache import cache
 from utils.logger import pulse_logger
@@ -21,8 +22,7 @@ class ManualInputPipeline:
         if not os.path.exists('/data'):
             os.makedirs('/data')
         if not os.path.exists(self.permanent_file):
-            with open(self.permanent_file, 'w') as f:
-                json.dump({}, f)
+            atomic_write_json(self.permanent_file, {})
 
     def save_actual(self, event_title, actual_value, story_url=None):
         try:
@@ -40,8 +40,7 @@ class ManualInputPipeline:
                 'timestamp': datetime.now(self.timezone).isoformat()
             }
 
-            with open(self.permanent_file, 'w') as f:
-                json.dump(inputs, f, indent=2)
+            atomic_write_json(self.permanent_file, inputs)
 
             pulse_logger.log(f"✓ Manual input saved permanently | {event_title}: {actual_value}")
             return True
@@ -82,8 +81,7 @@ class ManualInputPipeline:
                         fresh[title] = data
                 except:
                     pass
-            with open(self.permanent_file, 'w') as f:
-                json.dump(fresh, f, indent=2)
+            atomic_write_json(self.permanent_file, fresh)
         except Exception as e:
             error_handler.handle(e, "Manual Input Cleanup")
 

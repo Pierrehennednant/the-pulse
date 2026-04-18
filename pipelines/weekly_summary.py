@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 import pytz
 from config import TIMEZONE
+from utils.file_lock import atomic_write_json
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
 
@@ -16,8 +17,7 @@ class WeeklySummaryPipeline:
         if not os.path.exists('./data'):
             os.makedirs('./data')
         if not os.path.exists(self.permanent_file):
-            with open(self.permanent_file, 'w') as f:
-                json.dump({}, f)
+            atomic_write_json(self.permanent_file, {})
 
     def _load(self):
         try:
@@ -27,8 +27,7 @@ class WeeklySummaryPipeline:
             return {}
 
     def _save(self, data):
-        with open(self.permanent_file, 'w') as f:
-            json.dump(data, f, indent=2)
+        atomic_write_json(self.permanent_file, data)
 
     def is_friday(self):
         return datetime.now(pytz.timezone(TIMEZONE)).weekday() == 4

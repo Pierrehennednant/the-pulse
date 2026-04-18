@@ -7,6 +7,7 @@ import pytz
 import anthropic
 from transformers import pipeline as hf_pipeline
 from config import TIMEZONE, SENTIMENT_MODEL, THENEWS_API_KEY
+from utils.file_lock import atomic_write_json
 from utils.retry import fetch_with_retry
 from utils.cache import cache
 from utils.logger import pulse_logger
@@ -282,8 +283,7 @@ Articles to classify:
     def save_pinned_stories(self, pinned):
         """Save pinned stories to disk."""
         try:
-            with open(self.pinned_store_file, 'w') as f:
-                json.dump(pinned, f, indent=2)
+            atomic_write_json(self.pinned_store_file, pinned)
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to save pinned stories: {e}", level="WARNING")
 
@@ -658,8 +658,7 @@ Respond with only one word: SAME or DIFFERENT"""
                                     'uncertainty_score': r.get('uncertainty_score', 0),
                                     'classified_at': datetime.now().isoformat()
                                 }
-                        with open(gemini_cache_file, 'w') as f:
-                            json.dump(gemini_cache, f, indent=2)
+                        atomic_write_json(gemini_cache_file, gemini_cache)
                         self.update_pinned_store(new_items, classifications)
                         pulse_logger.log(f"✅ Haiku background done — {len(classifications)} articles classified with summaries")
                 except Exception as e:
