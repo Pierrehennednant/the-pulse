@@ -13,6 +13,7 @@ from pipelines.economic_calendar import economic_calendar_pipeline
 from pipelines.institutional import institutional_pipeline
 from pipelines.geopolitical import geopolitical_pipeline
 from pipelines.weekly_summary import weekly_summary_pipeline
+from pipelines.manual_input import manual_input_pipeline
 
 from processors.data_formatter import data_formatter
 from processors.bias_calculator import bias_calculator
@@ -95,6 +96,7 @@ def run_pulse():
 
 def run_scheduler():
     schedule.every(REFRESH_INTERVAL_MINUTES).minutes.do(run_pulse)
+    schedule.every(24).hours.do(manual_input_pipeline.clear_old_inputs)
     while True:
         schedule.run_pending()
         time.sleep(1)
