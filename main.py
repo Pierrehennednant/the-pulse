@@ -12,7 +12,6 @@ from pipelines.macro_sentiment import macro_sentiment_pipeline
 from pipelines.economic_calendar import economic_calendar_pipeline
 from pipelines.institutional import institutional_pipeline
 from pipelines.geopolitical import geopolitical_pipeline
-from pipelines.news_sentiment import news_sentiment_pipeline
 from pipelines.weekly_summary import weekly_summary_pipeline
 
 from processors.data_formatter import data_formatter
@@ -60,29 +59,12 @@ def run_pulse():
         cached = _cache.load("geopolitical")
         geo_data = cached['data'] if cached else {}
 
-    # News sentiment with hard 20s thread timeout
-    try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(news_sentiment_pipeline.fetch, geo_data)
-            news_data = future.result(timeout=20)
-    except concurrent.futures.TimeoutError:
-        pulse_logger.log("⚠️ News timed out after 20s — using cache", level="WARNING")
-        from utils.cache import cache as _cache
-        cached = _cache.load("news_sentiment")
-        news_data = cached['data'] if cached else {}
-    except Exception as e:
-        pulse_logger.log(f"⚠️ News failed: {e}", level="WARNING")
-        from utils.cache import cache as _cache
-        cached = _cache.load("news_sentiment")
-        news_data = cached['data'] if cached else {}
-
     try:
         formatted_data = data_formatter.standardize({
             'macro': macro_data,
             'economic': econ_data,
             'institutional': inst_data,
-            'geopolitical': geo_data,
-            'news': news_data
+            'geopolitical': geo_data
         })
 
         # Load size mode from persistent storage

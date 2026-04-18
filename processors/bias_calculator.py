@@ -18,8 +18,7 @@ class BiasCalculator:
             'economic': 'economic_calendar',
             'geopolitical': 'geopolitical',
             'institutional': 'institutional',
-            'macro': 'macro_sentiment',
-            'news': 'news_sentiment'
+            'macro': 'macro_sentiment'
         }
 
         for data_key, config_key in weight_map.items():
@@ -174,7 +173,7 @@ class BiasCalculator:
             'size_mode': size_mode
         }
 
-        pulse_logger.log(f"📊 Bias: {bias_emoji} {bias} | Confidence: {confidence}% ({confidence_label}) | Active Pillars: {active_pillars}/5 | Mode: {size_mode}")
+        pulse_logger.log(f"📊 Bias: {bias_emoji} {bias} | Confidence: {confidence}% ({confidence_label}) | Active Pillars: {active_pillars}/4 | Mode: {size_mode}")
         return result
 
 bias_calculator = BiasCalculator()

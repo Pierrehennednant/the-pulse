@@ -24,18 +24,16 @@ GEO_REFRESH_INTERVAL_MINUTES = 3
 # Pillar Weights
 PILLAR_WEIGHTS = {
     "economic_calendar": 40,
-    "geopolitical": 28,
+    "geopolitical": 30,
     "institutional": 20,
-    "macro_sentiment": 10,
-    "news_sentiment": 2
+    "macro_sentiment": 10
 }
 
 # Stale Data Thresholds (minutes)
 STALE_THRESHOLDS = {
     "economic_calendar": 1440,
     "macro_sentiment": 30,
-    "geopolitical": 120,
-    "news_sentiment": 60
+    "geopolitical": 120
 }
 
 # Bias Score Range
