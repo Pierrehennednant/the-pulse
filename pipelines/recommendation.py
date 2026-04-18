@@ -45,7 +45,8 @@ class RecommendationEngine:
                                 'confidence': bias.get('confidence', 0),
                                 'date': est.strftime('%Y-%m-%d')
                             })
-                except:
+                except Exception as e:
+                    pulse_logger.log(f"⚠️ Snapshot read failed: {e}", level="WARNING")
                     continue
 
             if not snapshots:
