@@ -12,6 +12,9 @@ class MacroSentimentPipeline:
         self.cache_key = "macro_sentiment"
 
     def fetch_vix(self):
+        if not FRED_API_KEY:
+            pulse_logger.log("⚠️ FRED_API_KEY not set — skipping VIX fetch", level="WARNING")
+            return None
         try:
             url = f"https://api.stlouisfed.org/fred/series/observations?series_id=VIXCLS&api_key={FRED_API_KEY}&sort_order=desc&limit=10&file_type=json"
             response = fetch_with_retry(url, timeout=10)
@@ -35,6 +38,9 @@ class MacroSentimentPipeline:
             return None
 
     def fetch_vxn(self):
+        if not FRED_API_KEY:
+            pulse_logger.log("⚠️ FRED_API_KEY not set — skipping VXN fetch", level="WARNING")
+            return None
         try:
             url = f"https://api.stlouisfed.org/fred/series/observations?series_id=VXNCLS&api_key={FRED_API_KEY}&sort_order=desc&limit=10&file_type=json"
             response = fetch_with_retry(url, timeout=10)

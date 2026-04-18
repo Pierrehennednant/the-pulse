@@ -17,7 +17,12 @@ class GeopoliticalPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "geopolitical"
-        self.anthropic_client = anthropic.Anthropic(api_key=os.environ.get('ANTHROPIC_API_KEY', ''))
+        api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+        if not api_key:
+            pulse_logger.log("⚠️ ANTHROPIC_API_KEY not set — Haiku classification will be unavailable", level="WARNING")
+            self.anthropic_client = None
+        else:
+            self.anthropic_client = anthropic.Anthropic(api_key=api_key)
         self.pinned_store_file = "/data/pinned_stories.json"
         self.sentiment_analyzer = hf_pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
         self.market_keywords = [
@@ -132,6 +137,8 @@ class GeopoliticalPipeline:
     def classify_relevance_batch(self, articles):
         """Use Claude Haiku to classify articles with full article context and generate clean summaries."""
         if not articles:
+            return []
+        if self.anthropic_client is None:
             return []
 
         # Build batch input with full article text
@@ -289,6 +296,8 @@ Articles to classify:
 
     def is_same_story(self, new_headline, pinned_headline):
         """Ask Haiku whether a new article supersedes a pinned story."""
+        if self.anthropic_client is None:
+            return False
         try:
             prompt = f"""You are evaluating whether two news headlines are about the same underlying geopolitical or market story.
 
