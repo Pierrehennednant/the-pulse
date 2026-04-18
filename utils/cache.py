@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from utils.file_lock import atomic_write_json
 
 class Cache:
@@ -16,7 +16,7 @@ class Cache:
         cache_file = os.path.join(self.cache_dir, f"{key}.json")
         payload = {
             'data': data,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
         atomic_write_json(cache_file, payload)
     
@@ -31,8 +31,8 @@ class Cache:
         cached = self.load(key)
         if not cached:
             return float('inf')
-        cached_time = datetime.fromisoformat(cached['timestamp'])
-        return (datetime.now() - cached_time).total_seconds() / 60
+        cached_time = datetime.fromisoformat(cached['timestamp'].replace('Z', '+00:00'))
+        return (datetime.now(timezone.utc) - cached_time).total_seconds() / 60
     
     def is_stale(self, key, threshold_minutes):
         return self.get_age_minutes(key) > threshold_minutes
