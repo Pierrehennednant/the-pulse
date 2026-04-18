@@ -24,7 +24,7 @@ class SnapshotGenerator:
     def save(self, bias_score, formatted_data):
         timestamp = datetime.now(self.timezone).isoformat()
         snapshot_id = self.generate_id()
-        weekly = None
+        weekly = {}
         try:
             with open('/data/permanent_weekly_summary.json', 'r') as f:
                 weekly = json.load(f)
@@ -35,7 +35,7 @@ class SnapshotGenerator:
             'timestamp': timestamp,
             'bias': bias_score,
             'pillars': formatted_data,
-            'weekly_summary': weekly if weekly else None
+            'weekly_summary': weekly or None
         }
         snapshot_file = os.path.join(self.snapshot_dir, f"snapshot_{snapshot_id}.json")
         atomic_write_json(snapshot_file, snapshot)
