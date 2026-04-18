@@ -4,15 +4,10 @@ import os
 
 # API Keys — set these as environment variables in Railway (and optionally locally via .env)
 FRED_API_KEY = os.environ.get("FRED_API_KEY", "")
-ALPHA_VANTAGE_API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
-NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "")
 THENEWS_API_KEY = os.environ.get("THENEWS_API_KEY", "")
 
 # Endpoints
-CNN_FEAR_GREED_URL = "https://www.cnn.com/markets/fear-and-greed"
 CFTC_COT_URL = "https://www.cftc.gov/dea/futures/financial_lf.htm"
-FINANCIAL_JUICE_URL = "https://www.financialjuice.com/home"
-UNBIASED_NETWORK_URL = "https://www.unbiasednetwork.com/episodes"
 
 # Timezone
 TIMEZONE = "US/Eastern"
@@ -48,4 +43,3 @@ SENTIMENT_MODEL = "distilbert-base-uncased-finetuned-sst-2-english"
 
 # Cache Settings
 CACHE_DIR = "/data"
-COT_CACHE_FILE = "/data/weekly_cot.json"
