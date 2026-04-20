@@ -702,6 +702,16 @@ Respond with only one word: SAME or DIFFERENT"""
             bg_thread = threading.Thread(target=background_classify, daemon=True)
             bg_thread.start()
 
+        def sort_key(item):
+            val = item.get('published_at') or item.get('date') or ''
+            try:
+                dt = datetime.fromisoformat(val.replace('Z', '+00:00'))
+                return dt.isoformat()
+            except Exception:
+                return val
+
+        immediately_available.sort(key=sort_key, reverse=True)
+
         return immediately_available
 
     def identify_flags(self, items):
