@@ -1,5 +1,6 @@
 from datetime import datetime
 import pytz
+import fear_greed
 from config import TIMEZONE, FRED_API_KEY
 from utils.retry import fetch_with_retry
 from utils.cache import cache
@@ -65,16 +66,14 @@ class MacroSentimentPipeline:
 
     def fetch_fear_greed(self):
         try:
-            url = "https://api.alternative.me/fng/?limit=1"
-            response = fetch_with_retry(url, timeout=10)
-            data = response.json()
-            score = int(data['data'][0]['value'])
-            rating = data['data'][0]['value_classification']
+            fg = fear_greed.get()
+            score = int(fg.score)
+            rating = fg.rating
             return {
                 'score': score,
                 'rating': rating,
                 'signal': 'bearish' if score < 40 else 'bullish' if score > 60 else 'neutral',
-                'source': 'Alternative.me'
+                'source': 'CNN'
             }
         except Exception as e:
             error_handler.handle(e, "Fear & Greed")
