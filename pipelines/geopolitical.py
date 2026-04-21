@@ -272,7 +272,6 @@ Articles to classify:
                 return []
             with open(self.pinned_store_file, 'r') as f:
                 pinned = json.load(f)
-            from datetime import timezone
             now = datetime.now(timezone.utc)
             valid = []
             for story in pinned:
@@ -520,7 +519,7 @@ Respond with only one word: SAME or DIFFERENT"""
                 f"&language=en"
                 f"&categories={category}"
                 f"&limit=25"
-                f"&published_after={(datetime.now(pytz.utc) - __import__('datetime').timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M:%S')}"
+                f"&published_after={(datetime.now(pytz.utc) - timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M:%S')}"
                 f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,abcnews.go.com,washingtonpost.com,nytimes.com"
             )
             response = fetch_with_retry(url, timeout=10)
@@ -537,7 +536,7 @@ Respond with only one word: SAME or DIFFERENT"""
                 f"&search={requests.utils.quote(query)}"
                 f"&sort=published_at"
                 f"&limit=25"
-                f"&published_after={(datetime.now(pytz.utc) - __import__('datetime').timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M:%S')}"
+                f"&published_after={(datetime.now(pytz.utc) - timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M:%S')}"
                 f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,washingtonpost.com,nytimes.com"
             )
             response = fetch_with_retry(url, timeout=10)
@@ -625,7 +624,6 @@ Respond with only one word: SAME or DIFFERENT"""
         for i in items:
             cached = gemini_cache.get(i['headline'], {})
             if cached.get('relevant') and cached.get('confidence', 0) >= 0.75:
-                from datetime import timezone
                 classified_at = cached.get('classified_at', '')
                 if classified_at:
                     try:

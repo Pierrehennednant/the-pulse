@@ -4,7 +4,6 @@ import schedule
 import time
 import threading
 from datetime import datetime
-import pytz
 import concurrent.futures
 
 from config import TIMEZONE, REFRESH_INTERVAL_MINUTES

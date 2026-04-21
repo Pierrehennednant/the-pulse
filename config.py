@@ -6,9 +6,6 @@ import os
 FRED_API_KEY = os.environ.get("FRED_API_KEY", "")
 THENEWS_API_KEY = os.environ.get("THENEWS_API_KEY", "")
 
-# Endpoints
-CFTC_COT_URL = "https://www.cftc.gov/dea/futures/financial_lf.htm"
-
 # Timezone
 TIMEZONE = "US/Eastern"
 
