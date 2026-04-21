@@ -706,16 +706,22 @@ Respond with only one word: SAME or DIFFERENT"""
             val = item.get('published_at') or item.get('date') or ''
             try:
                 dt = datetime.fromisoformat(val.replace('Z', '+00:00'))
-                return dt.isoformat()
+                sort_val = dt.isoformat()
+                pulse_logger.log(f"[sort_key DEBUG] headline={item.get('headline', '')!r} sort_val={sort_val!r}")
+                return sort_val
             except Exception:
                 pass
             ts = item.get('timestamp') or ''
             try:
                 dt = datetime.strptime(ts, "%b %d, %I:%M %p EST")
                 dt = dt.replace(year=datetime.now().year)
-                return dt.isoformat()
+                sort_val = dt.isoformat()
+                pulse_logger.log(f"[sort_key DEBUG] headline={item.get('headline', '')!r} sort_val={sort_val!r} (from timestamp)")
+                return sort_val
             except Exception:
-                return val or ts
+                sort_val = val or ts
+                pulse_logger.log(f"[sort_key DEBUG] headline={item.get('headline', '')!r} sort_val={sort_val!r} (fallback)")
+                return sort_val
 
         immediately_available.sort(key=sort_key, reverse=True)
 
