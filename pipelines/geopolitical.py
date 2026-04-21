@@ -703,25 +703,17 @@ Respond with only one word: SAME or DIFFERENT"""
             bg_thread.start()
 
         def sort_key(item):
-            val = item.get('published_at') or item.get('date') or ''
-            try:
-                dt = datetime.fromisoformat(val.replace('Z', '+00:00'))
-                sort_val = dt.isoformat()
-                print(f"[sort_key DEBUG] headline={item.get('headline', '')!r} sort_val={sort_val!r}")
-                return sort_val
-            except Exception:
-                pass
             ts = item.get('timestamp') or ''
             try:
-                dt = datetime.strptime(ts, "%b %d, %I:%M %p EST")
-                dt = dt.replace(year=datetime.now().year)
-                sort_val = dt.isoformat()
-                print(f"[sort_key DEBUG] headline={item.get('headline', '')!r} sort_val={sort_val!r} (from timestamp)")
-                return sort_val
+                dt = datetime.strptime(f"{datetime.now().year} {ts.replace(' EST', '')}", "%Y %b %d, %I:%M %p")
+                return dt.isoformat()
             except Exception:
-                sort_val = val or ts
-                print(f"[sort_key DEBUG] headline={item.get('headline', '')!r} sort_val={sort_val!r} (fallback)")
-                return sort_val
+                pass
+            val = item.get('published_at') or item.get('date') or ''
+            try:
+                return datetime.fromisoformat(val.replace('Z', '+00:00')).isoformat()
+            except Exception:
+                return val or ts
 
         immediately_available.sort(key=sort_key, reverse=True)
 
