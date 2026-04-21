@@ -2,7 +2,7 @@ import json
 import os
 import requests
 import concurrent.futures
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pytz
 import anthropic
 from transformers import pipeline as hf_pipeline
@@ -374,7 +374,7 @@ Respond with only one word: SAME or DIFFERENT"""
                 'timestamp': article.get('timestamp', ''),
                 'date': article.get('date', ''),
                 'link': article.get('link', ''),
-                'pinned_at': datetime.now().isoformat()
+                'pinned_at': datetime.now(timezone.utc).isoformat()
             }
 
             # Ask Haiku whether this supersedes any existing pinned story
@@ -521,6 +521,9 @@ Respond with only one word: SAME or DIFFERENT"""
                 f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,abcnews.go.com,washingtonpost.com,nytimes.com"
             )
             response = fetch_with_retry(url, timeout=10)
+            if not response.ok:
+                pulse_logger.log(f"⚠️ TheNewsAPI top stories returned {response.status_code} — skipping", level="WARNING")
+                return {}
             return response.json()
 
         def fetch_query(query):
@@ -535,6 +538,9 @@ Respond with only one word: SAME or DIFFERENT"""
                 f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,washingtonpost.com,nytimes.com"
             )
             response = fetch_with_retry(url, timeout=10)
+            if not response.ok:
+                pulse_logger.log(f"⚠️ TheNewsAPI query '{query}' returned {response.status_code} — skipping", level="WARNING")
+                return {}
             return response.json()
 
         items = []
@@ -732,7 +738,7 @@ Respond with only one word: SAME or DIFFERENT"""
                                     'reason': r.get('reason', ''),
                                     'summary': r.get('summary', ''),
                                     'uncertainty_score': r.get('uncertainty_score', 0),
-                                    'classified_at': datetime.now().isoformat()
+                                    'classified_at': datetime.now(timezone.utc).isoformat()
                                 }
                         atomic_write_json(gemini_cache_file, gemini_cache)
                         self.update_pinned_store(new_items, classifications)
