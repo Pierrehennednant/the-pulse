@@ -67,8 +67,8 @@ class MacroSentimentPipeline:
     def fetch_fear_greed(self):
         try:
             fg = fear_greed.get()
-            score = int(fg.score)
-            rating = fg.rating
+            score = int(fg['score'])
+            rating = fg['rating']
             return {
                 'score': score,
                 'rating': rating,
