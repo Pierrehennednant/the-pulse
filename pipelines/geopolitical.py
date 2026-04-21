@@ -486,7 +486,7 @@ Respond with only one word: SAME or DIFFERENT"""
                 date = datetime.now(self.timezone).strftime('%Y-%m-%d')
             try:
                 dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
-                age_days = (datetime.now(pytz.UTC) - dt.replace(tzinfo=pytz.UTC) if dt.tzinfo is None else datetime.now(pytz.UTC) - dt).days
+                age_days = (datetime.now(pytz.utc) - dt.replace(tzinfo=pytz.utc) if dt.tzinfo is None else datetime.now(pytz.utc) - dt).days
                 if age_days > 7:
                     continue
             except Exception as e:
@@ -504,6 +504,9 @@ Respond with only one word: SAME or DIFFERENT"""
             })
 
     def fetch_news(self):
+        if not THENEWS_API_KEY:
+            pulse_logger.log("⚠️ THENEWS_API_KEY not set — skipping geopolitical news fetch", level="WARNING")
+            return []
         import threading
         categories = ['business', 'politics', 'tech']
         search_queries = [
@@ -563,7 +566,7 @@ Respond with only one word: SAME or DIFFERENT"""
                     est = dt.astimezone(pytz.timezone(TIMEZONE))
                     timestamp = est.strftime('%b %d, %I:%M %p EST')
                     date = est.strftime('%Y-%m-%d')
-                    age_days = (datetime.now(pytz.UTC) - dt).days
+                    age_days = (datetime.now(pytz.utc) - dt).days
                     if age_days > 7:
                         continue
                 except Exception as e:
