@@ -708,7 +708,14 @@ Respond with only one word: SAME or DIFFERENT"""
                 dt = datetime.fromisoformat(val.replace('Z', '+00:00'))
                 return dt.isoformat()
             except Exception:
-                return val
+                pass
+            ts = item.get('timestamp') or ''
+            try:
+                dt = datetime.strptime(ts, "%b %d, %I:%M %p EST")
+                dt = dt.replace(year=datetime.now().year)
+                return dt.isoformat()
+            except Exception:
+                return val or ts
 
         immediately_available.sort(key=sort_key, reverse=True)
 
