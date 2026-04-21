@@ -285,6 +285,23 @@ Articles to classify:
                 except Exception as e:
                     pulse_logger.log(f"⚠️ Failed to parse pinned story timestamp: {e}", level="WARNING")
                     continue
+            # Pin vs pin deduplication — keep newest when two pins cover the same story
+            if len(valid) > 1:
+                try:
+                    valid.sort(key=lambda s: s.get('pinned_at', ''), reverse=True)
+                    deduped = []
+                    for candidate in valid:
+                        c_headline = candidate.get('headline', '')
+                        if any(self.is_same_story(c_headline, kept.get('headline', '')) for kept in deduped):
+                            pulse_logger.log(f"📌 Pinned story deduplicated (older duplicate retired): {c_headline[:60]}")
+                            continue
+                        deduped.append(candidate)
+                    if len(deduped) < len(valid):
+                        valid = deduped
+                        self.save_pinned_stories(valid)
+                except Exception as e:
+                    pulse_logger.log(f"⚠️ Pin vs pin dedup failed: {e}", level="WARNING")
+
             return valid
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to load pinned stories: {e}", level="WARNING")
