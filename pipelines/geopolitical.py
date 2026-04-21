@@ -1,5 +1,6 @@
 import json
 import os
+import threading
 import requests
 import concurrent.futures
 from datetime import datetime, timedelta, timezone
@@ -507,7 +508,6 @@ Respond with only one word: SAME or DIFFERENT"""
         if not THENEWS_API_KEY:
             pulse_logger.log("⚠️ THENEWS_API_KEY not set — skipping geopolitical news fetch", level="WARNING")
             return []
-        import threading
         categories = ['business', 'politics', 'tech']
         search_queries = [
             'federal reserve OR tariff OR war OR iran OR sanctions OR recession OR trump'

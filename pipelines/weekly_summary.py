@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from datetime import datetime
 import pytz
 from config import TIMEZONE
@@ -35,7 +36,6 @@ class WeeklySummaryPipeline:
 
     def truncate_to_sentences(self, text, max_sentences=2):
         """Cut text at sentence boundary, max 2 sentences."""
-        import re
         sentences = re.split(r'(?<=[.!?])\s+', text.strip())
         return ' '.join(sentences[:max_sentences])
 

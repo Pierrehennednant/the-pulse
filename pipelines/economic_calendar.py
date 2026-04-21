@@ -98,9 +98,6 @@ class EconomicCalendarPipeline:
                 return 'unchanged', 'neutral', f'{title} unchanged from previous ({actual})'
         return 'pending', 'unknown', f'{title} — no comparison available'
 
-    def get_forward_guidance(self, title):
-        return f'{title} not yet released'
-
     def is_speech_event(self, title):
         speech_keywords = [
             'speaks', 'speech', 'press conference', 'testimony',
@@ -228,7 +225,7 @@ class EconomicCalendarPipeline:
                     'impact': event.get('impact', ''),
                     'result': 'pending',
                     'market_impact': 'unknown',
-                    'reason': self.get_forward_guidance(title)
+                    'reason': f'{title} not yet released'
                 }
                 if self.is_speech_event(event_row['title']):
                     event_row['is_speech'] = True

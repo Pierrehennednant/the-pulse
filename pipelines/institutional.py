@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from bs4 import BeautifulSoup
 from datetime import datetime
 import pytz
@@ -39,7 +40,6 @@ class InstitutionalPipeline:
 
     def parse_positions(self, text, instrument):
         try:
-            import re
             idx = text.upper().find(instrument.upper())
             if idx == -1:
                 return None

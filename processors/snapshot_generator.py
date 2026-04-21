@@ -49,7 +49,10 @@ class SnapshotGenerator:
         )
         if len(all_snapshots) > 50:
             for old_file in all_snapshots[50:]:
-                os.remove(os.path.join(self.snapshot_dir, old_file))
+                try:
+                    os.remove(os.path.join(self.snapshot_dir, old_file))
+                except Exception as e:
+                    pulse_logger.log(f"⚠️ Failed to remove old snapshot {old_file}: {e}", level="WARNING")
 
         return snapshot_id
 
