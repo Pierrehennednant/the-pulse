@@ -707,7 +707,7 @@ Respond with only one word: SAME or DIFFERENT"""
             try:
                 dt = datetime.fromisoformat(val.replace('Z', '+00:00'))
                 sort_val = dt.isoformat()
-                pulse_logger.log(f"[sort_key DEBUG] headline={item.get('headline', '')!r} sort_val={sort_val!r}")
+                print(f"[sort_key DEBUG] headline={item.get('headline', '')!r} sort_val={sort_val!r}")
                 return sort_val
             except Exception:
                 pass
@@ -716,11 +716,11 @@ Respond with only one word: SAME or DIFFERENT"""
                 dt = datetime.strptime(ts, "%b %d, %I:%M %p EST")
                 dt = dt.replace(year=datetime.now().year)
                 sort_val = dt.isoformat()
-                pulse_logger.log(f"[sort_key DEBUG] headline={item.get('headline', '')!r} sort_val={sort_val!r} (from timestamp)")
+                print(f"[sort_key DEBUG] headline={item.get('headline', '')!r} sort_val={sort_val!r} (from timestamp)")
                 return sort_val
             except Exception:
                 sort_val = val or ts
-                pulse_logger.log(f"[sort_key DEBUG] headline={item.get('headline', '')!r} sort_val={sort_val!r} (fallback)")
+                print(f"[sort_key DEBUG] headline={item.get('headline', '')!r} sort_val={sort_val!r} (fallback)")
                 return sort_val
 
         immediately_available.sort(key=sort_key, reverse=True)
