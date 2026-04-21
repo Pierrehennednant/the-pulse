@@ -647,6 +647,30 @@ Respond with only one word: SAME or DIFFERENT"""
         # Return immediately — known relevant + keyword-passed new articles
         immediately_available = known_relevant + keyword_passed
 
+        # Deduplicate by story — sort newest first, then drop older articles covering the same story
+        def _live_sort_key(item):
+            ts = item.get('timestamp') or ''
+            try:
+                dt = datetime.strptime(f"{datetime.now().year} {ts.replace(' EST', '').replace(' EDT', '')}", "%Y %b %d, %I:%M %p")
+                return dt.isoformat()
+            except Exception:
+                pass
+            val = item.get('published_at') or item.get('date') or ''
+            try:
+                return datetime.fromisoformat(val.replace('Z', '+00:00')).isoformat()
+            except Exception:
+                return val or ts
+
+        immediately_available.sort(key=_live_sort_key, reverse=True)
+        deduped_live = []
+        for candidate in immediately_available:
+            c_headline = candidate.get('headline', '')
+            if any(self.is_same_story(c_headline, kept.get('headline', '')) for kept in deduped_live):
+                pulse_logger.log(f"📰 Live article deduplicated (older duplicate dropped): {c_headline[:60]}")
+                continue
+            deduped_live.append(candidate)
+        immediately_available = deduped_live
+
         # Inject pinned stories not already covered by a live article
         pinned_stories = self.load_pinned_stories()
         current_headlines = {i['headline'] for i in immediately_available}
