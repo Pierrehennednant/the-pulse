@@ -753,9 +753,12 @@ Respond with only one word: SAME or DIFFERENT"""
                 val = item.get(field) or ''
                 if val:
                     try:
-                        return dateutil_parser.parse(val, default=datetime.now(timezone.utc), tzinfos={"EST": -18000, "EDT": -14400}).isoformat()
-                    except Exception:
-                        pass
+                        parsed = dateutil_parser.parse(val, default=datetime.now(timezone.utc), tzinfos={"EST": -18000, "EDT": -14400})
+                        print(f"[SORT_KEY] field={field!r} raw={val!r} parsed={parsed.isoformat()!r} headline={item.get('headline','')[:50]!r}")
+                        return parsed.isoformat()
+                    except Exception as e:
+                        print(f"[SORT_KEY] field={field!r} raw={val!r} FAILED: {e} headline={item.get('headline','')[:50]!r}")
+            print(f"[SORT_KEY] FALLBACK headline={item.get('headline','')[:50]!r}")
             return datetime.min.replace(tzinfo=timezone.utc).isoformat()
 
         immediately_available.sort(key=sort_key, reverse=True)
