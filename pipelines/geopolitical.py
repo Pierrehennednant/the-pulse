@@ -661,7 +661,7 @@ Respond with only one word: SAME or DIFFERENT"""
                 val = item.get(field) or ''
                 if val:
                     try:
-                        return dateutil_parser.parse(val, default=datetime.now(timezone.utc)).isoformat()
+                        return dateutil_parser.parse(val, default=datetime.now(timezone.utc), tzinfos={"EST": -18000, "EDT": -14400}).isoformat()
                     except Exception:
                         pass
             return datetime.min.replace(tzinfo=timezone.utc).isoformat()
@@ -753,13 +753,10 @@ Respond with only one word: SAME or DIFFERENT"""
                 val = item.get(field) or ''
                 if val:
                     try:
-                        return dateutil_parser.parse(val, default=datetime.now(timezone.utc)).isoformat()
+                        return dateutil_parser.parse(val, default=datetime.now(timezone.utc), tzinfos={"EST": -18000, "EDT": -14400}).isoformat()
                     except Exception:
                         pass
             return datetime.min.replace(tzinfo=timezone.utc).isoformat()
-
-        for _dbg in immediately_available:
-            print(f"[SORT DEBUG] headline={_dbg.get('headline','')[:60]!r} | published_at={_dbg.get('published_at','')!r} | date={_dbg.get('date','')!r} | timestamp={_dbg.get('timestamp','')!r}")
 
         immediately_available.sort(key=sort_key, reverse=True)
 
