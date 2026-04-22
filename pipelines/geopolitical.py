@@ -4,6 +4,7 @@ import threading
 import requests
 import concurrent.futures
 from datetime import datetime, timedelta, timezone
+from dateutil import parser as dateutil_parser
 import pytz
 import anthropic
 from transformers import pipeline as hf_pipeline
@@ -656,17 +657,14 @@ Respond with only one word: SAME or DIFFERENT"""
 
         # Deduplicate by story — sort newest first, then drop older articles covering the same story
         def _live_sort_key(item):
-            ts = item.get('timestamp') or ''
-            try:
-                dt = datetime.strptime(f"{datetime.now().year} {ts.replace(' EST', '').replace(' EDT', '')}", "%Y %b %d, %I:%M %p")
-                return dt.isoformat()
-            except Exception:
-                pass
-            val = item.get('published_at') or item.get('date') or ''
-            try:
-                return datetime.fromisoformat(val.replace('Z', '+00:00')).isoformat()
-            except Exception:
-                return val or ts
+            for field in ('timestamp', 'published_at', 'date'):
+                val = item.get(field) or ''
+                if val:
+                    try:
+                        return dateutil_parser.parse(val, default=datetime.now(timezone.utc)).isoformat()
+                    except Exception:
+                        pass
+            return datetime.min.replace(tzinfo=timezone.utc).isoformat()
 
         immediately_available.sort(key=_live_sort_key, reverse=True)
         deduped_live = []
@@ -751,17 +749,14 @@ Respond with only one word: SAME or DIFFERENT"""
             bg_thread.start()
 
         def sort_key(item):
-            ts = item.get('timestamp') or ''
-            try:
-                dt = datetime.strptime(f"{datetime.now().year} {ts.replace(' EST', '')}", "%Y %b %d, %I:%M %p")
-                return dt.isoformat()
-            except Exception:
-                pass
-            val = item.get('published_at') or item.get('date') or ''
-            try:
-                return datetime.fromisoformat(val.replace('Z', '+00:00')).isoformat()
-            except Exception:
-                return val or ts
+            for field in ('timestamp', 'published_at', 'date'):
+                val = item.get(field) or ''
+                if val:
+                    try:
+                        return dateutil_parser.parse(val, default=datetime.now(timezone.utc)).isoformat()
+                    except Exception:
+                        pass
+            return datetime.min.replace(tzinfo=timezone.utc).isoformat()
 
         immediately_available.sort(key=sort_key, reverse=True)
 
