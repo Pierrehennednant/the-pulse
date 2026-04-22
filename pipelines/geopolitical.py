@@ -758,6 +758,9 @@ Respond with only one word: SAME or DIFFERENT"""
                         pass
             return datetime.min.replace(tzinfo=timezone.utc).isoformat()
 
+        for _dbg in immediately_available:
+            print(f"[SORT DEBUG] headline={_dbg.get('headline','')[:60]!r} | published_at={_dbg.get('published_at','')!r} | date={_dbg.get('date','')!r} | timestamp={_dbg.get('timestamp','')!r}")
+
         immediately_available.sort(key=sort_key, reverse=True)
 
         return immediately_available
