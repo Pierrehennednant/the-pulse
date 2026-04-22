@@ -426,40 +426,47 @@
         if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
         let html = data.status === 'stale' ? '<div class="stale-warning">⚠️ Stale data</div>' : '';
 
-        const flags = data.active_flags || [];
-        const newsItems = data.news_items || [];
+        const flags = (data.active_flags || []).map(f => ({ ...f, _type: 'flag' }));
+        const newsItems = (data.news_items || [])
+            .filter(item => !(data.active_flags || []).some(f => f.title === item.headline))
+            .map(item => ({ ...item, _type: 'news' }));
 
-        if (!flags.length && !newsItems.length) return html + '<div class="data-row"><span class="data-label">No active flags</span></div>';
+        const combined = [...flags, ...newsItems];
+        if (!combined.length) return html + '<div class="data-row"><span class="data-label">No active flags</span></div>';
 
-        newsItems.forEach(item => {
-            if (flags.some(f => f.title === item.headline)) return;
-            const dirClass = item.gemini_direction ? valClass(item.gemini_direction) : '';
-            const dirLabel = item.gemini_direction ? item.gemini_direction.toUpperCase() : '';
-            html += `<div class="flag-item">
-                <div class="flag-title">${item.headline}</div>
-                <div class="flag-meta">
-                    <span class="flag-source">${item.source}</span>
-                    <span class="flag-source">${item.timestamp}</span>
-                </div>
-                ${dirLabel ? `<div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${dirClass}">${dirLabel}</span></div>` : ''}
-                ${item.description ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${item.description}</div>` : ''}
-                ${item.link ? `<div style="margin-top:8px"><a class="flag-link" href="${item.link}" target="_blank">🔗 View Source →</a></div>` : ''}
-            </div>`;
+        combined.sort((a, b) => {
+            const ta = new Date(a.timestamp || 0).getTime() || 0;
+            const tb = new Date(b.timestamp || 0).getTime() || 0;
+            return tb - ta;
         });
 
-        flags.forEach(flag => {
-            const sc = 'status-developing';
-            html += `<div class="flag-item">
-                <div class="flag-title">${flag.title}</div>
-                <div class="flag-meta">
-                    <span class="flag-status ${sc}">${flag.status}</span>
-                    <span class="flag-source">${flag.source}</span>
-                    <span class="flag-source">${flag.timestamp}</span>
-                </div>
-                <div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${valClass(flag.predicted_impact)}">${(flag.predicted_impact || '').toUpperCase()}</span></div>
-                                ${flag.context ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${flag.context}</div>` : ''}
-                <div style="margin-top:8px"><a class="flag-link" href="${flag.link}" target="_blank">🔗 View Source →</a></div>
-            </div>`;
+        combined.forEach(item => {
+            if (item._type === 'flag') {
+                html += `<div class="flag-item">
+                    <div class="flag-title">${item.title}</div>
+                    <div class="flag-meta">
+                        <span class="flag-status status-developing">${item.status}</span>
+                        <span class="flag-source">${item.source}</span>
+                        <span class="flag-source">${item.timestamp}</span>
+                    </div>
+                    <div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${valClass(item.predicted_impact)}">${(item.predicted_impact || '').toUpperCase()}</span></div>
+                    ${item.context ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${item.context}</div>` : ''}
+                    <div style="margin-top:8px"><a class="flag-link" href="${item.link}" target="_blank">🔗 View Source →</a></div>
+                </div>`;
+            } else {
+                const dirClass = item.gemini_direction ? valClass(item.gemini_direction) : '';
+                const dirLabel = item.gemini_direction ? item.gemini_direction.toUpperCase() : '';
+                html += `<div class="flag-item">
+                    <div class="flag-title">${item.headline}</div>
+                    <div class="flag-meta">
+                        <span class="flag-source">${item.source}</span>
+                        <span class="flag-source">${item.timestamp}</span>
+                    </div>
+                    ${dirLabel ? `<div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${dirClass}">${dirLabel}</span></div>` : ''}
+                    ${item.description ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${item.description}</div>` : ''}
+                    ${item.link ? `<div style="margin-top:8px"><a class="flag-link" href="${item.link}" target="_blank">🔗 View Source →</a></div>` : ''}
+                </div>`;
+            }
         });
         return html;
     }
