@@ -78,7 +78,7 @@ class ManualInputPipeline:
                     ts = datetime.fromisoformat(data['timestamp'])
                     if ts.tzinfo is None:
                         ts = self.timezone.localize(ts)
-                    if (now - ts).total_seconds() < 86400:
+                    if (now - ts).total_seconds() < 604800:
                         fresh[title] = data
                 except Exception as e:
                     pulse_logger.log(f"⚠️ Failed to parse timestamp for manual input '{title}': {e}", level="WARNING")
