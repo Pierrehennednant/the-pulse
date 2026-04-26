@@ -91,6 +91,44 @@ class RecommendationEngine:
             pulse_logger.log(f"⚠️ Regime consistency check failed: {e}", level="WARNING")
             return {'consistent': False, 'days': 0, 'direction': None, 'avg_confidence': 0}
 
+    def _topic_keywords(self, headline):
+        """Extract significant topic words from a headline for overlap matching."""
+        keywords = {'iran', 'hormuz', 'ceasefire', 'fed', 'warsh', 'tariff', 'tariffs',
+                    'china', 'russia', 'ukraine', 'israel', 'gaza', 'taiwan', 'nato',
+                    'opec', 'oil', 'sanctions', 'nuclear', 'rate', 'rates', 'inflation',
+                    'recession', 'default', 'debt', 'powell', 'treasury'}
+        words = set(headline.lower().split())
+        return words & keywords
+
+    def _is_superseded(self, item, all_items):
+        """Return True if a newer article covers the same story with a conflicting direction."""
+        item_ts = item.get('timestamp') or item.get('published_at') or item.get('date') or ''
+        item_direction = item.get('direction', '')
+        item_keywords = self._topic_keywords(item.get('headline', ''))
+
+        if not item_keywords or not item_direction or item_direction == 'neutral':
+            return False
+
+        for other in all_items:
+            if other is item:
+                continue
+            other_ts = other.get('timestamp') or other.get('published_at') or other.get('date') or ''
+            other_direction = other.get('direction', '')
+            if not other_ts or not other_direction or other_direction == 'neutral':
+                continue
+            # Must be newer
+            if other_ts <= item_ts:
+                continue
+            # Must conflict in direction
+            conflicting = {('bullish', 'bearish'), ('bearish', 'bullish')}
+            if (item_direction, other_direction) not in conflicting:
+                continue
+            # Must share topic keywords
+            other_keywords = self._topic_keywords(other.get('headline', ''))
+            if item_keywords & other_keywords:
+                return True
+        return False
+
     def get_uncertainty_signal(self, geo_data):
         """Get highest uncertainty score and count of high-uncertainty articles."""
         if not geo_data:
@@ -103,6 +141,9 @@ class RecommendationEngine:
         for item in items:
             score = item.get('uncertainty_score', 0)
             if score:
+                if self._is_superseded(item, items):
+                    pulse_logger.log(f"📰 Uncertainty score suppressed (superseded): {item.get('headline', '')[:60]}", level="DEBUG")
+                    continue
                 uncertainty_scores.append(score)
 
         # Also check flags for uncertainty context
