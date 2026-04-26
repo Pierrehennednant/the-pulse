@@ -563,6 +563,8 @@ Respond with only one word: SAME or DIFFERENT"""
                 published = article.get('published_at', '')
                 try:
                     dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
                     est = dt.astimezone(pytz.timezone(TIMEZONE))
                     timestamp = est.strftime('%b %d, %I:%M %p EST')
                     date = est.strftime('%Y-%m-%d')

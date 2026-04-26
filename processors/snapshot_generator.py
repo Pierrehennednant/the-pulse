@@ -45,6 +45,8 @@ class SnapshotGenerator:
         pulse_logger.log(f"📸 Snapshot saved | ID: {snapshot_id}")
 
         # Keep only last 50 snapshots
+        if not os.path.exists(self.snapshot_dir):
+            return snapshot_id
         all_snapshots = sorted(
             os.listdir(self.snapshot_dir),
             key=lambda f: os.path.getmtime(os.path.join(self.snapshot_dir, f)),
@@ -102,6 +104,8 @@ class SnapshotGenerator:
         return None
 
     def get_latest(self):
+        if not os.path.exists(self.snapshot_dir):
+            return None
         files = sorted(
             os.listdir(self.snapshot_dir),
             key=lambda f: os.path.getmtime(os.path.join(self.snapshot_dir, f)),
