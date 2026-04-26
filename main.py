@@ -5,6 +5,7 @@ import time
 import threading
 from datetime import datetime
 import concurrent.futures
+import pytz
 
 from config import TIMEZONE, REFRESH_INTERVAL_MINUTES
 
@@ -87,6 +88,11 @@ def run_pulse():
         weekly_summary_pipeline.fetch(formatted_data=formatted_data, bias=bias_score)
         snapshot_id = snapshot_generator.save(bias_score, formatted_data)
         pulse_logger.log(f"✅ Pulse updated | {bias_score['bias_emoji']} {bias_score['bias']} | Confidence: {bias_score['confidence']}% | Snapshot: {snapshot_id}")
+
+        now_est = datetime.now(pytz.timezone(TIMEZONE))
+        if now_est.hour == 16 and now_est.minute < 5:
+            snapshot_generator.save_daily(bias_score, formatted_data)
+            pulse_logger.log("📅 Daily closing snapshot saved")
     except Exception as e:
         error_handler.handle(e, "Main Orchestrator")
 

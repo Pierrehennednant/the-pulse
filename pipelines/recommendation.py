@@ -8,7 +8,7 @@ from utils.logger import pulse_logger
 class RecommendationEngine:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
-        self.snapshot_dir = "/data/snapshots"
+        self.snapshot_dir = "/data/snapshots/daily"
 
     def get_regime_consistency(self):
         """Read last 10 snapshots, calculate regime consistency over trading days."""

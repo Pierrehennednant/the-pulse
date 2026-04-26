@@ -17,6 +17,9 @@ class SnapshotGenerator:
     def _ensure_exists(self):
         if not os.path.exists(self.snapshot_dir):
             os.makedirs(self.snapshot_dir)
+        daily_dir = os.path.join(self.snapshot_dir, "daily")
+        if not os.path.exists(daily_dir):
+            os.makedirs(daily_dir)
 
     def generate_id(self):
         return str(uuid.uuid4())
@@ -53,6 +56,41 @@ class SnapshotGenerator:
                     os.remove(os.path.join(self.snapshot_dir, old_file))
                 except Exception as e:
                     pulse_logger.log(f"⚠️ Failed to remove old snapshot {old_file}: {e}", level="WARNING")
+
+        return snapshot_id
+
+    def save_daily(self, bias_score, formatted_data):
+        daily_dir = os.path.join(self.snapshot_dir, "daily")
+        timestamp = datetime.now(self.timezone).isoformat()
+        snapshot_id = self.generate_id()
+        weekly = {}
+        try:
+            with open('/data/permanent_weekly_summary.json', 'r') as f:
+                weekly = json.load(f)
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to load weekly summary for daily snapshot: {e}", level="WARNING")
+        snapshot = {
+            'id': snapshot_id,
+            'timestamp': timestamp,
+            'bias': bias_score,
+            'pillars': formatted_data,
+            'weekly_summary': weekly or None
+        }
+        snapshot_file = os.path.join(daily_dir, f"snapshot_{snapshot_id}.json")
+        atomic_write_json(snapshot_file, snapshot)
+
+        # Keep only last 10 daily snapshots
+        all_snapshots = sorted(
+            os.listdir(daily_dir),
+            key=lambda f: os.path.getmtime(os.path.join(daily_dir, f)),
+            reverse=True
+        )
+        if len(all_snapshots) > 10:
+            for old_file in all_snapshots[10:]:
+                try:
+                    os.remove(os.path.join(daily_dir, old_file))
+                except Exception as e:
+                    pulse_logger.log(f"⚠️ Failed to remove old daily snapshot {old_file}: {e}", level="WARNING")
 
         return snapshot_id
 
