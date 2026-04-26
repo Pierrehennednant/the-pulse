@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from utils.file_lock import atomic_write_json
 
 class Cache:
-    def __init__(self, cache_dir="./data"):
+    def __init__(self, cache_dir="/data"):
         self.cache_dir = cache_dir
         self._ensure_exists()
     

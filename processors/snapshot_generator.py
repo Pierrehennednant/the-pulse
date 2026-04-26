@@ -112,8 +112,12 @@ class SnapshotGenerator:
             reverse=True
         )
         if files:
-            with open(os.path.join(self.snapshot_dir, files[0]), 'r') as f:
-                return json.load(f)
+            try:
+                with open(os.path.join(self.snapshot_dir, files[0]), 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                pulse_logger.log(f"⚠️ Failed to load latest snapshot: {e}", level="WARNING")
+                return None
         return None
 
 snapshot_generator = SnapshotGenerator()

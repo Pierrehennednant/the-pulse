@@ -19,8 +19,8 @@ class InstitutionalPipeline:
         self._ensure_exists()
 
     def _ensure_exists(self):
-        if not os.path.exists('./data'):
-            os.makedirs('./data')
+        if not os.path.exists('/data'):
+            os.makedirs('/data')
         if not os.path.exists(self.permanent_file):
             atomic_write_json(self.permanent_file, {})
 

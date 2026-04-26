@@ -35,6 +35,8 @@ class EconomicCalendarPipeline:
     def convert_to_est(self, date_str):
         try:
             dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=pytz.utc)
             est = dt.astimezone(pytz.timezone(TIMEZONE))
             return est.strftime('%a %b %d, %I:%M %p EST')
         except Exception as e:
