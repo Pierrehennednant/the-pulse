@@ -79,7 +79,7 @@ class RecommendationEngine:
                     break
 
             avg_confidence = round(sum(confidences) / len(confidences), 1) if confidences else 0
-            consistent = streak >= 3 and avg_confidence >= 55
+            consistent = streak >= 2 and avg_confidence >= 55
 
             return {
                 'consistent': consistent,
