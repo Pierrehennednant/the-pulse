@@ -6,6 +6,7 @@ from utils.retry import fetch_with_retry
 from utils.cache import cache
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
+from pipelines.manual_input import manual_input_pipeline
 
 class EconomicCalendarPipeline:
     def __init__(self):
@@ -170,7 +171,6 @@ class EconomicCalendarPipeline:
         return round(score / max(count, 1), 2) if count > 0 else 0.0
     
     def apply_manual_inputs(self, events):
-        from pipelines.manual_input import manual_input_pipeline
         manual_inputs = manual_input_pipeline.get_inputs()
         for event in events:
             if event['title'] in manual_inputs:
@@ -235,7 +235,7 @@ class EconomicCalendarPipeline:
                     event_row['market_impact'] = 'unknown'
                     event_row['reason'] = f"{event_row['title']} — No data to parse. Market will reprice on tone. No trade 30 minutes before."
 
-                    from pipelines.manual_input import manual_input_pipeline as mip
+                    mip = manual_input_pipeline
                     TIER1_SPEAKERS = ['powell', 'fed chair', 'waller', 'williams', 'jefferson', 'kugler', 'cook', 'musalem', 'bessent', 'treasury']
                     TIER2_SPEAKERS = ['trump', 'white house', 'president', 'lagarde', 'ecb']
                     all_speakers = TIER1_SPEAKERS + TIER2_SPEAKERS

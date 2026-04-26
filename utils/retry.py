@@ -20,4 +20,6 @@ def fetch_with_retry(url, *, retries=3, backoff=2, **kwargs):
                 time.sleep(backoff * (2 ** attempt))
     if last_exc:
         raise last_exc
+    if last_response is None:
+        raise RuntimeError(f"fetch_with_retry exhausted {retries} attempts with no response for {url}")
     return last_response
