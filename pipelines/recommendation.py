@@ -75,6 +75,8 @@ class RecommendationEngine:
                 if snap['bias'] == base_direction and snap['confidence'] >= 50:
                     streak += 1
                     confidences.append(snap['confidence'])
+                elif snap['bias'] == 'Neutral':
+                    continue
                 else:
                     break
 
