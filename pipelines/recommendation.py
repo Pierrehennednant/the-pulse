@@ -196,9 +196,14 @@ class RecommendationEngine:
             if bias == 'Neutral' or confidence < 20:
                 return None
 
-            # Below 50% confidence — card doesn't show at all
-            if confidence < 50:
-                return None
+            # Below 55% — always quarter, regardless of other conditions
+            if confidence < 55:
+                return {
+                    'mode': 'quarter',
+                    'label': 'Conditions suggest: Quarter size',
+                    'reason': 'Confidence not yet strong enough for Normal size',
+                    'strength': 'weak'
+                }
 
             # High uncertainty event active
             if uncertainty['signal'] == 'high':
@@ -237,20 +242,12 @@ class RecommendationEngine:
                         'strength': 'moderate'
                     }
                 elif consistency['consistent'] and consistency['direction'] == bias:
-                    if confidence >= 55:
-                        return {
-                            'mode': 'normal',
-                            'label': 'Conditions support: Normal size',
-                            'reason': f"Regime consistent {consistency['days']} days · Developing event but conditions manageable",
-                            'strength': 'moderate'
-                        }
-                    else:
-                        return {
-                            'mode': 'quarter',
-                            'label': 'Conditions suggest: Quarter size',
-                            'reason': 'Confidence not yet strong enough for Normal size',
-                            'strength': 'weak'
-                        }
+                    return {
+                        'mode': 'normal',
+                        'label': 'Conditions support: Normal size',
+                        'reason': f"Regime consistent {consistency['days']} days · Developing event but conditions manageable",
+                        'strength': 'moderate'
+                    }
                 else:
                     return {
                         'mode': 'quarter',
@@ -261,20 +258,12 @@ class RecommendationEngine:
 
             # Low or no uncertainty
             if consistency['consistent'] and consistency['direction'] == bias:
-                if confidence >= 55:
-                    return {
-                        'mode': 'normal',
-                        'label': 'Conditions support: Normal size',
-                        'reason': f"Regime consistent {consistency['days']} days · {int(consistency['avg_confidence'])}% avg confidence · Conditions calm",
-                        'strength': 'strong'
-                    }
-                else:
-                    return {
-                        'mode': 'quarter',
-                        'label': 'Conditions suggest: Quarter size',
-                        'reason': 'Confidence not yet strong enough for Normal size',
-                        'strength': 'weak'
-                    }
+                return {
+                    'mode': 'normal',
+                    'label': 'Conditions support: Normal size',
+                    'reason': f"Regime consistent {consistency['days']} days · {int(consistency['avg_confidence'])}% avg confidence · Conditions calm",
+                    'strength': 'strong'
+                }
             elif vix_elevated:
                 return {
                     'mode': 'quarter',
