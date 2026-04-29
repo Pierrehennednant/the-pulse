@@ -655,9 +655,11 @@
 
             const result = await response.json();
             if (result.status === 'saved') {
-                actualInput.style.borderColor = '#2ecc71';
-                actualInput.value = '✓ ' + actual + ' saved';
-                actualInput.disabled = true;
+                if (actualInput) {
+                    actualInput.style.borderColor = '#2ecc71';
+                    actualInput.value = '✓ ' + actual + ' saved';
+                    actualInput.disabled = true;
+                }
                 if (storyInput) storyInput.disabled = true;
                 setTimeout(() => {
                     fetchData();
