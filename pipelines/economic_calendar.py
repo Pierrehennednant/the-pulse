@@ -108,13 +108,13 @@ class EconomicCalendarPipeline:
         ]
         return any(keyword in title.lower() for keyword in speech_keywords)
 
-    def auto_detect_speech_sentiment(self, speaker_name):
-        """Query TheNewsAPI 30min after speech starts, return bearish/bullish/neutral."""
+    def auto_detect_speech_sentiment(self, event_title):
+        """Query TheNewsAPI after speech starts, return bearish/bullish/neutral."""
         api_key = os.environ.get('THENEWS_API_KEY', '')
         if not api_key:
             return None
         try:
-            search_query = f"{speaker_name} hawkish dovish rate inflation cut hike hold tariff"
+            search_query = event_title
             url = "https://api.thenewsapi.com/v1/news/all"
             params = {
                 'api_token': api_key,
@@ -147,7 +147,7 @@ class EconomicCalendarPipeline:
             else:
                 return 'neutral'
         except Exception as e:
-            pulse_logger.log(f"⚠️ Speech auto-detect failed for {speaker_name}: {e}", level="WARNING")
+            pulse_logger.log(f"⚠️ Speech auto-detect failed for {event_title}: {e}", level="WARNING")
             return 'neutral'
 
     def calculate_score(self, events):
@@ -235,15 +235,7 @@ class EconomicCalendarPipeline:
                     event_row['market_impact'] = 'unknown'
                     event_row['reason'] = f"{event_row['title']} — No data to parse. Market will reprice on tone. No trade 30 minutes before."
 
-                    mip = manual_input_pipeline
-                    TIER1_SPEAKERS = ['powell', 'fed chair', 'waller', 'williams', 'jefferson', 'kugler', 'cook', 'musalem', 'bessent', 'treasury']
-                    TIER2_SPEAKERS = ['trump', 'white house', 'president', 'lagarde', 'ecb']
-                    all_speakers = TIER1_SPEAKERS + TIER2_SPEAKERS
-
-                    title_lower = event_row['title'].lower()
-                    matched_speaker = next((s for s in all_speakers if s in title_lower), None)
-
-                    if matched_speaker and date_str:
+                    if date_str:
                         try:
                             speech_dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
                             if speech_dt.tzinfo is None:
@@ -254,12 +246,12 @@ class EconomicCalendarPipeline:
                             now_utc = datetime.now(pytz.utc)
 
                             if now_utc >= trigger_time and event_row['actual'] == 'Pending':
-                                existing = mip.get_inputs().get(event_row['title'])
+                                existing = manual_input_pipeline.get_inputs().get(event_row['title'])
                                 if not existing:
                                     pulse_logger.log(f"🎙️ Auto-detecting speech sentiment for: {event_row['title']}")
-                                    sentiment = self.auto_detect_speech_sentiment(matched_speaker)
+                                    sentiment = self.auto_detect_speech_sentiment(event_row['title'])
                                     if sentiment:
-                                        mip.save_actual(event_row['title'], sentiment, None)
+                                        manual_input_pipeline.save_actual(event_row['title'], sentiment, None)
                                         pulse_logger.log(f"✅ Auto-tagged {event_row['title']} as {sentiment}")
                         except Exception as e:
                             pulse_logger.log(f"⚠️ Speech trigger check failed: {e}", level="WARNING")
