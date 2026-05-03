@@ -211,6 +211,7 @@ class EconomicCalendarPipeline:
 
             raw_events = response.json()
             events = []
+            date_strs = {}
             for event in raw_events:
                 if not self.is_market_moving(event):
                     continue
@@ -234,30 +235,38 @@ class EconomicCalendarPipeline:
                     event_row['result'] = 'speech'
                     event_row['market_impact'] = 'unknown'
                     event_row['reason'] = f"{event_row['title']} — No data to parse. Market will reprice on tone. No trade 30 minutes before."
-
-                    if date_str:
-                        try:
-                            speech_dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                            if speech_dt.tzinfo is None:
-                                speech_dt = pytz.utc.localize(speech_dt)
-                            else:
-                                speech_dt = speech_dt.astimezone(pytz.utc)
-                            trigger_time = speech_dt + timedelta(minutes=60)
-                            now_utc = datetime.now(pytz.utc)
-
-                            if now_utc >= trigger_time and event_row['actual'] == 'Pending':
-                                existing = manual_input_pipeline.get_inputs().get(event_row['title'])
-                                if not existing:
-                                    pulse_logger.log(f"🎙️ Auto-detecting speech sentiment for: {event_row['title']}")
-                                    sentiment = self.auto_detect_speech_sentiment(event_row['title'])
-                                    if sentiment:
-                                        manual_input_pipeline.save_actual(event_row['title'], sentiment, None)
-                                        pulse_logger.log(f"✅ Auto-tagged {event_row['title']} as {sentiment}")
-                        except Exception as e:
-                            pulse_logger.log(f"⚠️ Speech trigger check failed: {e}", level="WARNING")
+                    date_strs[title] = date_str
                 else:
                     event_row['is_speech'] = False
                 events.append(event_row)
+
+            # Apply saved manual inputs before speech detection so actual reflects prior tags
+            events = self.apply_manual_inputs(events)
+
+            for event_row in events:
+                if not event_row.get('is_speech'):
+                    continue
+                date_str = date_strs.get(event_row['title'], '')
+                if date_str:
+                    try:
+                        speech_dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                        if speech_dt.tzinfo is None:
+                            speech_dt = pytz.utc.localize(speech_dt)
+                        else:
+                            speech_dt = speech_dt.astimezone(pytz.utc)
+                        trigger_time = speech_dt + timedelta(minutes=60)
+                        now_utc = datetime.now(pytz.utc)
+
+                        if now_utc >= trigger_time and event_row['actual'] == 'Pending':
+                            existing = manual_input_pipeline.get_inputs().get(event_row['title'])
+                            if not existing:
+                                pulse_logger.log(f"🎙️ Auto-detecting speech sentiment for: {event_row['title']}")
+                                sentiment = self.auto_detect_speech_sentiment(event_row['title'])
+                                if sentiment:
+                                    manual_input_pipeline.save_actual(event_row['title'], sentiment, None)
+                                    pulse_logger.log(f"✅ Auto-tagged {event_row['title']} as {sentiment}")
+                    except Exception as e:
+                        pulse_logger.log(f"⚠️ Speech trigger check failed: {e}", level="WARNING")
 
             events = self.apply_manual_inputs(events)
             score = self.calculate_score(events)
