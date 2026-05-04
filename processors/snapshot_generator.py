@@ -48,7 +48,8 @@ class SnapshotGenerator:
         if not os.path.exists(self.snapshot_dir):
             return snapshot_id
         all_snapshots = sorted(
-            os.listdir(self.snapshot_dir),
+            [f for f in os.listdir(self.snapshot_dir)
+             if os.path.isfile(os.path.join(self.snapshot_dir, f))],
             key=lambda f: os.path.getmtime(os.path.join(self.snapshot_dir, f)),
             reverse=True
         )
