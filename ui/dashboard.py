@@ -54,13 +54,9 @@ def manual_input():
                 econ_data = economic_calendar_pipeline.fetch()
 
                 macro_cached = cache.load('macro_sentiment')
-                pulse_logger.log(f"📊 manual_input refresh | macro_cached={'yes' if macro_cached else 'MISSING'}")
-
                 inst_cached = cache.load('institutional')
-                pulse_logger.log(f"📊 manual_input refresh | inst_cached={'yes' if inst_cached else 'MISSING'}")
-
                 geo_cached = cache.load('geopolitical')
-                pulse_logger.log(f"📊 manual_input refresh | geo_cached={'yes' if geo_cached else 'MISSING'}")
+                pulse_logger.log(f"Cache load institutional: {bool(inst_cached)}, geo: {bool(geo_cached)}, macro: {bool(macro_cached)}")
 
                 formatted_data = data_formatter.standardize({
                     'macro': macro_cached['data'] if macro_cached else None,
@@ -110,13 +106,9 @@ def reset_manual_input():
             econ_data = economic_calendar_pipeline.fetch()
 
             macro_cached = cache.load('macro_sentiment')
-            pulse_logger.log(f"📊 reset_manual_input refresh | macro_cached={'yes' if macro_cached else 'MISSING'}")
-
             inst_cached = cache.load('institutional')
-            pulse_logger.log(f"📊 reset_manual_input refresh | inst_cached={'yes' if inst_cached else 'MISSING'}")
-
             geo_cached = cache.load('geopolitical')
-            pulse_logger.log(f"📊 reset_manual_input refresh | geo_cached={'yes' if geo_cached else 'MISSING'}")
+            pulse_logger.log(f"Cache load institutional: {bool(inst_cached)}, geo: {bool(geo_cached)}, macro: {bool(macro_cached)}")
 
             formatted_data = data_formatter.standardize({
                 'macro': macro_cached['data'] if macro_cached else None,
