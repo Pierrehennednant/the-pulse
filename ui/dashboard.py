@@ -87,6 +87,28 @@ def reset_manual_input():
         if event_title in inputs:
             del inputs[event_title]
             atomic_write_json('/data/permanent_manual_inputs.json', inputs)
+
+        from pipelines.economic_calendar import economic_calendar_pipeline
+        from processors.data_formatter import data_formatter
+        from processors.bias_calculator import bias_calculator
+        from processors.snapshot_generator import snapshot_generator
+        from utils.cache import cache
+
+        econ_data = economic_calendar_pipeline.fetch()
+
+        macro_cached = cache.load('macro_sentiment')
+        inst_cached = cache.load('institutional')
+        geo_cached = cache.load('geopolitical')
+        formatted_data = data_formatter.standardize({
+            'macro': macro_cached['data'] if macro_cached else None,
+            'economic': econ_data,
+            'institutional': inst_cached['data'] if inst_cached else None,
+            'geopolitical': geo_cached['data'] if geo_cached else None,
+        })
+
+        bias_score = bias_calculator.compute(formatted_data)
+        snapshot_generator.save(bias_score, formatted_data)
+
         return jsonify({'status': 'reset', 'event': event_title})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
