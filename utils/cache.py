@@ -37,4 +37,12 @@ class Cache:
     def is_stale(self, key, threshold_minutes):
         return self.get_age_minutes(key) > threshold_minutes
 
+    def delete(self, key):
+        cache_file = os.path.join(self.cache_dir, f"{key}.json")
+        try:
+            if os.path.exists(cache_file):
+                os.remove(cache_file)
+        except Exception:
+            pass
+
 cache = Cache()

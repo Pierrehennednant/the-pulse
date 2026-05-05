@@ -94,6 +94,7 @@ def reset_manual_input():
         from processors.snapshot_generator import snapshot_generator
         from utils.cache import cache
 
+        cache.delete('economic_calendar')
         econ_data = economic_calendar_pipeline.fetch()
 
         macro_cached = cache.load('macro_sentiment')
