@@ -54,9 +54,28 @@ def manual_input():
                 econ_data = economic_calendar_pipeline.fetch()
 
                 macro_cached = cache.load('macro_sentiment')
+                if not macro_cached:
+                    try:
+                        with open('/data/macro_sentiment.json', 'r') as f:
+                            macro_cached = json.load(f)
+                    except Exception:
+                        pass
+
                 inst_cached = cache.load('institutional')
+                if not inst_cached:
+                    try:
+                        with open('/data/permanent_cot.json', 'r') as f:
+                            inst_cached = {'data': json.load(f)}
+                    except Exception:
+                        pass
+
                 geo_cached = cache.load('geopolitical')
-                pulse_logger.log(f"Cache load institutional: {bool(inst_cached)}, geo: {bool(geo_cached)}, macro: {bool(macro_cached)}")
+                if not geo_cached:
+                    try:
+                        with open('/data/geopolitical.json', 'r') as f:
+                            geo_cached = json.load(f)
+                    except Exception:
+                        pass
 
                 formatted_data = data_formatter.standardize({
                     'macro': macro_cached['data'] if macro_cached else None,
@@ -106,9 +125,28 @@ def reset_manual_input():
             econ_data = economic_calendar_pipeline.fetch()
 
             macro_cached = cache.load('macro_sentiment')
+            if not macro_cached:
+                try:
+                    with open('/data/macro_sentiment.json', 'r') as f:
+                        macro_cached = json.load(f)
+                except Exception:
+                    pass
+
             inst_cached = cache.load('institutional')
+            if not inst_cached:
+                try:
+                    with open('/data/permanent_cot.json', 'r') as f:
+                        inst_cached = {'data': json.load(f)}
+                except Exception:
+                    pass
+
             geo_cached = cache.load('geopolitical')
-            pulse_logger.log(f"Cache load institutional: {bool(inst_cached)}, geo: {bool(geo_cached)}, macro: {bool(macro_cached)}")
+            if not geo_cached:
+                try:
+                    with open('/data/geopolitical.json', 'r') as f:
+                        geo_cached = json.load(f)
+                except Exception:
+                    pass
 
             formatted_data = data_formatter.standardize({
                 'macro': macro_cached['data'] if macro_cached else None,
