@@ -3,6 +3,7 @@ from flask import Flask, render_template, jsonify, request
 from utils.file_lock import atomic_write_json
 from processors.snapshot_generator import snapshot_generator
 from pipelines.manual_input import manual_input_pipeline
+from utils.logger import pulse_logger
 
 app = Flask(__name__, template_folder='templates')
 
@@ -43,26 +44,36 @@ def manual_input():
         success = manual_input_pipeline.save_actual(event_title, actual_value, story_url)
 
         if success:
-            from pipelines.economic_calendar import economic_calendar_pipeline
-            from processors.data_formatter import data_formatter
-            from processors.bias_calculator import bias_calculator
-            from processors.snapshot_generator import snapshot_generator
-            from utils.cache import cache
+            try:
+                from pipelines.economic_calendar import economic_calendar_pipeline
+                from processors.data_formatter import data_formatter
+                from processors.bias_calculator import bias_calculator
+                from processors.snapshot_generator import snapshot_generator
+                from utils.cache import cache
 
-            econ_data = economic_calendar_pipeline.fetch()
+                econ_data = economic_calendar_pipeline.fetch()
 
-            macro_cached = cache.load('macro_sentiment')
-            inst_cached = cache.load('institutional')
-            geo_cached = cache.load('geopolitical')
-            formatted_data = data_formatter.standardize({
-                'macro': macro_cached['data'] if macro_cached else None,
-                'economic': econ_data,
-                'institutional': inst_cached['data'] if inst_cached else None,
-                'geopolitical': geo_cached['data'] if geo_cached else None,
-            })
+                macro_cached = cache.load('macro_sentiment')
+                pulse_logger.log(f"📊 manual_input refresh | macro_cached={'yes' if macro_cached else 'MISSING'}")
 
-            bias_score = bias_calculator.compute(formatted_data)
-            snapshot_generator.save(bias_score, formatted_data)
+                inst_cached = cache.load('institutional')
+                pulse_logger.log(f"📊 manual_input refresh | inst_cached={'yes' if inst_cached else 'MISSING'}")
+
+                geo_cached = cache.load('geopolitical')
+                pulse_logger.log(f"📊 manual_input refresh | geo_cached={'yes' if geo_cached else 'MISSING'}")
+
+                formatted_data = data_formatter.standardize({
+                    'macro': macro_cached['data'] if macro_cached else None,
+                    'economic': econ_data,
+                    'institutional': inst_cached['data'] if inst_cached else None,
+                    'geopolitical': geo_cached['data'] if geo_cached else None,
+                })
+
+                bias_score = bias_calculator.compute(formatted_data)
+                snapshot_generator.save(bias_score, formatted_data)
+                pulse_logger.log(f"✅ manual_input partial refresh complete | {event_title}")
+            except Exception as refresh_err:
+                pulse_logger.log(f"⚠️ manual_input partial refresh failed: {refresh_err}", level="WARNING")
 
             return jsonify({'status': 'saved', 'event': event_title, 'actual': actual_value})
 
@@ -88,27 +99,37 @@ def reset_manual_input():
             del inputs[event_title]
             atomic_write_json('/data/permanent_manual_inputs.json', inputs)
 
-        from pipelines.economic_calendar import economic_calendar_pipeline
-        from processors.data_formatter import data_formatter
-        from processors.bias_calculator import bias_calculator
-        from processors.snapshot_generator import snapshot_generator
-        from utils.cache import cache
+        try:
+            from pipelines.economic_calendar import economic_calendar_pipeline
+            from processors.data_formatter import data_formatter
+            from processors.bias_calculator import bias_calculator
+            from processors.snapshot_generator import snapshot_generator
+            from utils.cache import cache
 
-        cache.delete('economic_calendar')
-        econ_data = economic_calendar_pipeline.fetch()
+            cache.delete('economic_calendar')
+            econ_data = economic_calendar_pipeline.fetch()
 
-        macro_cached = cache.load('macro_sentiment')
-        inst_cached = cache.load('institutional')
-        geo_cached = cache.load('geopolitical')
-        formatted_data = data_formatter.standardize({
-            'macro': macro_cached['data'] if macro_cached else None,
-            'economic': econ_data,
-            'institutional': inst_cached['data'] if inst_cached else None,
-            'geopolitical': geo_cached['data'] if geo_cached else None,
-        })
+            macro_cached = cache.load('macro_sentiment')
+            pulse_logger.log(f"📊 reset_manual_input refresh | macro_cached={'yes' if macro_cached else 'MISSING'}")
 
-        bias_score = bias_calculator.compute(formatted_data)
-        snapshot_generator.save(bias_score, formatted_data)
+            inst_cached = cache.load('institutional')
+            pulse_logger.log(f"📊 reset_manual_input refresh | inst_cached={'yes' if inst_cached else 'MISSING'}")
+
+            geo_cached = cache.load('geopolitical')
+            pulse_logger.log(f"📊 reset_manual_input refresh | geo_cached={'yes' if geo_cached else 'MISSING'}")
+
+            formatted_data = data_formatter.standardize({
+                'macro': macro_cached['data'] if macro_cached else None,
+                'economic': econ_data,
+                'institutional': inst_cached['data'] if inst_cached else None,
+                'geopolitical': geo_cached['data'] if geo_cached else None,
+            })
+
+            bias_score = bias_calculator.compute(formatted_data)
+            snapshot_generator.save(bias_score, formatted_data)
+            pulse_logger.log(f"✅ reset_manual_input partial refresh complete | {event_title}")
+        except Exception as refresh_err:
+            pulse_logger.log(f"⚠️ reset_manual_input partial refresh failed: {refresh_err}", level="WARNING")
 
         return jsonify({'status': 'reset', 'event': event_title})
     except Exception as e:
