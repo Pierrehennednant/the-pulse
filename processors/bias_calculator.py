@@ -1,18 +1,17 @@
 from datetime import datetime
 import pytz
-from config import PILLAR_WEIGHTS, TIMEZONE
+from config import PILLAR_WEIGHTS_ESCALATION, PILLAR_WEIGHTS_EXPANSION, TIMEZONE
 from utils.logger import pulse_logger
 
 class BiasCalculator:
-    def __init__(self):
-        self.weights = PILLAR_WEIGHTS
-
-    def compute(self, formatted_data, size_mode='quarter'):
+    def compute(self, formatted_data, size_mode='quarter', regime='escalation'):
         total_score = 0.0
         pillar_contributions = {}
         active_pillars = 0
         pillar_signals = []
         threshold_warning = None
+
+        weights = PILLAR_WEIGHTS_EXPANSION if regime == 'expansion' else PILLAR_WEIGHTS_ESCALATION
 
         weight_map = {
             'economic': 'economic_calendar',
@@ -24,7 +23,7 @@ class BiasCalculator:
         for data_key, config_key in weight_map.items():
             pillar_data = formatted_data.get(data_key, {})
             score = pillar_data.get('pillar_score', 0)
-            weight = self.weights.get(config_key, 0)
+            weight = weights.get(config_key, 0)
             status = pillar_data.get('status', 'unavailable')
 
             # COT decay — stale weekly data weighs less as the week progresses
@@ -176,7 +175,7 @@ class BiasCalculator:
             'size_mode': size_mode
         }
 
-        pulse_logger.log(f"📊 Bias: {bias_emoji} {bias} | Confidence: {confidence}% ({confidence_label}) | Active Pillars: {active_pillars}/4 | Mode: {size_mode}")
+        pulse_logger.log(f"📊 Bias: {bias_emoji} {bias} | Confidence: {confidence}% ({confidence_label}) | Active Pillars: {active_pillars}/4 | Mode: {size_mode} | Regime: {regime}")
         return result
 
 bias_calculator = BiasCalculator()
