@@ -4,7 +4,7 @@ from config import PILLAR_WEIGHTS_ESCALATION, PILLAR_WEIGHTS_EXPANSION, TIMEZONE
 from utils.logger import pulse_logger
 
 class BiasCalculator:
-    def compute(self, formatted_data, size_mode='quarter', regime='escalation'):
+    def compute(self, formatted_data, size_mode='quarter', regime='escalation', calm_days_count=0, high_uncertainty_count=0):
         total_score = 0.0
         pillar_contributions = {}
         active_pillars = 0
@@ -86,6 +86,18 @@ class BiasCalculator:
             agreement_pct = agreeing / active_pillars
             score_strength = min(abs(final_score) / 2.0, 1.0)
             confidence = int((agreement_pct * 0.6 + score_strength * 0.4) * 100)
+
+            # Persistence bonus — uses calm_days_count from regime detector
+            if regime == 'expansion':
+                persistence_bonus = min(calm_days_count * 2, 15)
+            else:
+                persistence_bonus = min(calm_days_count * 1, 8)
+
+            confidence = int(min(confidence + persistence_bonus, 95))
+
+            # Uncertainty dampening in escalation
+            if regime == 'escalation' and high_uncertainty_count >= 2:
+                confidence = int(confidence * 0.85)
 
             if confidence >= 70:
                 confidence_label = 'High Confidence'

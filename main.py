@@ -80,7 +80,13 @@ def run_pulse():
             pulse_logger.log(f"⚠️ Failed to load size_mode.json, defaulting to quarter: {e}", level="WARNING")
             size_mode = 'quarter'
 
-        bias_score = bias_calculator.compute(formatted_data, size_mode=size_mode, regime=current_regime)
+        bias_score = bias_calculator.compute(
+            formatted_data,
+            size_mode=size_mode,
+            regime=current_regime,
+            calm_days_count=regime_result['calm_days_count'],
+            high_uncertainty_count=regime_result['high_uncertainty_count']
+        )
 
         recommendation = recommendation_engine.compute(
             bias_score,
