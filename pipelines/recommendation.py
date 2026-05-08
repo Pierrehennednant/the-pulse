@@ -10,7 +10,7 @@ class RecommendationEngine:
         self.timezone = pytz.timezone(TIMEZONE)
         self.snapshot_dir = "/data/snapshots/daily"
 
-    def get_regime_consistency(self):
+    def get_regime_consistency(self, regime='escalation'):
         """Read last 10 snapshots, calculate regime consistency over trading days."""
         try:
             if not os.path.exists(self.snapshot_dir):
@@ -81,7 +81,8 @@ class RecommendationEngine:
                     break
 
             avg_confidence = round(sum(confidences) / len(confidences), 1) if confidences else 0
-            consistent = streak >= 2 and avg_confidence >= 55
+            required_streak = 2 if regime == 'expansion' else 3
+            consistent = streak >= required_streak and avg_confidence >= 55
 
             return {
                 'consistent': consistent,
@@ -173,7 +174,7 @@ class RecommendationEngine:
             'signal': signal
         }
 
-    def compute(self, bias_data, geo_data, macro_data):
+    def compute(self, bias_data, geo_data, macro_data, regime='escalation'):
         """Generate size recommendation based on 3 sources."""
         try:
             # Source 1 — Gemini uncertainty signal
@@ -185,7 +186,7 @@ class RecommendationEngine:
             vix_elevated = vix_value >= 22
 
             # Source 3 — Regime consistency
-            consistency = self.get_regime_consistency()
+            consistency = self.get_regime_consistency(regime=regime)
 
             bias = bias_data.get('bias', 'Neutral') if bias_data else 'Neutral'
             confidence = bias_data.get('confidence', 0) if bias_data else 0
