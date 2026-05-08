@@ -62,7 +62,8 @@ def run_pulse():
         cached = cache.load("geopolitical")
         geo_data = cached['data'] if cached else {}
 
-    current_regime = regime_detector.detect(geo_data, macro_data)
+    regime_result = regime_detector.detect(geo_data, macro_data)
+    current_regime = regime_result['regime']
 
     try:
         formatted_data = data_formatter.standardize({

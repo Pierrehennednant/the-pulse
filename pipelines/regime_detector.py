@@ -84,6 +84,10 @@ class RegimeDetector:
         state['vix_elevated_count'] = vix_elevated_count
         self._save(state)
 
-        return new_regime
+        return {
+            'regime': new_regime,
+            'calm_days_count': calm_days_count,
+            'high_uncertainty_count': high_uncertainty_count
+        }
 
 regime_detector = RegimeDetector()
