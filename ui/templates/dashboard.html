@@ -254,7 +254,7 @@
             <div class="pillar-title">📅 Economic Calendar</div>
             <div class="pillar-score" id="econ-score-badge">--</div>
         </div>
-        <div class="pillar-weight">Weight: 40% | Red Folder Events Only</div>
+        <div class="pillar-weight" id="weight-econ">Weight: 40% | Red Folder Events Only</div>
         <div id="econ-content">Loading...</div>
     </div>
     <div class="pillar-card" id="card-institutional">
@@ -262,7 +262,7 @@
             <div class="pillar-title">🏦 Institutional Positioning</div>
             <div class="pillar-score" id="inst-score-badge">--</div>
         </div>
-        <div class="pillar-weight">Weight: 20% | COT Report (Updates Fridays)</div>
+        <div class="pillar-weight" id="weight-inst">Weight: 20% | COT Report (Updates Fridays)</div>
         <div id="inst-content">Loading...</div>
     </div>
     <div class="pillar-card" id="card-macro">
@@ -270,7 +270,7 @@
             <div class="pillar-title">📊 Macro Sentiment</div>
             <div class="pillar-score" id="macro-score-badge">--</div>
         </div>
-        <div class="pillar-weight">Weight: 10% | VIX · VXN · Fear & Greed</div>
+        <div class="pillar-weight" id="weight-macro">Weight: 10% | VIX · VXN · Fear & Greed</div>
         <div id="macro-content">Loading...</div>
     </div>
     <div class="pillar-card" id="card-geo">
@@ -278,7 +278,7 @@
             <div class="pillar-title">🌍 Political & Geopolitical</div>
             <div class="pillar-score" id="geo-score-badge">--</div>
         </div>
-        <div class="pillar-weight">Weight: 30% | Real-time via TheNewsAPI · Updates every 3min</div>
+        <div class="pillar-weight" id="weight-geo">Weight: 30% | Real-time via TheNewsAPI · Updates every 3min</div>
         <div id="geo-content">Loading...</div>
     </div>
     <div class="refresh-bar">
@@ -609,6 +609,16 @@
         document.getElementById('geo-score-badge').textContent = scoreLabel(geo.pillar_score || 0);
         document.getElementById('geo-score-badge').className = `pillar-score ${scoreClass(geo.pillar_score || 0)}`;
         document.getElementById('geo-content').innerHTML = renderGeopolitical(geo);
+
+        const pc = (snapshot.bias || {}).pillar_contributions || {};
+        const econW = pc.economic_calendar && pc.economic_calendar.weight != null ? Math.round(pc.economic_calendar.weight) : 40;
+        const instW = pc.institutional && pc.institutional.weight != null ? Math.round(pc.institutional.weight) : 20;
+        const macroW = pc.macro_sentiment && pc.macro_sentiment.weight != null ? Math.round(pc.macro_sentiment.weight) : 10;
+        const geoW = pc.geopolitical && pc.geopolitical.weight != null ? Math.round(pc.geopolitical.weight) : 30;
+        document.getElementById('weight-econ').textContent = `Weight: ${econW}% | Red Folder Events Only`;
+        document.getElementById('weight-inst').textContent = `Weight: ${instW}% | COT Report (Updates Fridays)`;
+        document.getElementById('weight-macro').textContent = `Weight: ${macroW}% | VIX · VXN · Fear & Greed`;
+        document.getElementById('weight-geo').textContent = `Weight: ${geoW}% | Real-time via TheNewsAPI · Updates every 3min`;
         document.getElementById('share-btn').href = `/snapshot/${snapshot.id}`;
 
         const ws = snapshot.weekly_summary;

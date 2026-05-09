@@ -191,7 +191,8 @@ class BiasCalculator:
             'directive': directive,
             'directive_color': directive_color,
             'size_mode': size_mode,
-            'stability_score': stability_score
+            'stability_score': stability_score,
+            'regime': regime
         }
 
         pulse_logger.log(f"📊 Bias: {bias_emoji} {bias} | Confidence: {confidence}% ({confidence_label}) | Active Pillars: {active_pillars}/4 | Mode: {size_mode} | Regime: {regime}")
