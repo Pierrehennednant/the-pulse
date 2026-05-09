@@ -64,6 +64,7 @@ def run_pulse():
 
     regime_result = regime_detector.detect(geo_data, macro_data)
     current_regime = regime_result['regime']
+    stability_score = regime_result['stability_score']
 
     try:
         formatted_data = data_formatter.standardize({
@@ -85,14 +86,16 @@ def run_pulse():
             size_mode=size_mode,
             regime=current_regime,
             calm_days_count=regime_result['calm_days_count'],
-            high_uncertainty_count=regime_result['high_uncertainty_count']
+            high_uncertainty_count=regime_result['high_uncertainty_count'],
+            stability_score=stability_score
         )
 
         recommendation = recommendation_engine.compute(
             bias_score,
             formatted_data.get('geopolitical', {}),
             formatted_data.get('macro', {}),
-            regime=current_regime
+            regime=current_regime,
+            stability_score=stability_score
         )
         bias_score['recommendation'] = recommendation
 

@@ -23,6 +23,15 @@ class RegimeDetector:
     def _save(self, state):
         atomic_write_json(REGIME_FILE, state)
 
+    def compute_stability(self, vix, avg_uncertainty, calm_days_count):
+        """Compute a runtime-only regime stability score (0-100). Not persisted."""
+        stability = (
+            (1 - min(vix / 30, 1)) * 40 +
+            (1 - min(avg_uncertainty / 100, 1)) * 40 +
+            min(calm_days_count * 5, 20)
+        )
+        return int(stability)
+
     def detect(self, geo_data, macro_data):
         state = self._load()
         current_regime = state.get('regime', 'escalation')
@@ -92,10 +101,13 @@ class RegimeDetector:
         state['escalation_streak_count'] = escalation_streak_count
         self._save(state)
 
+        stability_score = self.compute_stability(vix_value, avg_uncertainty, calm_days_count)
+
         return {
             'regime': new_regime,
             'calm_days_count': calm_days_count,
-            'high_uncertainty_count': high_uncertainty_count
+            'high_uncertainty_count': high_uncertainty_count,
+            'stability_score': stability_score
         }
 
 regime_detector = RegimeDetector()

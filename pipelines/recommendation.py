@@ -174,7 +174,7 @@ class RecommendationEngine:
             'signal': signal
         }
 
-    def compute(self, bias_data, geo_data, macro_data, regime='escalation'):
+    def compute(self, bias_data, geo_data, macro_data, regime='escalation', stability_score=50):
         """Generate size recommendation based on 3 sources."""
         try:
             # Source 1 — Gemini uncertainty signal
@@ -193,12 +193,19 @@ class RecommendationEngine:
 
             # --- Decision logic ---
 
+            # Stability-adjusted Normal size threshold
+            normal_size_threshold = 55
+            if stability_score < 30:
+                normal_size_threshold = 62
+            elif stability_score > 70:
+                normal_size_threshold = 55
+
             # Neutral or very low confidence — no recommendation needed
             if bias == 'Neutral' or confidence < 20:
                 return None
 
-            # Below 55% — always quarter, regardless of other conditions
-            if confidence < 55:
+            # Below normal_size_threshold — always quarter, regardless of other conditions
+            if confidence < normal_size_threshold:
                 return {
                     'mode': 'quarter',
                     'label': 'Conditions suggest: Quarter size',

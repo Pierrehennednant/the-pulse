@@ -4,7 +4,7 @@ from config import PILLAR_WEIGHTS_ESCALATION, PILLAR_WEIGHTS_EXPANSION, TIMEZONE
 from utils.logger import pulse_logger
 
 class BiasCalculator:
-    def compute(self, formatted_data, size_mode='quarter', regime='escalation', calm_days_count=0, high_uncertainty_count=0):
+    def compute(self, formatted_data, size_mode='quarter', regime='escalation', calm_days_count=0, high_uncertainty_count=0, stability_score=50):
         total_score = 0.0
         pillar_contributions = {}
         active_pillars = 0
@@ -99,6 +99,12 @@ class BiasCalculator:
             if regime == 'escalation' and high_uncertainty_count >= 2:
                 confidence = int(confidence * 0.85)
 
+            # Stability micro-adjustment — smooths noisy confidence fluctuations
+            # Capped at ±5 points to avoid overriding primary signals
+            stability_adjustment = int((stability_score - 50) / 10)
+            stability_adjustment = max(-5, min(5, stability_adjustment))
+            confidence = int(min(max(confidence + stability_adjustment, 0), 95))
+
             if confidence >= 70:
                 confidence_label = 'High Confidence'
                 confidence_color = 'green'
@@ -184,7 +190,8 @@ class BiasCalculator:
             'gauge_value': int((final_score + 2) / 4 * 100),
             'directive': directive,
             'directive_color': directive_color,
-            'size_mode': size_mode
+            'size_mode': size_mode,
+            'stability_score': stability_score
         }
 
         pulse_logger.log(f"📊 Bias: {bias_emoji} {bias} | Confidence: {confidence}% ({confidence_label}) | Active Pillars: {active_pillars}/4 | Mode: {size_mode} | Regime: {regime}")
