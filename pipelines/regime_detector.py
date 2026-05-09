@@ -16,7 +16,8 @@ class RegimeDetector:
         return {
             'regime': 'escalation',
             'calm_days_count': 0,
-            'vix_elevated_count': 0
+            'vix_elevated_count': 0,
+            'escalation_streak_count': 0
         }
 
     def _save(self, state):
@@ -27,6 +28,7 @@ class RegimeDetector:
         current_regime = state.get('regime', 'escalation')
         calm_days_count = state.get('calm_days_count', 0)
         vix_elevated_count = state.get('vix_elevated_count', 0)
+        escalation_streak_count = state.get('escalation_streak_count', 0)
 
         # --- Read signals ---
         vix_value = (macro_data or {}).get('vix', {}).get('value', 0) or 0
@@ -47,30 +49,35 @@ class RegimeDetector:
         else:
             vix_elevated_count = 0
 
-        # --- Escalation signals ---
-        vix_escalation = vix_elevated_count >= 2
-        geo_escalation = high_uncertainty_count >= 2
-        any_escalation = vix_escalation or geo_escalation
-
-        # --- Expansion conditions ---
+        # --- Live condition signals ---
         expansion_conditions_met = (
             vix_value < 18 and
             avg_uncertainty < 40 and
             high_uncertainty_count == 0
         )
+        escalation_conditions_met = vix_value > 22 or high_uncertainty_count >= 2
 
-        # --- Hysteresis logic ---
-        if any_escalation:
-            calm_days_count = 0
-            new_regime = 'escalation'
-        elif expansion_conditions_met:
+        # --- State validation: live override when stored regime conflicts ---
+        if current_regime == 'expansion' and escalation_conditions_met:
+            pulse_logger.log("⚠️ Regime override: expansion state invalidated — escalation conditions active", level="WARNING")
+            current_regime = 'escalation'
+
+        # --- Persistence logic ---
+        new_regime = current_regime
+
+        if expansion_conditions_met:
             calm_days_count += 1
-            if calm_days_count >= 3:
-                new_regime = 'expansion'
-            else:
-                new_regime = current_regime
-        else:
-            new_regime = current_regime
+            escalation_streak_count = 0
+        elif escalation_conditions_met:
+            escalation_streak_count += 1
+            if escalation_streak_count >= 2:
+                new_regime = 'escalation'
+                calm_days_count = 0
+                escalation_streak_count = 0
+
+        # --- Expansion promotion ---
+        if calm_days_count >= 3 and new_regime == 'escalation':
+            new_regime = 'expansion'
 
         # --- Log regime changes ---
         if new_regime != current_regime:
@@ -82,6 +89,7 @@ class RegimeDetector:
         state['regime'] = new_regime
         state['calm_days_count'] = calm_days_count
         state['vix_elevated_count'] = vix_elevated_count
+        state['escalation_streak_count'] = escalation_streak_count
         self._save(state)
 
         return {
