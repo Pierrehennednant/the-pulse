@@ -401,11 +401,24 @@
             return `<span style="font-size:11px;color:#7a8fa8"> (${change > 0 ? '+' : '-'}${abs} WoW)</span>`;
         };
 
+        const cotTrend = (key) => {
+            const history = (data.cot_history || []).slice(-3);
+            if (history.length < 2) return '→ Stable';
+            const vals = history.map(h => h[key]);
+            const rising = vals.every((v, i) => i === 0 || v > vals[i - 1]);
+            const falling = vals.every((v, i) => i === 0 || v < vals[i - 1]);
+            if (rising) return '↑ Building';
+            if (falling) return '↓ Unwinding';
+            return '→ Stable';
+        };
+
         html += `
             <div class="data-row"><span class="data-label">NQ Direction</span><span class="data-value ${valClass(nq.direction)}">${(nq.direction || 'N/A').toUpperCase()}</span></div>
             <div class="data-row"><span class="data-label">NQ Net Position</span><span class="data-value">${(nq.combined_net || 0).toLocaleString()} (${nq.net_pct || 0}%)${wowArrow(nq.wow_change)}${wowText(nq.wow_change)}</span></div>
+            <div class="data-row"><span class="data-label">NQ 3-Week Trend</span><span class="data-value" style="color:#7a8fa8">${cotTrend('nq_net_pct')}</span></div>
             <div class="data-row"><span class="data-label">ES Direction</span><span class="data-value ${valClass(es.direction)}">${(es.direction || 'N/A').toUpperCase()}</span></div>
             <div class="data-row"><span class="data-label">ES Net Position</span><span class="data-value">${(es.combined_net || 0).toLocaleString()} (${es.net_pct || 0}%)${wowArrow(es.wow_change)}${wowText(es.wow_change)}</span></div>
+            <div class="data-row"><span class="data-label">ES 3-Week Trend</span><span class="data-value" style="color:#7a8fa8">${cotTrend('es_net_pct')}</span></div>
             <div class="data-row"><span class="data-label">Updates</span><span class="data-value" style="color:#7a8fa8">${data.update_frequency || 'Weekly'}</span></div>`;
         return html;
     }

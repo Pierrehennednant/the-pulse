@@ -87,6 +87,29 @@ class InstitutionalPipeline:
             error_handler.handle(e, f"COT Parser {instrument}")
             return None
 
+    def _append_history(self, result):
+        history_file = '/data/cot_history.json'
+        try:
+            try:
+                with open(history_file, 'r') as f:
+                    history = json.load(f)
+            except Exception:
+                history = []
+            nq = result.get('nq_futures') or {}
+            es = result.get('es_futures') or {}
+            entry = {
+                'timestamp': result.get('timestamp', ''),
+                'nq_net_pct': nq.get('net_pct', 0),
+                'nq_direction': nq.get('direction', 'unknown'),
+                'es_net_pct': es.get('net_pct', 0),
+                'es_direction': es.get('direction', 'unknown')
+            }
+            history.append(entry)
+            history = history[-6:]
+            atomic_write_json(history_file, history)
+        except Exception as e:
+            pulse_logger.log(f"⚠️ COT history append failed: {e}", level="WARNING")
+
     def fetch_cot(self):
         try:
             response = fetch_with_retry(self.cot_url, headers=self.headers, timeout=10)
@@ -147,6 +170,7 @@ class InstitutionalPipeline:
                 'status': 'live'
             }
             self._save(result)
+            self._append_history(result)
             pulse_logger.log(f"✓ Institutional COT updated | NQ: {nq_data['direction'] if nq_data else 'unknown'} | ES: {es_data['direction'] if es_data else 'unknown'} | Score: {pillar_score}")
             return result
         except Exception as e:
