@@ -209,6 +209,7 @@
     <a class="share-btn" id="share-btn" href="#" onclick="copySnapshot()">📤 Share</a>
 </div>
 <div class="container">
+    <div id="staleness-banner" style="display:none;background:#c0392b;color:#fff;padding:10px 16px;border-radius:6px;margin-bottom:14px;font-size:0.9rem;font-weight:600;"></div>
     <div class="gauge-section">
         <div class="gauge-wrapper">
             <svg class="gauge-svg" viewBox="0 0 260 160">
@@ -592,6 +593,14 @@
         }
 
         document.getElementById('last-updated-text').textContent = `Last updated: ${new Date(snapshot.timestamp).toLocaleTimeString('en-US', {timeZone: 'America/New_York'})} EST`;
+        const staleBanner = document.getElementById('staleness-banner');
+        const ageMinutes = snapshot.timestamp ? Math.floor((Date.now() - new Date(snapshot.timestamp).getTime()) / 60000) : null;
+        if (ageMinutes !== null && ageMinutes > 10) {
+            staleBanner.textContent = `⚠️ Data may be stale — refresh cycle may have stopped. Last updated: ${ageMinutes} minutes ago.`;
+            staleBanner.style.display = 'block';
+        } else {
+            staleBanner.style.display = 'none';
+        }
         document.getElementById('why-today-text').innerHTML = generateWhyToday(snapshot);
         const econ = pillars.economic || {};
         document.getElementById('econ-score-badge').textContent = scoreLabel(econ.pillar_score || 0);
