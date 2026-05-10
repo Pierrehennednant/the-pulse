@@ -114,7 +114,10 @@ def run_scheduler():
     schedule.every(REFRESH_INTERVAL_MINUTES).minutes.do(run_pulse)
     schedule.every(24).hours.do(manual_input_pipeline.clear_old_inputs)
     while True:
-        schedule.run_pending()
+        try:
+            schedule.run_pending()
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Scheduler job failed — continuing: {e}", level="WARNING")
         time.sleep(1)
 
 if __name__ == '__main__':

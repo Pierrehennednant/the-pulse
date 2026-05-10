@@ -34,80 +34,92 @@ class RegimeDetector:
 
     def detect(self, geo_data, macro_data):
         state = self._load()
-        current_regime = state.get('regime', 'escalation')
-        calm_days_count = state.get('calm_days_count', 0)
-        vix_elevated_count = state.get('vix_elevated_count', 0)
-        escalation_streak_count = state.get('escalation_streak_count', 0)
+        try:
+            current_regime = state.get('regime', 'escalation')
+            calm_days_count = state.get('calm_days_count', 0)
+            vix_elevated_count = state.get('vix_elevated_count', 0)
+            escalation_streak_count = state.get('escalation_streak_count', 0)
 
-        # --- Read signals ---
-        vix_value = (macro_data or {}).get('vix', {}).get('value', 0) or 0
+            # --- Read signals ---
+            try:
+                vix_value = float(macro_data.get('vix', {}).get('value', 0) or 0) if isinstance(macro_data, dict) else 0.0
+            except Exception:
+                vix_value = 0.0
 
-        items = (geo_data or {}).get('news_items', [])
-        uncertainty_scores = [
-            item.get('uncertainty_score', 0)
-            for item in items
-            if item.get('uncertainty_score') is not None
-        ]
-        last_5_scores = uncertainty_scores[:5]
-        avg_uncertainty = (sum(last_5_scores) / len(last_5_scores)) if last_5_scores else 0
-        high_uncertainty_count = sum(1 for s in uncertainty_scores if s >= 70)
+            items = (geo_data or {}).get('news_items', []) if isinstance(geo_data, dict) else []
+            uncertainty_scores = [
+                item.get('uncertainty_score', 0)
+                for item in items
+                if item.get('uncertainty_score') is not None
+            ]
+            last_5_scores = uncertainty_scores[:5]
+            avg_uncertainty = (sum(last_5_scores) / len(last_5_scores)) if last_5_scores else 0
+            high_uncertainty_count = sum(1 for s in uncertainty_scores if s >= 70)
 
-        # --- VIX consecutive tracking ---
-        if vix_value > 22:
-            vix_elevated_count += 1
-        else:
-            vix_elevated_count = 0
-
-        # --- Live condition signals ---
-        expansion_conditions_met = (
-            vix_value < 18 and
-            avg_uncertainty < 40 and
-            high_uncertainty_count == 0
-        )
-        escalation_conditions_met = vix_value > 22 or high_uncertainty_count >= 2
-
-        # --- State validation: live override when stored regime conflicts ---
-        if current_regime == 'expansion' and escalation_conditions_met:
-            pulse_logger.log("⚠️ Regime override: expansion state invalidated — escalation conditions active", level="WARNING")
-            current_regime = 'escalation'
-
-        # --- Persistence logic ---
-        new_regime = current_regime
-
-        if expansion_conditions_met:
-            calm_days_count += 1
-            escalation_streak_count = 0
-        elif escalation_conditions_met:
-            escalation_streak_count += 1
-            if escalation_streak_count >= 2:
-                new_regime = 'escalation'
-                calm_days_count = 0
-                escalation_streak_count = 0
-
-        # --- Expansion promotion ---
-        if calm_days_count >= 3 and new_regime == 'escalation':
-            new_regime = 'expansion'
-
-        # --- Log regime changes ---
-        if new_regime != current_regime:
-            if new_regime == 'expansion':
-                pulse_logger.log("🟢 Regime shift: EXPANSION — calm conditions confirmed 3 days")
+            # --- VIX consecutive tracking ---
+            if vix_value > 22:
+                vix_elevated_count += 1
             else:
-                pulse_logger.log("🔴 Regime shift: ESCALATION — elevated risk detected")
+                vix_elevated_count = 0
 
-        state['regime'] = new_regime
-        state['calm_days_count'] = calm_days_count
-        state['vix_elevated_count'] = vix_elevated_count
-        state['escalation_streak_count'] = escalation_streak_count
-        self._save(state)
+            # --- Live condition signals ---
+            expansion_conditions_met = (
+                vix_value < 18 and
+                avg_uncertainty < 40 and
+                high_uncertainty_count == 0
+            )
+            escalation_conditions_met = vix_value > 22 or high_uncertainty_count >= 2
 
-        stability_score = self.compute_stability(vix_value, avg_uncertainty, calm_days_count)
+            # --- State validation: live override when stored regime conflicts ---
+            if current_regime == 'expansion' and escalation_conditions_met:
+                pulse_logger.log("⚠️ Regime override: expansion state invalidated — escalation conditions active", level="WARNING")
+                current_regime = 'escalation'
 
-        return {
-            'regime': new_regime,
-            'calm_days_count': calm_days_count,
-            'high_uncertainty_count': high_uncertainty_count,
-            'stability_score': stability_score
-        }
+            # --- Persistence logic ---
+            new_regime = current_regime
+
+            if expansion_conditions_met:
+                calm_days_count += 1
+                escalation_streak_count = 0
+            elif escalation_conditions_met:
+                escalation_streak_count += 1
+                if escalation_streak_count >= 2:
+                    new_regime = 'escalation'
+                    calm_days_count = 0
+                    escalation_streak_count = 0
+
+            # --- Expansion promotion ---
+            if calm_days_count >= 3 and new_regime == 'escalation':
+                new_regime = 'expansion'
+
+            # --- Log regime changes ---
+            if new_regime != current_regime:
+                if new_regime == 'expansion':
+                    pulse_logger.log("🟢 Regime shift: EXPANSION — calm conditions confirmed 3 days")
+                else:
+                    pulse_logger.log("🔴 Regime shift: ESCALATION — elevated risk detected")
+
+            state['regime'] = new_regime
+            state['calm_days_count'] = calm_days_count
+            state['vix_elevated_count'] = vix_elevated_count
+            state['escalation_streak_count'] = escalation_streak_count
+            self._save(state)
+
+            stability_score = self.compute_stability(vix_value, avg_uncertainty, calm_days_count)
+
+            return {
+                'regime': new_regime,
+                'calm_days_count': calm_days_count,
+                'high_uncertainty_count': high_uncertainty_count,
+                'stability_score': stability_score
+            }
+        except Exception as e:
+            pulse_logger.log(f"⚠️ RegimeDetector.detect failed — returning stored regime: {e}", level="WARNING")
+            return {
+                'regime': state.get('regime', 'escalation'),
+                'calm_days_count': state.get('calm_days_count', 0),
+                'high_uncertainty_count': 0,
+                'stability_score': 50
+            }
 
 regime_detector = RegimeDetector()
