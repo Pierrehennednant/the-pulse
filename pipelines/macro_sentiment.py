@@ -11,6 +11,7 @@ from utils.logger import pulse_logger
 from utils.error_handler import error_handler
 
 VIX_CACHE_FILE = '/data/vix_cache.json'
+VXN_CACHE_FILE = '/data/vxn_cache.json'
 FG_CACHE_FILE = '/data/fear_greed_cache.json'
 
 class MacroSentimentPipeline:
@@ -74,10 +75,33 @@ class MacroSentimentPipeline:
             pulse_logger.log("⚠️ VIX — FRED fetch failed and no cache, defaulting to 20.0", level="WARNING")
             return {'value': 20.0, 'previous': 20.0, 'change': 0, 'change_pct': 0, 'signal': 'neutral'}
 
+    def _save_vxn_cache(self, vxn_data):
+        try:
+            atomic_write_json(VXN_CACHE_FILE, {
+                'timestamp': datetime.now(self.timezone).isoformat(),
+                'vxn': vxn_data
+            })
+        except Exception as e:
+            pulse_logger.log(f"⚠️ VXN cache write failed: {e}", level="WARNING")
+
+    def _load_vxn_cache(self):
+        try:
+            if os.path.exists(VXN_CACHE_FILE):
+                with open(VXN_CACHE_FILE, 'r') as f:
+                    return json.load(f).get('vxn')
+        except Exception:
+            pass
+        return None
+
     def fetch_vxn(self):
         if not FRED_API_KEY:
             pulse_logger.log("⚠️ FRED_API_KEY not set — skipping VXN fetch", level="WARNING")
-            return None
+            cached = self._load_vxn_cache()
+            if cached:
+                pulse_logger.log("⚠️ VXN — using cached value (FRED key missing)", level="WARNING")
+                return cached
+            pulse_logger.log("⚠️ VXN — no cache available, defaulting to 20.0", level="WARNING")
+            return {'value': 20.0, 'previous': 20.0, 'change': 0, 'change_pct': 0, 'signal': 'neutral'}
         try:
             url = f"https://api.stlouisfed.org/fred/series/observations?series_id=VXNCLS&api_key={FRED_API_KEY}&sort_order=desc&limit=10&file_type=json"
             response = fetch_with_retry(url, timeout=10)
@@ -89,16 +113,23 @@ class MacroSentimentPipeline:
             previous = round(float(observations[1]['value']), 2) if len(observations) >= 2 else current
             change = round(current - previous, 2)
             change_pct = round((change / previous) * 100, 2) if previous else 0
-            return {
+            result = {
                 'value': current,
                 'previous': previous,
                 'change': change,
                 'change_pct': change_pct,
                 'signal': 'bearish' if current > 25 else 'neutral' if current > 18 else 'bullish'
             }
+            self._save_vxn_cache(result)
+            return result
         except Exception as e:
             error_handler.handle(e, "VXN")
-            return None
+            cached = self._load_vxn_cache()
+            if cached:
+                pulse_logger.log("⚠️ VXN — FRED fetch failed, using cached value", level="WARNING")
+                return cached
+            pulse_logger.log("⚠️ VXN — FRED fetch failed and no cache, defaulting to 20.0", level="WARNING")
+            return {'value': 20.0, 'previous': 20.0, 'change': 0, 'change_pct': 0, 'signal': 'neutral'}
 
     def _save_fg_cache(self, fg_data):
         try:
