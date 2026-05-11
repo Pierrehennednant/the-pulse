@@ -16,37 +16,42 @@ class RecommendationEngine:
             if not os.path.exists(self.snapshot_dir):
                 return {'consistent': False, 'days': 0, 'direction': None, 'avg_confidence': 0}
 
-            files = sorted(
-                [f for f in os.listdir(self.snapshot_dir) if f.endswith('.json')],
-                key=lambda f: os.path.getmtime(os.path.join(self.snapshot_dir, f)),
-                reverse=True
-            )[:20]
-
-            if not files:
+            raw_files = [f for f in os.listdir(self.snapshot_dir) if f.endswith('.json')]
+            if not raw_files:
                 return {'consistent': False, 'days': 0, 'direction': None, 'avg_confidence': 0}
 
-            snapshots = []
-            for f in files:
+            loaded = []
+            for f in raw_files:
                 try:
                     with open(os.path.join(self.snapshot_dir, f), 'r') as fp:
                         snap = json.load(fp)
-                        bias = snap.get('bias', {})
-                        timestamp = snap.get('timestamp', '')
-                        if bias and timestamp:
-                            dt = datetime.fromisoformat(timestamp)
-                            if dt.tzinfo is None:
-                                dt = dt.replace(tzinfo=pytz.utc)
-                            # Skip weekends
-                            est = dt.astimezone(self.timezone)
-                            if est.weekday() in [5, 6]:
-                                continue
-                            snapshots.append({
-                                'bias': bias.get('bias', 'Neutral'),
-                                'confidence': bias.get('confidence', 0),
-                                'date': est.strftime('%Y-%m-%d')
-                            })
+                    bias = snap.get('bias', {})
+                    timestamp = snap.get('timestamp', '')
+                    if bias and timestamp:
+                        loaded.append((timestamp, snap))
                 except Exception as e:
                     pulse_logger.log(f"⚠️ Snapshot read failed: {e}", level="WARNING")
+
+            # Sort newest-first by the timestamp field inside the snapshot content
+            loaded.sort(key=lambda t: t[0], reverse=True)
+
+            snapshots = []
+            for timestamp, snap in loaded[:20]:
+                try:
+                    bias = snap.get('bias', {})
+                    dt = datetime.fromisoformat(timestamp)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=pytz.utc)
+                    est = dt.astimezone(self.timezone)
+                    if est.weekday() in [5, 6]:
+                        continue
+                    snapshots.append({
+                        'bias': bias.get('bias', 'Neutral'),
+                        'confidence': bias.get('confidence', 0),
+                        'date': est.strftime('%Y-%m-%d')
+                    })
+                except Exception as e:
+                    pulse_logger.log(f"⚠️ Snapshot parse failed: {e}", level="WARNING")
                     continue
 
             if not snapshots:
