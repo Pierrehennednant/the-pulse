@@ -142,6 +142,7 @@ class GeopoliticalPipeline:
         if not articles:
             return []
         if self.anthropic_client is None:
+            pulse_logger.log("⚠️ Haiku unavailable — keyword-only scoring in effect for unclassified articles", level="WARNING")
             return []
 
         # Build batch input with full article text
@@ -857,6 +858,20 @@ Respond with only one word: SAME or DIFFERENT"""
                 if existing:
                     existing['data']['status'] = 'cached'
                     return existing['data']
+                pinned = self.load_pinned_stories()
+                if pinned:
+                    pulse_logger.log(f"⚠️ Geopolitical — News API unavailable and no cache, using {len(pinned)} pinned stories only", level="WARNING")
+                    flags = self.identify_flags(pinned)
+                    score = self.calculate_score(pinned, flags)
+                    return {
+                        'pillar': 'geopolitical',
+                        'timestamp': datetime.now(self.timezone).isoformat(),
+                        'news_items': pinned[:10],
+                        'active_flags': flags,
+                        'total_items': len(pinned),
+                        'pillar_score': score,
+                        'status': 'pinned_only'
+                    }
                 return None
 
             flags = self.identify_flags(items)

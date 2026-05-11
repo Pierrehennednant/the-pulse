@@ -11,6 +11,7 @@ from utils.logger import pulse_logger
 from utils.error_handler import error_handler
 
 VIX_CACHE_FILE = '/data/vix_cache.json'
+FG_CACHE_FILE = '/data/fear_greed_cache.json'
 
 class MacroSentimentPipeline:
     def __init__(self):
@@ -99,19 +100,44 @@ class MacroSentimentPipeline:
             error_handler.handle(e, "VXN")
             return None
 
+    def _save_fg_cache(self, fg_data):
+        try:
+            atomic_write_json(FG_CACHE_FILE, {
+                'timestamp': datetime.now(self.timezone).isoformat(),
+                'fear_greed': fg_data
+            })
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Fear & Greed cache write failed: {e}", level="WARNING")
+
+    def _load_fg_cache(self):
+        try:
+            if os.path.exists(FG_CACHE_FILE):
+                with open(FG_CACHE_FILE, 'r') as f:
+                    return json.load(f).get('fear_greed')
+        except Exception:
+            pass
+        return None
+
     def fetch_fear_greed(self):
         try:
             fg = fear_greed.get()
             score = int(fg['score'])
             rating = fg['rating']
-            return {
+            result = {
                 'score': score,
                 'rating': rating,
                 'signal': 'bearish' if score < 40 else 'bullish' if score > 60 else 'neutral',
                 'source': 'CNN'
             }
+            self._save_fg_cache(result)
+            return result
         except Exception as e:
             error_handler.handle(e, "Fear & Greed")
+            cached = self._load_fg_cache()
+            if cached:
+                pulse_logger.log("⚠️ Fear & Greed — CNN fetch failed, using cached value", level="WARNING")
+                return cached
+            pulse_logger.log("⚠️ Fear & Greed — CNN fetch failed and no cache available", level="WARNING")
             return None
 
     def calculate_score(self, vix, vxn, fear_greed):
