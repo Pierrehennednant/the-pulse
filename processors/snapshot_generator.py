@@ -97,6 +97,30 @@ class SnapshotGenerator:
 
         return snapshot_id
 
+    def has_daily_for_today(self):
+        """Return True if a daily snapshot already exists for today in EST."""
+        daily_dir = os.path.join(self.snapshot_dir, "daily")
+        if not os.path.exists(daily_dir):
+            return False
+        today_str = datetime.now(self.timezone).strftime('%Y-%m-%d')
+        for f in os.listdir(daily_dir):
+            if not f.endswith('.json'):
+                continue
+            try:
+                with open(os.path.join(daily_dir, f), 'r') as fp:
+                    snap = json.load(fp)
+                ts = snap.get('timestamp', '')
+                if not ts:
+                    continue
+                dt = datetime.fromisoformat(ts)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=pytz.utc)
+                if dt.astimezone(self.timezone).strftime('%Y-%m-%d') == today_str:
+                    return True
+            except Exception:
+                continue
+        return False
+
     def load(self, snapshot_id):
         snapshot_file = os.path.join(self.snapshot_dir, f"snapshot_{snapshot_id}.json")
         if os.path.exists(snapshot_file):
