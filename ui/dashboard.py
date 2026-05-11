@@ -7,6 +7,82 @@ from utils.logger import pulse_logger
 
 app = Flask(__name__, template_folder='templates')
 
+_MAX_TITLE_LEN = 200
+_MAX_VALUE_LEN = 50
+
+def _validate_manual_input(event_title, actual_value):
+    """Return (ok, error_message). Checks type, length, and no null bytes."""
+    if not isinstance(event_title, str) or not isinstance(actual_value, str):
+        return False, 'event_title and actual_value must be strings'
+    if not event_title or not actual_value:
+        return False, 'Missing event_title or actual_value'
+    if len(event_title) > _MAX_TITLE_LEN:
+        return False, f'event_title exceeds {_MAX_TITLE_LEN} characters'
+    if len(actual_value) > _MAX_VALUE_LEN:
+        return False, f'actual_value exceeds {_MAX_VALUE_LEN} characters'
+    if '\x00' in event_title or '\x00' in actual_value:
+        return False, 'Null bytes not allowed'
+    return True, None
+
+def _run_partial_refresh(label):
+    """Fresh econ fetch + cached macro/inst/geo → full bias recompute with regime params."""
+    from pipelines.economic_calendar import economic_calendar_pipeline
+    from pipelines.regime_detector import regime_detector
+    from pipelines.recommendation import recommendation_engine
+    from processors.data_formatter import data_formatter
+    from processors.bias_calculator import bias_calculator
+    from utils.cache import cache
+
+    cache.delete('economic_calendar')
+    econ_data = economic_calendar_pipeline.fetch()
+
+    macro_cached = cache.load('macro_sentiment')
+    macro_data = macro_cached['data'] if macro_cached else {}
+
+    inst_cached = cache.load('institutional')
+    inst_data = inst_cached['data'] if inst_cached else {}
+
+    geo_cached = cache.load('geopolitical')
+    geo_data = geo_cached['data'] if geo_cached else {}
+
+    regime_result = regime_detector.detect(geo_data, macro_data)
+    current_regime = regime_result['regime']
+    stability_score = regime_result['stability_score']
+
+    formatted_data = data_formatter.standardize({
+        'macro': macro_data,
+        'economic': econ_data,
+        'institutional': inst_data,
+        'geopolitical': geo_data,
+    })
+
+    try:
+        with open('/data/size_mode.json', 'r') as f:
+            size_mode = json.load(f).get('mode', 'quarter')
+    except Exception:
+        size_mode = 'quarter'
+
+    bias_score = bias_calculator.compute(
+        formatted_data,
+        size_mode=size_mode,
+        regime=current_regime,
+        calm_days_count=regime_result['calm_days_count'],
+        high_uncertainty_count=regime_result['high_uncertainty_count'],
+        stability_score=stability_score,
+    )
+
+    recommendation = recommendation_engine.compute(
+        bias_score,
+        formatted_data.get('geopolitical', {}),
+        formatted_data.get('macro', {}),
+        regime=current_regime,
+        stability_score=stability_score,
+    )
+    bias_score['recommendation'] = recommendation
+
+    snapshot_generator.save(bias_score, formatted_data)
+    pulse_logger.log(f"✅ {label} partial refresh complete")
+
 @app.route('/')
 def home():
     latest = snapshot_generator.get_latest()
@@ -38,55 +114,16 @@ def manual_input():
         event_title = data.get('event_title')
         actual_value = data.get('actual_value')
         story_url = data.get('story_url', None)
-        if not event_title or not actual_value:
-            return jsonify({'error': 'Missing event_title or actual_value'}), 400
+
+        ok, err = _validate_manual_input(event_title, actual_value)
+        if not ok:
+            return jsonify({'error': err}), 400
 
         success = manual_input_pipeline.save_actual(event_title, actual_value, story_url)
 
         if success:
             try:
-                from pipelines.economic_calendar import economic_calendar_pipeline
-                from processors.data_formatter import data_formatter
-                from processors.bias_calculator import bias_calculator
-                from processors.snapshot_generator import snapshot_generator
-                from utils.cache import cache
-
-                econ_data = economic_calendar_pipeline.fetch()
-
-                macro_cached = cache.load('macro_sentiment')
-                if not macro_cached:
-                    try:
-                        with open('/data/macro_sentiment.json', 'r') as f:
-                            macro_cached = json.load(f)
-                    except Exception:
-                        pass
-
-                inst_cached = cache.load('institutional')
-                if not inst_cached:
-                    try:
-                        with open('/data/permanent_cot.json', 'r') as f:
-                            inst_cached = {'data': json.load(f)}
-                    except Exception:
-                        pass
-
-                geo_cached = cache.load('geopolitical')
-                if not geo_cached:
-                    try:
-                        with open('/data/geopolitical.json', 'r') as f:
-                            geo_cached = json.load(f)
-                    except Exception:
-                        pass
-
-                formatted_data = data_formatter.standardize({
-                    'macro': macro_cached['data'] if macro_cached else None,
-                    'economic': econ_data,
-                    'institutional': inst_cached['data'] if inst_cached else None,
-                    'geopolitical': geo_cached['data'] if geo_cached else None,
-                })
-
-                bias_score = bias_calculator.compute(formatted_data)
-                snapshot_generator.save(bias_score, formatted_data)
-                pulse_logger.log(f"✅ manual_input partial refresh complete | {event_title}")
+                _run_partial_refresh(f"manual_input | {event_title}")
             except Exception as refresh_err:
                 pulse_logger.log(f"⚠️ manual_input partial refresh failed: {refresh_err}", level="WARNING")
 
@@ -106,8 +143,11 @@ def reset_manual_input():
     try:
         data = request.get_json()
         event_title = data.get('event_title')
-        if not event_title:
+        if not isinstance(event_title, str) or not event_title:
             return jsonify({'error': 'Missing event_title'}), 400
+        if len(event_title) > _MAX_TITLE_LEN or '\x00' in event_title:
+            return jsonify({'error': 'Invalid event_title'}), 400
+
         with open('/data/permanent_manual_inputs.json', 'r') as f:
             inputs = json.load(f)
         if event_title in inputs:
@@ -115,49 +155,7 @@ def reset_manual_input():
             atomic_write_json('/data/permanent_manual_inputs.json', inputs)
 
         try:
-            from pipelines.economic_calendar import economic_calendar_pipeline
-            from processors.data_formatter import data_formatter
-            from processors.bias_calculator import bias_calculator
-            from processors.snapshot_generator import snapshot_generator
-            from utils.cache import cache
-
-            cache.delete('economic_calendar')
-            econ_data = economic_calendar_pipeline.fetch()
-
-            macro_cached = cache.load('macro_sentiment')
-            if not macro_cached:
-                try:
-                    with open('/data/macro_sentiment.json', 'r') as f:
-                        macro_cached = json.load(f)
-                except Exception:
-                    pass
-
-            inst_cached = cache.load('institutional')
-            if not inst_cached:
-                try:
-                    with open('/data/permanent_cot.json', 'r') as f:
-                        inst_cached = {'data': json.load(f)}
-                except Exception:
-                    pass
-
-            geo_cached = cache.load('geopolitical')
-            if not geo_cached:
-                try:
-                    with open('/data/geopolitical.json', 'r') as f:
-                        geo_cached = json.load(f)
-                except Exception:
-                    pass
-
-            formatted_data = data_formatter.standardize({
-                'macro': macro_cached['data'] if macro_cached else None,
-                'economic': econ_data,
-                'institutional': inst_cached['data'] if inst_cached else None,
-                'geopolitical': geo_cached['data'] if geo_cached else None,
-            })
-
-            bias_score = bias_calculator.compute(formatted_data)
-            snapshot_generator.save(bias_score, formatted_data)
-            pulse_logger.log(f"✅ reset_manual_input partial refresh complete | {event_title}")
+            _run_partial_refresh(f"reset_manual_input | {event_title}")
         except Exception as refresh_err:
             pulse_logger.log(f"⚠️ reset_manual_input partial refresh failed: {refresh_err}", level="WARNING")
 
