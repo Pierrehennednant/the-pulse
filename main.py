@@ -104,7 +104,7 @@ def run_pulse():
         pulse_logger.log(f"✅ Pulse updated | {bias_score['bias_emoji']} {bias_score['bias']} | Confidence: {bias_score['confidence']}% | Snapshot: {snapshot_id}")
 
         now_est = datetime.now(pytz.timezone(TIMEZONE))
-        if now_est.hour == 16 and now_est.minute < 5:
+        if now_est.hour >= 16 and not snapshot_generator.has_daily_for_today():
             snapshot_generator.save_daily(bias_score, formatted_data)
             pulse_logger.log("📅 Daily closing snapshot saved")
     except Exception as e:
