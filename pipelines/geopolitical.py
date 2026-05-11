@@ -594,17 +594,22 @@ Respond with only one word: SAME or DIFFERENT"""
             qry_futures = [executor.submit(fetch_query, q) for q in search_queries]
             all_futures = cat_futures + qry_futures
 
-            for future in concurrent.futures.as_completed(all_futures, timeout=20):
-                try:
-                    data = future.result()
-                    batch = safe_parse(data)
-                    with seen_lock:
-                        for item in batch:
-                            if item['headline'] not in seen_titles:
-                                seen_titles.add(item['headline'])
-                                items.append(item)
-                except Exception as e:
-                    pulse_logger.log(f"⚠️ Parallel fetch failed: {e}", level="WARNING")
+            try:
+                completed = concurrent.futures.as_completed(all_futures, timeout=40)
+                for future in completed:
+                    try:
+                        data = future.result()
+                        batch = safe_parse(data)
+                        with seen_lock:
+                            for item in batch:
+                                if item['headline'] not in seen_titles:
+                                    seen_titles.add(item['headline'])
+                                    items.append(item)
+                    except Exception as e:
+                        pulse_logger.log(f"⚠️ Parallel fetch failed: {e}", level="WARNING")
+            except concurrent.futures.TimeoutError:
+                pending = sum(1 for f in all_futures if not f.done())
+                pulse_logger.log(f"⚠️ Geo futures timeout — {pending} fetch(es) did not complete; using {len(items)} articles collected so far", level="WARNING")
 
         if not items:
             pulse_logger.log("⚠️ All parallel fetches returned empty", level="WARNING")
