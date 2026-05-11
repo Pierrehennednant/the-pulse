@@ -10,6 +10,8 @@ from utils.retry import fetch_with_retry
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
 
+_MAX_COT_POSITION = 5_000_000  # upper bound per long/short field; flags CFTC layout changes
+
 class InstitutionalPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
@@ -55,6 +57,10 @@ class InstitutionalPipeline:
                 return None
             nums = [int(x.replace(',', '')) for x in re.findall(r'[\d,]+', positions_line)]
             if len(nums) < 14:
+                pulse_logger.log(
+                    f"❌ COT sanity check failed for {instrument}: expected ≥14 columns, got {len(nums)}",
+                    level="ERROR"
+                )
                 return None
             positions = {
                 'asset_mgr_long': nums[3],
@@ -62,13 +68,26 @@ class InstitutionalPipeline:
                 'leveraged_long': nums[6],
                 'leveraged_short': nums[7],
             }
+            for field, val in positions.items():
+                if val < 0 or val > _MAX_COT_POSITION:
+                    pulse_logger.log(
+                        f"❌ COT sanity check failed for {instrument}: {field}={val:,} outside [0, {_MAX_COT_POSITION:,}]",
+                        level="ERROR"
+                    )
+                    return None
             asset_mgr_net = positions.get('asset_mgr_long', 0) - positions.get('asset_mgr_short', 0)
             leveraged_net = positions.get('leveraged_long', 0) - positions.get('leveraged_short', 0)
             combined_long = positions.get('asset_mgr_long', 0) + positions.get('leveraged_long', 0)
             combined_short = positions.get('asset_mgr_short', 0) + positions.get('leveraged_short', 0)
             combined_net = combined_long - combined_short
             total = combined_long + combined_short
-            net_pct = round((combined_net / total * 100), 2) if total > 0 else 0
+            if total == 0:
+                pulse_logger.log(
+                    f"❌ COT sanity check failed for {instrument}: combined open interest is zero — likely a parse column mismatch",
+                    level="ERROR"
+                )
+                return None
+            net_pct = round((combined_net / total * 100), 2)
             direction = 'bullish' if combined_net > 0 else 'bearish'
             score = 1.0 if net_pct > 10 else -1.0 if net_pct < -10 else 0.5 if net_pct > 0 else -0.5
             return {
