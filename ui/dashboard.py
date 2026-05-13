@@ -24,15 +24,22 @@ def _validate_manual_input(event_title, actual_value):
         return False, 'Null bytes not allowed'
     return True, None
 
-def _run_partial_refresh(label):
-    """Fresh econ fetch + cached macro/inst/geo → full bias recompute."""
+def _run_partial_refresh(label, invalidate_econ=False):
+    """Recompute bias from cached pillars and save a fresh snapshot.
+
+    invalidate_econ=True forces a live econ fetch (needed after manual
+    input changes actual values). False (default) reuses the econ cache,
+    which is correct for size_mode toggles where only the directive text
+    needs to change.
+    """
     from pipelines.economic_calendar import economic_calendar_pipeline
     from pipelines.recommendation import recommendation_engine
     from processors.data_formatter import data_formatter
     from processors.bias_calculator import bias_calculator
     from utils.cache import cache
 
-    cache.delete('economic_calendar')
+    if invalidate_econ:
+        cache.delete('economic_calendar')
     econ_data = economic_calendar_pipeline.fetch()
 
     macro_cached = cache.load('macro_sentiment')
@@ -109,7 +116,7 @@ def manual_input():
 
         if success:
             try:
-                _run_partial_refresh(f"manual_input | {event_title}")
+                _run_partial_refresh(f"manual_input | {event_title}", invalidate_econ=True)
             except Exception as refresh_err:
                 pulse_logger.log(f"⚠️ manual_input partial refresh failed: {refresh_err}", level="WARNING")
 
@@ -141,7 +148,7 @@ def reset_manual_input():
             atomic_write_json('/data/permanent_manual_inputs.json', inputs)
 
         try:
-            _run_partial_refresh(f"reset_manual_input | {event_title}")
+            _run_partial_refresh(f"reset_manual_input | {event_title}", invalidate_econ=True)
         except Exception as refresh_err:
             pulse_logger.log(f"⚠️ reset_manual_input partial refresh failed: {refresh_err}", level="WARNING")
 
@@ -152,12 +159,22 @@ def reset_manual_input():
 @app.route('/api/size_mode', methods=['POST'])
 def set_size_mode():
     data = request.get_json()
+    if not data:
+        return jsonify({'status': 'error', 'message': 'Missing request body'}), 400
     mode = data.get('mode', 'quarter')
     if mode not in ['quarter', 'normal']:
         return jsonify({'status': 'error', 'message': 'Invalid mode'}), 400
     size_mode_file = '/data/size_mode.json'
     try:
         atomic_write_json(size_mode_file, {'mode': mode})
+        try:
+            # Recompute immediately so the next /api/latest fetch (triggered by
+            # setSizeMode() 1 second after toggle) returns a snapshot with the
+            # updated size_mode and directive — preventing the button from
+            # reverting to the previous value on auto-refresh.
+            _run_partial_refresh('size_mode toggle')
+        except Exception as refresh_err:
+            pulse_logger.log(f"⚠️ size_mode refresh failed: {refresh_err}", level="WARNING")
         return jsonify({'status': 'saved', 'mode': mode})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
