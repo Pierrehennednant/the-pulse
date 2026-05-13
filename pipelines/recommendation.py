@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 from config import TIMEZONE
 from utils.logger import pulse_logger
