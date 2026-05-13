@@ -23,7 +23,8 @@ class BiasCalculator:
         for data_key, config_key in weight_map.items():
             pillar_data = formatted_data.get(data_key, {})
             score = pillar_data.get('pillar_score', 0)
-            weight = weights.get(config_key, 0)
+            base_weight = weights.get(config_key, 0)
+            weight = base_weight
             status = pillar_data.get('status', 'unavailable')
 
             # COT decay — stale weekly data weighs less as the week progresses
@@ -37,7 +38,7 @@ class BiasCalculator:
                     cot_decay = {0: 0.8, 1: 0.6, 2: 0.4, 3: 0.2}
                     decay_factor = cot_decay[today]
                     weight = weight * decay_factor
-                    pulse_logger.log(f"📉 COT decay applied — {int(decay_factor * 100)}% of {weights.get('institutional', 0)}% base = {weight:.1f}% effective")
+                    pulse_logger.log(f"📉 COT decay applied — {int(decay_factor * 100)}% of {base_weight}% base = {weight:.1f}% effective")
 
             contribution = score * (weight / 100)
             total_score += contribution
@@ -53,6 +54,7 @@ class BiasCalculator:
 
             pillar_contributions[config_key] = {
                 'raw_score': score,
+                'base_weight': base_weight,
                 'weight': weight,
                 'contribution': round(contribution, 3),
                 'status': status
