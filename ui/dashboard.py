@@ -25,9 +25,8 @@ def _validate_manual_input(event_title, actual_value):
     return True, None
 
 def _run_partial_refresh(label):
-    """Fresh econ fetch + cached macro/inst/geo → full bias recompute with regime params."""
+    """Fresh econ fetch + cached macro/inst/geo → full bias recompute."""
     from pipelines.economic_calendar import economic_calendar_pipeline
-    from pipelines.regime_detector import regime_detector
     from pipelines.recommendation import recommendation_engine
     from processors.data_formatter import data_formatter
     from processors.bias_calculator import bias_calculator
@@ -45,10 +44,6 @@ def _run_partial_refresh(label):
     geo_cached = cache.load('geopolitical')
     geo_data = geo_cached['data'] if geo_cached else {}
 
-    regime_result = regime_detector.detect(geo_data, macro_data)
-    current_regime = regime_result['regime']
-    stability_score = regime_result['stability_score']
-
     formatted_data = data_formatter.standardize({
         'macro': macro_data,
         'economic': econ_data,
@@ -62,21 +57,12 @@ def _run_partial_refresh(label):
     except Exception:
         size_mode = 'quarter'
 
-    bias_score = bias_calculator.compute(
-        formatted_data,
-        size_mode=size_mode,
-        regime=current_regime,
-        calm_days_count=regime_result['calm_days_count'],
-        high_uncertainty_count=regime_result['high_uncertainty_count'],
-        stability_score=stability_score,
-    )
+    bias_score = bias_calculator.compute(formatted_data, size_mode=size_mode)
 
     recommendation = recommendation_engine.compute(
         bias_score,
         formatted_data.get('geopolitical', {}),
         formatted_data.get('macro', {}),
-        regime=current_regime,
-        stability_score=stability_score,
     )
     bias_score['recommendation'] = recommendation
 

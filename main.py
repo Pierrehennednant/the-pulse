@@ -16,7 +16,6 @@ from pipelines.geopolitical import geopolitical_pipeline
 from pipelines.weekly_summary import weekly_summary_pipeline
 from pipelines.manual_input import manual_input_pipeline
 from pipelines.recommendation import recommendation_engine
-from pipelines.regime_detector import regime_detector
 
 from processors.data_formatter import data_formatter
 from processors.bias_calculator import bias_calculator
@@ -62,10 +61,6 @@ def run_pulse():
         cached = cache.load("geopolitical")
         geo_data = cached['data'] if cached else {}
 
-    regime_result = regime_detector.detect(geo_data, macro_data)
-    current_regime = regime_result['regime']
-    stability_score = regime_result['stability_score']
-
     try:
         formatted_data = data_formatter.standardize({
             'macro': macro_data,
@@ -81,21 +76,12 @@ def run_pulse():
             pulse_logger.log(f"⚠️ Failed to load size_mode.json, defaulting to quarter: {e}", level="WARNING")
             size_mode = 'quarter'
 
-        bias_score = bias_calculator.compute(
-            formatted_data,
-            size_mode=size_mode,
-            regime=current_regime,
-            calm_days_count=regime_result['calm_days_count'],
-            high_uncertainty_count=regime_result['high_uncertainty_count'],
-            stability_score=stability_score
-        )
+        bias_score = bias_calculator.compute(formatted_data, size_mode=size_mode)
 
         recommendation = recommendation_engine.compute(
             bias_score,
             formatted_data.get('geopolitical', {}),
             formatted_data.get('macro', {}),
-            regime=current_regime,
-            stability_score=stability_score
         )
         bias_score['recommendation'] = recommendation
 
