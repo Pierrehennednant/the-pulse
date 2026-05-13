@@ -14,21 +14,12 @@ REFRESH_INTERVAL_MINUTES = 5
 GEO_REFRESH_INTERVAL_MINUTES = 3
 
 # Pillar Weights
-PILLAR_WEIGHTS_ESCALATION = {
-    "economic_calendar": 40,
-    "geopolitical": 30,
-    "institutional": 20,
-    "macro_sentiment": 10
-}
-
-PILLAR_WEIGHTS_EXPANSION = {
-    "economic_calendar": 45,
-    "geopolitical": 20,
+PILLAR_WEIGHTS = {
+    "economic_calendar": 30,
+    "geopolitical": 25,
     "institutional": 25,
-    "macro_sentiment": 10
+    "macro_sentiment": 20
 }
-
-PILLAR_WEIGHTS = PILLAR_WEIGHTS_ESCALATION
 
 # Stale Data Thresholds (minutes)
 STALE_THRESHOLDS = {
