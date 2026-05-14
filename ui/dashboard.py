@@ -33,6 +33,7 @@ def _run_partial_refresh(label, invalidate_econ=False):
     needs to change.
     """
     from pipelines.economic_calendar import economic_calendar_pipeline
+    from pipelines.institutional import institutional_pipeline
     from pipelines.recommendation import recommendation_engine
     from processors.data_formatter import data_formatter
     from processors.bias_calculator import bias_calculator
@@ -45,8 +46,11 @@ def _run_partial_refresh(label, invalidate_econ=False):
     macro_cached = cache.load('macro_sentiment')
     macro_data = macro_cached['data'] if macro_cached else {}
 
-    inst_cached = cache.load('institutional')
-    inst_data = inst_cached['data'] if inst_cached else {}
+    # institutional_pipeline writes to /data/permanent_cot.json, not the
+    # shared cache, so cache.load('institutional') always misses. Call
+    # fetch() directly — on non-Fridays it reads the permanent file and
+    # returns immediately without hitting the CFTC endpoint.
+    inst_data = institutional_pipeline.fetch() or {}
 
     geo_cached = cache.load('geopolitical')
     geo_data = geo_cached['data'] if geo_cached else {}
