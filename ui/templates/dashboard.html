@@ -429,9 +429,14 @@
         const vix = data.vix || {};
         const vxn = data.vxn || {};
         const fg = data.fear_greed || {};
+        const srcBadge = (src) => {
+            const map = { polygon: ['POLY', '#27ae60'], fred: ['FRED', '#2980b9'], cache: ['CACHE', '#e67e22'], default: ['DEF', '#c0392b'] };
+            const [label, color] = map[src] || ['?', '#888'];
+            return `<span style="font-size:0.65em;padding:1px 4px;border-radius:3px;background:${color};color:#fff;margin-left:4px;vertical-align:middle">${label}</span>`;
+        };
         html += `
-            <div class="data-row"><span class="data-label">VIX</span><span class="data-value ${valClass(vix.signal)}">${vix.value || '--'} <small>(${vix.change >= 0 ? '+' : ''}${vix.change || 0})</small></span></div>
-            <div class="data-row"><span class="data-label">VXN</span><span class="data-value ${valClass(vxn.signal)}">${vxn.value || '--'} <small>(${vxn.change >= 0 ? '+' : ''}${vxn.change || 0})</small></span></div>
+            <div class="data-row"><span class="data-label">VIX</span><span class="data-value ${valClass(vix.signal)}">${vix.value || '--'} <small>(${vix.change >= 0 ? '+' : ''}${vix.change || 0})</small>${srcBadge(vix.source)}</span></div>
+            <div class="data-row"><span class="data-label">VXN</span><span class="data-value ${valClass(vxn.signal)}">${vxn.value || '--'} <small>(${vxn.change >= 0 ? '+' : ''}${vxn.change || 0})</small>${srcBadge(vxn.source)}</span></div>
             <div class="data-row"><span class="data-label">Fear & Greed</span><span class="data-value ${valClass(fg.signal)}">${fg.score || '--'} — ${fg.rating || 'N/A'}</span></div>`;
         return html;
     }
