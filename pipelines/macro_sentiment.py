@@ -1,9 +1,7 @@
 import json
-import math
 import os
 from datetime import datetime, timezone
 import pytz
-import yfinance as yf
 import fear_greed
 from config import TIMEZONE, FRED_API_KEY
 from utils.file_lock import atomic_write_json
@@ -16,14 +14,10 @@ VIX_CACHE_FILE = '/data/vix_cache.json'
 VXN_CACHE_FILE = '/data/vxn_cache.json'
 FG_CACHE_FILE = '/data/fear_greed_cache.json'
 
-_YF_STALE_MINUTES = 30
-
 class MacroSentimentPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "macro_sentiment"
-
-    # --- VIX file cache ---
 
     def _save_vix_cache(self, vix_data):
         try:
@@ -43,8 +37,6 @@ class MacroSentimentPipeline:
             pass
         return None
 
-    # --- VXN file cache ---
-
     def _save_vxn_cache(self, vxn_data):
         try:
             atomic_write_json(VXN_CACHE_FILE, {
@@ -62,32 +54,6 @@ class MacroSentimentPipeline:
         except Exception:
             pass
         return None
-
-    # --- yfinance tier ---
-
-    def _fetch_yfinance_index(self, symbol, stale_minutes=_YF_STALE_MINUTES):
-        """Fetch index from yfinance. Returns (current, previous) or raises."""
-        hist = yf.Ticker(symbol).history(period='5d', interval='1d')
-        if hist.empty or len(hist) < 1:
-            raise ValueError(f"yfinance returned empty history for {symbol}")
-        current = float(hist['Close'].iloc[-1])
-        if math.isnan(current):
-            raise ValueError(f"yfinance returned NaN for {symbol}")
-        # Staleness check on last bar's timestamp
-        last_ts = hist.index[-1]
-        if last_ts.tzinfo is None:
-            last_ts = last_ts.tz_localize('UTC')
-        else:
-            last_ts = last_ts.tz_convert('UTC')
-        age_minutes = (datetime.now(timezone.utc) - last_ts.to_pydatetime()).total_seconds() / 60
-        if age_minutes > stale_minutes:
-            raise ValueError(f"yfinance {symbol} data is {age_minutes:.0f}m old (>{stale_minutes}m threshold)")
-        previous = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else current
-        if math.isnan(previous):
-            previous = current
-        return round(current, 2), round(previous, 2)
-
-    # --- FRED tier ---
 
     def _fetch_fred_index(self, series_id):
         """Fetch index from FRED. Returns (current, previous) or raises."""
@@ -107,28 +73,7 @@ class MacroSentimentPipeline:
         previous = round(float(observations[1]['value']), 2) if len(observations) >= 2 else current
         return current, previous
 
-    # --- VIX public fetch ---
-
     def fetch_vix(self):
-        # Tier 1: yfinance
-        try:
-            current, previous = self._fetch_yfinance_index('^VIX')
-            change = round(current - previous, 2)
-            change_pct = round((change / previous) * 100, 2) if previous else 0
-            result = {
-                'value': current,
-                'previous': previous,
-                'change': change,
-                'change_pct': change_pct,
-                'signal': 'bearish' if current > 20 else 'neutral' if current > 15 else 'bullish',
-                'source': 'yahoo'
-            }
-            self._save_vix_cache(result)
-            return result
-        except Exception as e:
-            pulse_logger.log(f"⚠️ VIX — yfinance fetch failed ({e}), falling back to FRED", level="WARNING")
-
-        # Tier 2: FRED
         try:
             current, previous = self._fetch_fred_index('VIXCLS')
             change = round(current - previous, 2)
@@ -144,41 +89,16 @@ class MacroSentimentPipeline:
             self._save_vix_cache(result)
             return result
         except Exception as e:
-            error_handler.handle(e, "VIX FRED")
-
-        # Tier 3: file cache
-        cached = self._load_vix_cache()
-        if cached:
-            pulse_logger.log("⚠️ VIX — both sources failed, using file cache", level="WARNING")
-            cached['source'] = 'cache'
-            return cached
-
-        # Tier 4: default
-        pulse_logger.log("⚠️ VIX — all sources failed, defaulting to 20.0", level="WARNING")
-        return {'value': 20.0, 'previous': 20.0, 'change': 0, 'change_pct': 0, 'signal': 'neutral', 'source': 'default'}
-
-    # --- VXN public fetch ---
+            error_handler.handle(e, "VIX")
+            cached = self._load_vix_cache()
+            if cached:
+                pulse_logger.log("⚠️ VIX — FRED failed, using file cache", level="WARNING")
+                cached['source'] = 'cache'
+                return cached
+            pulse_logger.log("⚠️ VIX — FRED failed and no cache, defaulting to 20.0", level="WARNING")
+            return {'value': 20.0, 'previous': 20.0, 'change': 0, 'change_pct': 0, 'signal': 'neutral', 'source': 'default'}
 
     def fetch_vxn(self):
-        # Tier 1: yfinance
-        try:
-            current, previous = self._fetch_yfinance_index('^VXN')
-            change = round(current - previous, 2)
-            change_pct = round((change / previous) * 100, 2) if previous else 0
-            result = {
-                'value': current,
-                'previous': previous,
-                'change': change,
-                'change_pct': change_pct,
-                'signal': 'bearish' if current > 25 else 'neutral' if current > 18 else 'bullish',
-                'source': 'yahoo'
-            }
-            self._save_vxn_cache(result)
-            return result
-        except Exception as e:
-            pulse_logger.log(f"⚠️ VXN — yfinance fetch failed ({e}), falling back to FRED", level="WARNING")
-
-        # Tier 2: FRED
         try:
             current, previous = self._fetch_fred_index('VXNCLS')
             change = round(current - previous, 2)
@@ -194,20 +114,14 @@ class MacroSentimentPipeline:
             self._save_vxn_cache(result)
             return result
         except Exception as e:
-            error_handler.handle(e, "VXN FRED")
-
-        # Tier 3: file cache
-        cached = self._load_vxn_cache()
-        if cached:
-            pulse_logger.log("⚠️ VXN — both sources failed, using file cache", level="WARNING")
-            cached['source'] = 'cache'
-            return cached
-
-        # Tier 4: default
-        pulse_logger.log("⚠️ VXN — all sources failed, defaulting to 20.0", level="WARNING")
-        return {'value': 20.0, 'previous': 20.0, 'change': 0, 'change_pct': 0, 'signal': 'neutral', 'source': 'default'}
-
-    # --- Fear & Greed ---
+            error_handler.handle(e, "VXN")
+            cached = self._load_vxn_cache()
+            if cached:
+                pulse_logger.log("⚠️ VXN — FRED failed, using file cache", level="WARNING")
+                cached['source'] = 'cache'
+                return cached
+            pulse_logger.log("⚠️ VXN — FRED failed and no cache, defaulting to 20.0", level="WARNING")
+            return {'value': 20.0, 'previous': 20.0, 'change': 0, 'change_pct': 0, 'signal': 'neutral', 'source': 'default'}
 
     def _save_fg_cache(self, fg_data):
         try:
