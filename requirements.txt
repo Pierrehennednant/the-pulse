@@ -1,6 +1,5 @@
 flask==3.0.0
 schedule==1.2.1
-yfinance==0.2.36
 requests==2.31.0
 beautifulsoup4==4.12.2
 transformers==4.37.0
