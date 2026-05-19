@@ -87,15 +87,16 @@ class MacroSentimentPipeline:
                 'source': 'fred'
             }
             self._save_vix_cache(result)
+            pulse_logger.log(f"✓ VIX — FRED: {current} (prev: {previous}, chg: {change:+.2f})")
             return result
         except Exception as e:
-            error_handler.handle(e, "VIX")
+            pulse_logger.log(f"⚠️ VIX — FRED fetch failed: {e}", level="WARNING")
             cached = self._load_vix_cache()
             if cached:
-                pulse_logger.log("⚠️ VIX — FRED failed, using file cache", level="WARNING")
+                pulse_logger.log(f"⚠️ VIX — using file cache: {cached.get('value')}", level="WARNING")
                 cached['source'] = 'cache'
                 return cached
-            pulse_logger.log("⚠️ VIX — FRED failed and no cache, defaulting to 20.0", level="WARNING")
+            pulse_logger.log("⚠️ VIX — no cache available, defaulting to 20.0", level="WARNING")
             return {'value': 20.0, 'previous': 20.0, 'change': 0, 'change_pct': 0, 'signal': 'neutral', 'source': 'default'}
 
     def fetch_vxn(self):
@@ -112,15 +113,16 @@ class MacroSentimentPipeline:
                 'source': 'fred'
             }
             self._save_vxn_cache(result)
+            pulse_logger.log(f"✓ VXN — FRED: {current} (prev: {previous}, chg: {change:+.2f})")
             return result
         except Exception as e:
-            error_handler.handle(e, "VXN")
+            pulse_logger.log(f"⚠️ VXN — FRED fetch failed: {e}", level="WARNING")
             cached = self._load_vxn_cache()
             if cached:
-                pulse_logger.log("⚠️ VXN — FRED failed, using file cache", level="WARNING")
+                pulse_logger.log(f"⚠️ VXN — using file cache: {cached.get('value')}", level="WARNING")
                 cached['source'] = 'cache'
                 return cached
-            pulse_logger.log("⚠️ VXN — FRED failed and no cache, defaulting to 20.0", level="WARNING")
+            pulse_logger.log("⚠️ VXN — no cache available, defaulting to 20.0", level="WARNING")
             return {'value': 20.0, 'previous': 20.0, 'change': 0, 'change_pct': 0, 'signal': 'neutral', 'source': 'default'}
 
     def _save_fg_cache(self, fg_data):
