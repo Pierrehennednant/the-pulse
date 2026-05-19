@@ -1,9 +1,11 @@
 import json
+import math
 import os
 from datetime import datetime, timezone
 import pytz
+import yfinance as yf
 import fear_greed
-from config import TIMEZONE, FRED_API_KEY, POLYGON_API_KEY
+from config import TIMEZONE, FRED_API_KEY
 from utils.file_lock import atomic_write_json
 from utils.retry import fetch_with_retry
 from utils.cache import cache
@@ -14,7 +16,7 @@ VIX_CACHE_FILE = '/data/vix_cache.json'
 VXN_CACHE_FILE = '/data/vxn_cache.json'
 FG_CACHE_FILE = '/data/fear_greed_cache.json'
 
-_POLYGON_STALE_MINUTES = 30
+_YF_STALE_MINUTES = 30
 
 class MacroSentimentPipeline:
     def __init__(self):
@@ -61,30 +63,29 @@ class MacroSentimentPipeline:
             pass
         return None
 
-    # --- Polygon.io tier ---
+    # --- yfinance tier ---
 
-    def _fetch_polygon_index(self, ticker, stale_minutes=_POLYGON_STALE_MINUTES):
-        """Fetch index snapshot from Polygon.io. Returns (current, previous) or raises."""
-        if not POLYGON_API_KEY:
-            raise ValueError("POLYGON_API_KEY not set")
-        url = f"https://api.polygon.io/v3/snapshot?ticker.any_of={ticker}&apiKey={POLYGON_API_KEY}"
-        response = fetch_with_retry(url, timeout=10)
-        data = response.json()
-        results = data.get('results', [])
-        if not results:
-            raise ValueError(f"No Polygon snapshot results for {ticker}")
-        snap = results[0]
-        session = snap.get('session', {})
-        current = round(float(session['close']), 2)
-        previous = round(float(session.get('previous_close', current)), 2)
-        # Staleness check — last_updated is nanoseconds epoch
-        last_updated_ns = snap.get('last_updated')
-        if last_updated_ns:
-            last_updated_s = last_updated_ns / 1e9
-            age_minutes = (datetime.now(timezone.utc).timestamp() - last_updated_s) / 60
-            if age_minutes > stale_minutes:
-                raise ValueError(f"Polygon {ticker} data is {age_minutes:.0f}m old (>{stale_minutes}m threshold)")
-        return current, previous
+    def _fetch_yfinance_index(self, symbol, stale_minutes=_YF_STALE_MINUTES):
+        """Fetch index from yfinance. Returns (current, previous) or raises."""
+        hist = yf.Ticker(symbol).history(period='5d', interval='1d')
+        if hist.empty or len(hist) < 1:
+            raise ValueError(f"yfinance returned empty history for {symbol}")
+        current = float(hist['Close'].iloc[-1])
+        if math.isnan(current):
+            raise ValueError(f"yfinance returned NaN for {symbol}")
+        # Staleness check on last bar's timestamp
+        last_ts = hist.index[-1]
+        if last_ts.tzinfo is None:
+            last_ts = last_ts.tz_localize('UTC')
+        else:
+            last_ts = last_ts.tz_convert('UTC')
+        age_minutes = (datetime.now(timezone.utc) - last_ts.to_pydatetime()).total_seconds() / 60
+        if age_minutes > stale_minutes:
+            raise ValueError(f"yfinance {symbol} data is {age_minutes:.0f}m old (>{stale_minutes}m threshold)")
+        previous = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else current
+        if math.isnan(previous):
+            previous = current
+        return round(current, 2), round(previous, 2)
 
     # --- FRED tier ---
 
@@ -109,9 +110,9 @@ class MacroSentimentPipeline:
     # --- VIX public fetch ---
 
     def fetch_vix(self):
-        # Tier 1: Polygon.io
+        # Tier 1: yfinance
         try:
-            current, previous = self._fetch_polygon_index('I:VIX')
+            current, previous = self._fetch_yfinance_index('^VIX')
             change = round(current - previous, 2)
             change_pct = round((change / previous) * 100, 2) if previous else 0
             result = {
@@ -120,12 +121,12 @@ class MacroSentimentPipeline:
                 'change': change,
                 'change_pct': change_pct,
                 'signal': 'bearish' if current > 20 else 'neutral' if current > 15 else 'bullish',
-                'source': 'polygon'
+                'source': 'yahoo'
             }
             self._save_vix_cache(result)
             return result
         except Exception as e:
-            pulse_logger.log(f"⚠️ VIX — Polygon fetch failed ({e}), falling back to FRED", level="WARNING")
+            pulse_logger.log(f"⚠️ VIX — yfinance fetch failed ({e}), falling back to FRED", level="WARNING")
 
         # Tier 2: FRED
         try:
@@ -149,7 +150,6 @@ class MacroSentimentPipeline:
         cached = self._load_vix_cache()
         if cached:
             pulse_logger.log("⚠️ VIX — both sources failed, using file cache", level="WARNING")
-            cached['source'] = cached.get('source', 'cache')
             cached['source'] = 'cache'
             return cached
 
@@ -160,9 +160,9 @@ class MacroSentimentPipeline:
     # --- VXN public fetch ---
 
     def fetch_vxn(self):
-        # Tier 1: Polygon.io
+        # Tier 1: yfinance
         try:
-            current, previous = self._fetch_polygon_index('I:VXN')
+            current, previous = self._fetch_yfinance_index('^VXN')
             change = round(current - previous, 2)
             change_pct = round((change / previous) * 100, 2) if previous else 0
             result = {
@@ -171,12 +171,12 @@ class MacroSentimentPipeline:
                 'change': change,
                 'change_pct': change_pct,
                 'signal': 'bearish' if current > 25 else 'neutral' if current > 18 else 'bullish',
-                'source': 'polygon'
+                'source': 'yahoo'
             }
             self._save_vxn_cache(result)
             return result
         except Exception as e:
-            pulse_logger.log(f"⚠️ VXN — Polygon fetch failed ({e}), falling back to FRED", level="WARNING")
+            pulse_logger.log(f"⚠️ VXN — yfinance fetch failed ({e}), falling back to FRED", level="WARNING")
 
         # Tier 2: FRED
         try:
