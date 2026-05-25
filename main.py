@@ -14,6 +14,7 @@ from pipelines.economic_calendar import economic_calendar_pipeline
 from pipelines.institutional import institutional_pipeline
 from pipelines.geopolitical import geopolitical_pipeline
 from pipelines.weekly_summary import weekly_summary_pipeline
+from pipelines.ai_lens import ai_lens_pipeline
 from pipelines.manual_input import manual_input_pipeline
 from pipelines.recommendation import recommendation_engine
 
@@ -90,6 +91,14 @@ def run_pulse():
         pulse_logger.log(f"✅ Pulse updated | {bias_score['bias_emoji']} {bias_score['bias']} | Confidence: {bias_score['confidence']}% | Snapshot: {snapshot_id}")
 
         now_est = datetime.now(pytz.timezone(TIMEZONE))
+
+        # AI Lens — generate once daily after 8:30 AM EST
+        if now_est.hour > 8 or (now_est.hour == 8 and now_est.minute >= 30):
+            try:
+                ai_lens_pipeline.generate(bias_score, formatted_data)
+            except Exception as e:
+                pulse_logger.log(f"⚠️ AI Lens failed: {e}", level="WARNING")
+
         if now_est.hour >= 16 and not snapshot_generator.has_daily_for_today():
             snapshot_generator.save_daily(bias_score, formatted_data)
             pulse_logger.log("📅 Daily closing snapshot saved")
