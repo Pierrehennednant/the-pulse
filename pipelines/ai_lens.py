@@ -12,6 +12,19 @@ AI_LENS_CACHE_FILE = '/data/ai_lens_cache.json'
 _GROK_BASE_URL = 'https://api.x.ai/v1'
 _GROK_MODEL = 'grok-4.20-0309-reasoning'
 
+_SYSTEM_PROMPT = (
+    "You are a market regime analyst for a systematic futures trader who trades NQ and ES. "
+    "Write a concise AI Lens analysis following these four priorities in order: "
+    "1) Why we're here — explain clearly why the market is in its current regime based on the data provided. "
+    "2) Psychological insight — describe the emotional and nervous system state of the market right now, "
+    "what the 95% of traders are likely doing, and what the disciplined 5% should be doing instead. "
+    "3) Regime context — state how many days we have been in this regime and reference how long similar "
+    "regimes have historically lasted and what typically ends them. "
+    "4) What to watch — give exactly two or three specific concrete triggers that would break the current regime. "
+    "Hard rules: maximum 180 words, tone must be calm sharp and psychologically insightful, "
+    "never give directional bias or trade recommendations, always reinforce thinking like the 5% not the 95%."
+)
+
 
 class AILensPipeline:
     def __init__(self):
@@ -47,33 +60,49 @@ class AILensPipeline:
         except Exception:
             return False
 
-    def _compute_regime_age(self, bias):
-        """Count consecutive daily closing snapshots with the same bias direction."""
+    def _load_daily_history(self):
+        """Load up to 10 daily snapshots sorted newest-first. Returns list of dicts."""
         daily_dir = '/data/snapshots/daily'
         if not os.path.exists(daily_dir):
-            return 1
+            return []
         try:
             files = sorted(
                 [f for f in os.listdir(daily_dir) if f.endswith('.json')],
                 key=lambda f: os.path.getmtime(os.path.join(daily_dir, f)),
                 reverse=True
-            )
-            age = 0
+            )[:10]
+            history = []
             for fname in files:
-                with open(os.path.join(daily_dir, fname)) as fp:
-                    snap = json.load(fp)
-                if snap.get('bias', {}).get('bias', '') == bias:
-                    age += 1
-                else:
-                    break
-            return max(age, 1)
+                try:
+                    with open(os.path.join(daily_dir, fname)) as fp:
+                        snap = json.load(fp)
+                    bias_block = snap.get('bias', {})
+                    ts_raw = snap.get('timestamp', '')
+                    date_str = ''
+                    if ts_raw:
+                        ts = datetime.fromisoformat(ts_raw)
+                        if ts.tzinfo is None:
+                            ts = pytz.utc.localize(ts)
+                        date_str = ts.astimezone(self.timezone).strftime('%Y-%m-%d')
+                    contributions = bias_block.get('pillar_contributions', {})
+                    history.append({
+                        'date': date_str,
+                        'bias': bias_block.get('bias', 'Unknown'),
+                        'confidence': bias_block.get('confidence', 0),
+                        'pillar_scores': {
+                            k: round(v.get('raw_score', 0), 3)
+                            for k, v in contributions.items()
+                        },
+                    })
+                except Exception:
+                    continue
+            return history
         except Exception:
-            return 1
+            return []
 
     def _build_messages(self, bias_score, formatted_data):
         bias = bias_score.get('bias', 'Neutral')
         confidence = bias_score.get('confidence', 0)
-        regime_age = self._compute_regime_age(bias)
         contributions = bias_score.get('pillar_contributions', {})
 
         macro = formatted_data.get('macro', {})
@@ -84,19 +113,38 @@ class AILensPipeline:
         vxn = macro.get('vxn', {})
         fg = macro.get('fear_greed', {})
 
+        # Compute regime age from daily history
+        history = self._load_daily_history()
+        regime_age = 0
+        for entry in history:
+            if entry['bias'] == bias:
+                regime_age += 1
+            else:
+                break
+        regime_age = max(regime_age, 1)
+
         geo_items = geo.get('news_items', [])
-        geo_headlines = [item.get('headline', item.get('title', '')) for item in geo_items[:5] if item.get('headline') or item.get('title')]
+        geo_headlines = [
+            item.get('headline', item.get('title', ''))
+            for item in geo_items[:5]
+            if item.get('headline') or item.get('title')
+        ]
 
         econ_events = econ.get('events', [])
         upcoming = [e for e in econ_events if e.get('result') in ('pending', 'speech')][:5]
 
         lines = [
-            f"CURRENT BIAS: {bias} | Confidence: {confidence}% | Regime age: {regime_age} day(s)",
+            f"CURRENT STATE:",
+            f"  Bias: {bias} | Confidence: {confidence}% | Regime age: {regime_age} day(s)",
             "",
-            "PILLAR SCORES:",
+            "PILLAR SCORES (current):",
         ]
         for key, data in contributions.items():
-            lines.append(f"  {key}: score={data.get('raw_score', 0)}, weight={data.get('base_weight', 0)}%, status={data.get('status', 'unknown')}")
+            lines.append(
+                f"  {key}: score={data.get('raw_score', 0)}, "
+                f"weight={data.get('base_weight', 0)}%, "
+                f"status={data.get('status', 'unknown')}"
+            )
 
         lines += [
             "",
@@ -107,6 +155,17 @@ class AILensPipeline:
             "",
         ]
 
+        if history:
+            lines.append(f"DAILY SNAPSHOT HISTORY (last {len(history)} closing days, newest first):")
+            for i, entry in enumerate(history, 1):
+                scores = ', '.join(f"{k}={v}" for k, v in entry['pillar_scores'].items())
+                lines.append(
+                    f"  Day {i} ({entry['date']}): "
+                    f"Bias={entry['bias']}, Confidence={entry['confidence']}%, "
+                    f"pillars=[{scores}]"
+                )
+            lines.append("")
+
         if geo_headlines:
             lines.append("ACTIVE GEOPOLITICAL HEADLINES:")
             for h in geo_headlines:
@@ -114,35 +173,20 @@ class AILensPipeline:
             lines.append("")
 
         if upcoming:
-            lines.append("UPCOMING ECONOMIC EVENTS (within 48h, pending):")
+            lines.append("UPCOMING ECONOMIC EVENTS (pending, within 48h):")
             for e in upcoming:
-                lines.append(f"  - {e.get('title', '')} | impact: {e.get('impact', '')} | forecast: {e.get('forecast', '--')}")
+                lines.append(
+                    f"  - {e.get('title', '')} | "
+                    f"impact: {e.get('impact', '')} | "
+                    f"forecast: {e.get('forecast', '--')}"
+                )
             lines.append("")
 
         context = "\n".join(lines)
 
         return [
-            {
-                "role": "system",
-                "content": (
-                    "You are a calm, precise market analyst writing for professional traders. "
-                    "You never give directional trade recommendations. "
-                    "Think and write like the disciplined 5%, not the emotional 95%. "
-                    "Be sharp and direct. Maximum 180-200 words."
-                )
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"Current market data:\n\n{context}\n"
-                    "Write a market analysis covering these four points in order:\n"
-                    "1. Why we're here — explain why the market is in its current regime\n"
-                    "2. Psychological insight — emotional state of the market; what the 95% are doing; what the disciplined 5% should do instead\n"
-                    "3. Regime context — days in this regime and historical precedent for how long similar regimes last\n"
-                    "4. What to watch — two or three specific, concrete triggers that would break the current regime\n\n"
-                    "Hard requirements: 180-200 words maximum, calm and sharp tone, no directional bias or trade recommendations, always reinforce thinking like the 5% not the 95%."
-                )
-            }
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": f"Current market data:\n\n{context}"},
         ]
 
     def generate(self, bias_score, formatted_data, force=False):
@@ -161,13 +205,15 @@ class AILensPipeline:
             messages = self._build_messages(bias_score, formatted_data)
             resp = requests.post(
                 f"{_GROK_BASE_URL}/chat/completions",
-                headers={"Authorization": f"Bearer {GROK_API_KEY}", "Content-Type": "application/json"},
+                headers={
+                    "Authorization": f"Bearer {GROK_API_KEY}",
+                    "Content-Type": "application/json",
+                },
                 json={"model": _GROK_MODEL, "messages": messages, "max_tokens": 1500},
                 timeout=60,
             )
             resp.raise_for_status()
             raw = resp.json()['choices'][0]['message']['content']
-            # Strip any <think> reasoning blocks if present
             analysis = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
             self._save_cache(analysis)
             pulse_logger.log(f"✓ AI Lens generated ({len(analysis.split())} words)")

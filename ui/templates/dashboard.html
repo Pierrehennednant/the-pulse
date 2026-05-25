@@ -641,17 +641,24 @@
     }
 
     async function loadAILens() {
+        const card = document.getElementById('ai-lens-card');
+        const meta = document.getElementById('ai-lens-meta');
+        const text = document.getElementById('ai-lens-text');
         try {
             const resp = await fetch('/api/ai_lens');
-            if (!resp.ok) return;
             const data = await resp.json();
-            if (!data.analysis) return;
-            document.getElementById('ai-lens-card').style.display = 'block';
-            document.getElementById('ai-lens-text').textContent = data.analysis;
+            card.style.display = 'block';
+            if (!resp.ok || !data.analysis) {
+                meta.textContent = '';
+                text.style.color = '#7a8fa8';
+                text.textContent = 'Analysis unavailable';
+                return;
+            }
+            text.style.color = '#e0e6f0';
+            text.textContent = data.analysis;
             const ts = new Date(data.timestamp);
             const timeStr = ts.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York'});
             const dateStr = ts.toLocaleDateString('en-US', {month: 'short', day: 'numeric', timeZone: 'America/New_York'});
-            const meta = document.getElementById('ai-lens-meta');
             if (data.is_fresh) {
                 meta.style.color = '#4a9eff';
                 meta.textContent = `Generated at ${timeStr} EST`;
@@ -659,7 +666,13 @@
                 meta.style.color = '#7a8fa8';
                 meta.textContent = `Last updated: ${dateStr} at ${timeStr} EST`;
             }
-        } catch(e) { console.error('AI Lens fetch failed:', e); }
+        } catch(e) {
+            card.style.display = 'block';
+            meta.textContent = '';
+            text.style.color = '#7a8fa8';
+            text.textContent = 'Analysis unavailable';
+            console.error('AI Lens fetch failed:', e);
+        }
     }
 
     function copySnapshot() {
