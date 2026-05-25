@@ -5,6 +5,7 @@ import os
 # API Keys — set these as environment variables in Railway (and optionally locally via .env)
 FRED_API_KEY = os.environ.get("FRED_API_KEY", "")
 THENEWS_API_KEY = os.environ.get("THENEWS_API_KEY", "")
+GROK_API_KEY = os.environ.get("GROK_API_KEY", "")
 
 # Timezone
 TIMEZONE = "US/Eastern"

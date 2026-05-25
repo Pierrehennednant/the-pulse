@@ -1,9 +1,12 @@
 import json
+from datetime import datetime
+import pytz
 from flask import Flask, render_template, jsonify, request
 from utils.file_lock import atomic_write_json
 from processors.snapshot_generator import snapshot_generator
 from pipelines.manual_input import manual_input_pipeline
 from utils.logger import pulse_logger
+from config import TIMEZONE
 
 app = Flask(__name__, template_folder='templates')
 
@@ -124,6 +127,14 @@ def manual_input():
             except Exception as refresh_err:
                 pulse_logger.log(f"⚠️ manual_input partial refresh failed: {refresh_err}", level="WARNING")
 
+            try:
+                from pipelines.ai_lens import ai_lens_pipeline
+                latest = snapshot_generator.get_latest()
+                if latest:
+                    ai_lens_pipeline.generate(latest['bias'], latest['pillars'], force=True)
+            except Exception as ai_err:
+                pulse_logger.log(f"⚠️ AI Lens re-trigger on manual_input failed: {ai_err}", level="WARNING")
+
             return jsonify({'status': 'saved', 'event': event_title, 'actual': actual_value})
 
         return jsonify({'error': 'Failed to save'}), 500
@@ -182,6 +193,28 @@ def set_size_mode():
         return jsonify({'status': 'saved', 'mode': mode})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/ai_lens')
+def api_ai_lens():
+    from pipelines.ai_lens import ai_lens_pipeline
+    cached = ai_lens_pipeline._load_cache()
+    if not cached or not cached.get('analysis'):
+        return jsonify({'error': 'No AI Lens data available'}), 404
+    is_fresh = False
+    try:
+        tz = pytz.timezone(TIMEZONE)
+        ts = datetime.fromisoformat(cached['timestamp'])
+        if ts.tzinfo is None:
+            ts = pytz.utc.localize(ts)
+        is_fresh = ts.astimezone(tz).date() == datetime.now(tz).date()
+    except Exception:
+        pass
+    return jsonify({
+        'analysis': cached['analysis'],
+        'timestamp': cached['timestamp'],
+        'is_fresh': is_fresh,
+    })
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=False)
