@@ -9,15 +9,19 @@ from utils.file_lock import atomic_write_json
 from utils.logger import pulse_logger
 
 AI_LENS_CACHE_FILE = '/data/ai_lens_cache.json'
+PCR_CACHE_FILE = '/data/pcr_cache.json'
 _GROK_BASE_URL = 'https://api.x.ai/v1'
 _GROK_MODEL = 'grok-4.20-0309-reasoning'
+_CBOE_PCR_URL = 'https://www.cboe.com/data/putcallratio/'
 
 _SYSTEM_PROMPT = (
     "You are a market regime analyst for a systematic futures trader who trades NQ and ES. "
     "Write a concise AI Lens analysis following these four priorities in order: "
     "1) Why we're here — explain clearly why the market is in its current regime based on the data provided. "
-    "2) Psychological insight — describe the emotional and nervous system state of the market right now, "
+    "2) Psychological insight — use the put/call ratio and institutional COT positioning as the primary basis "
+    "for describing the emotional and nervous system state of the market right now, "
     "what the 95% of traders are likely doing, and what the disciplined 5% should be doing instead. "
+    "If put/call ratio data is unavailable, acknowledge uncertainty rather than defaulting to generic assumptions. "
     "3) Regime context — state how many days we have been in this regime and reference how long similar "
     "regimes have historically lasted and what typically ends them. "
     "4) What to watch — give exactly two or three specific concrete triggers that would break the current regime. "
@@ -26,6 +30,8 @@ _SYSTEM_PROMPT = (
     "Never reference raw pillar score numbers in your analysis — translate all scores into qualitative language "
     "such as 'strongly bullish', 'mildly bearish', or 'neutral'. "
     "A score of zero means neutral and must always be described as neutral, never as zero or any number. "
+    "Never include raw put/call ratio numbers or COT contract counts in your output — "
+    "translate everything into plain language only. "
     "Never use the word 'cap' anywhere in your analysis. "
     "Never include a word count or any reference to word count in your output."
 )
@@ -64,6 +70,112 @@ class AILensPipeline:
             return ts.astimezone(self.timezone).date() == datetime.now(self.timezone).date()
         except Exception:
             return False
+
+    def _load_pcr_cache(self):
+        try:
+            if os.path.exists(PCR_CACHE_FILE):
+                with open(PCR_CACHE_FILE) as f:
+                    return json.load(f)
+        except Exception:
+            pass
+        return None
+
+    def _save_pcr_cache(self, pcr):
+        try:
+            atomic_write_json(PCR_CACHE_FILE, {
+                'timestamp': datetime.now(self.timezone).isoformat(),
+                'pcr': pcr,
+            })
+        except Exception as e:
+            pulse_logger.log(f"⚠️ PCR cache write failed: {e}", level="WARNING")
+
+    def _parse_pcr_from_json(self, data, depth=0):
+        """Recursively search a JSON structure for a put/call ratio under a 'total'-named key."""
+        if depth > 8:
+            return None
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if isinstance(k, str) and 'total' in k.lower():
+                    try:
+                        pcr = float(v)
+                        if 0.3 <= pcr <= 4.0:
+                            return pcr
+                    except (TypeError, ValueError):
+                        pass
+                result = self._parse_pcr_from_json(v, depth + 1)
+                if result is not None:
+                    return result
+        elif isinstance(data, list):
+            for item in data[:50]:
+                result = self._parse_pcr_from_json(item, depth + 1)
+                if result is not None:
+                    return result
+        return None
+
+    def _fetch_pcr(self):
+        """Fetch CBOE total put/call ratio. Caches result. Returns float or None."""
+        try:
+            resp = requests.get(
+                _CBOE_PCR_URL,
+                headers={'User-Agent': 'Mozilla/5.0 (compatible; ThePulse/1.0)'},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            html = resp.text
+
+            # Strategy 1: Next.js __NEXT_DATA__ JSON blob
+            nd_match = re.search(
+                r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL
+            )
+            if nd_match:
+                try:
+                    pcr = self._parse_pcr_from_json(json.loads(nd_match.group(1)))
+                    if pcr is not None:
+                        self._save_pcr_cache(pcr)
+                        pulse_logger.log(f"✓ PCR — CBOE (JSON): {pcr}")
+                        return pcr
+                except Exception:
+                    pass
+
+            # Strategy 2: HTML table — Date | Total | Index | Equity
+            rows = re.findall(r'<tr[^>]*>(.*?)</tr>', html, re.DOTALL)
+            for row in reversed(rows):
+                cells = re.findall(r'<t[dh][^>]*>(.*?)</t[dh]>', row, re.DOTALL)
+                cells = [re.sub(r'<[^>]+>', '', c).strip() for c in cells]
+                if len(cells) >= 2:
+                    try:
+                        pcr = float(cells[1])
+                        if 0.3 <= pcr <= 4.0:
+                            self._save_pcr_cache(pcr)
+                            pulse_logger.log(f"✓ PCR — CBOE (table): {pcr}")
+                            return pcr
+                    except (ValueError, TypeError):
+                        pass
+
+            pulse_logger.log("⚠️ PCR — could not parse CBOE response", level="WARNING")
+        except Exception as e:
+            pulse_logger.log(f"⚠️ PCR — CBOE fetch failed: {e}", level="WARNING")
+
+        # Fall back to cache
+        cached = self._load_pcr_cache()
+        if cached and cached.get('pcr') is not None:
+            pulse_logger.log(f"⚠️ PCR — using cache: {cached['pcr']}", level="WARNING")
+            return cached['pcr']
+
+        pulse_logger.log("⚠️ PCR — no data available", level="WARNING")
+        return None
+
+    def _cot_trend(self, history, field):
+        """Return 'building', 'unwinding', or 'stable' from last 3 weeks of COT history."""
+        values = [h.get(field) for h in history[:3] if h.get(field) is not None]
+        if len(values) < 2:
+            return 'unknown'
+        delta = values[0] - values[-1]
+        if delta > 2.0:
+            return 'building'
+        elif delta < -2.0:
+            return 'unwinding'
+        return 'stable'
 
     def _load_daily_history(self):
         """Load up to 10 daily snapshots sorted newest-first. Returns list of dicts."""
@@ -105,7 +217,7 @@ class AILensPipeline:
         except Exception:
             return []
 
-    def _build_messages(self, bias_score, formatted_data):
+    def _build_messages(self, bias_score, formatted_data, pcr_value):
         bias = bias_score.get('bias', 'Neutral')
         confidence = bias_score.get('confidence', 0)
         contributions = bias_score.get('pillar_contributions', {})
@@ -113,6 +225,7 @@ class AILensPipeline:
         macro = formatted_data.get('macro', {})
         econ = formatted_data.get('economic', {})
         geo = formatted_data.get('geopolitical', {})
+        inst = formatted_data.get('institutional', {})
 
         vix = macro.get('vix', {})
         vxn = macro.get('vxn', {})
@@ -160,6 +273,39 @@ class AILensPipeline:
             "",
         ]
 
+        # Institutional COT block — explicit behavioral anchor for psychology section
+        nq_fut = inst.get('nq_futures', {})
+        es_fut = inst.get('es_futures', {})
+        cot_history = inst.get('cot_history', [])
+        if inst.get('status') != 'unavailable' and (nq_fut or es_fut):
+            nq_net = nq_fut.get('combined_net', 0)
+            nq_pct = nq_fut.get('net_pct', 0)
+            nq_dir = nq_fut.get('direction', 'unknown')
+            nq_trend = self._cot_trend(cot_history, 'nq_net_pct')
+            es_net = es_fut.get('combined_net', 0)
+            es_pct = es_fut.get('net_pct', 0)
+            es_dir = es_fut.get('direction', 'unknown')
+            es_trend = self._cot_trend(cot_history, 'es_net_pct')
+            lines += [
+                "INSTITUTIONAL POSITIONING (COT):",
+                f"  NQ: institutions net {nq_dir} at {abs(nq_net):,} contracts ({nq_pct:.1f}% net) — {nq_trend} 3-week trend",
+                f"  ES: institutions net {es_dir} at {abs(es_net):,} contracts ({es_pct:.1f}% net) — {es_trend} 3-week trend",
+                "",
+            ]
+        else:
+            lines += ["INSTITUTIONAL POSITIONING (COT): unavailable", ""]
+
+        # Put/call ratio block
+        if pcr_value is not None:
+            lines += [
+                "MARKET PSYCHOLOGY INDICATORS:",
+                f"  CBOE Total Put/Call Ratio: {pcr_value:.2f} "
+                f"(context: above 1.0 = elevated hedging/fear, below 0.7 = complacency/low hedging)",
+                "",
+            ]
+        else:
+            lines += ["MARKET PSYCHOLOGY INDICATORS: put/call ratio unavailable", ""]
+
         if history:
             lines.append(f"DAILY SNAPSHOT HISTORY (last {len(history)} closing days, newest first):")
             for i, entry in enumerate(history, 1):
@@ -206,8 +352,11 @@ class AILensPipeline:
             cached = self._load_cache()
             return cached.get('analysis') if cached else None
 
+        # Fetch PCR once daily alongside generation
+        pcr_value = self._fetch_pcr()
+
         try:
-            messages = self._build_messages(bias_score, formatted_data)
+            messages = self._build_messages(bias_score, formatted_data, pcr_value)
             resp = requests.post(
                 f"{_GROK_BASE_URL}/chat/completions",
                 headers={
