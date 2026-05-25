@@ -200,6 +200,18 @@
             margin-right: 6px;
             animation: pulse 2s infinite;
         }
+        .ai-section { margin-bottom: 16px; }
+        .ai-section:last-child { margin-bottom: 0; }
+        .ai-section-hdr { display:flex; align-items:center; gap:7px; margin-bottom:8px; }
+        .ai-section-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; }
+        .ai-section-body { font-size:13px; line-height:1.65; color:#b0c4d8; }
+        .ai-trigger {
+            display:flex; align-items:flex-start; gap:10px;
+            padding:9px 12px; margin-top:7px;
+            background:#0a0e1a; border:1px solid #1e3a28; border-left:2px solid #2ecc71;
+            border-radius:6px; font-size:12px; color:#c8e6d0; line-height:1.5;
+        }
+        .ai-trigger-pip { width:5px; height:5px; border-radius:50%; background:#2ecc71; margin-top:5px; flex-shrink:0; }
     </style>
 </head>
 <body>
@@ -236,10 +248,12 @@
         </div>
         <div class="last-updated"><span class="live-dot"></span><span id="last-updated-text">Fetching data...</span></div>
     </div>
-    <div id="ai-lens-card" class="why-today" style="border-left-color: #6c3483; display:none;">
-        <h3 style="color:#9b59b6">🔭 AI Lens</h3>
-        <div id="ai-lens-meta" style="font-size:11px;margin-bottom:10px;"></div>
-        <div id="ai-lens-text" style="font-size:13px;color:#e0e6f0;line-height:1.7;white-space:pre-wrap;"></div>
+    <div id="ai-lens-card" class="why-today" style="border-left-color:#6c3483;display:none;padding:18px 16px 16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <h3 style="color:#9b59b6;margin:0">🔭 AI Lens</h3>
+            <div id="ai-lens-meta" style="font-size:10px;letter-spacing:0.3px;"></div>
+        </div>
+        <div id="ai-lens-body"></div>
     </div>
     <div class="why-today">
         <h3>Why Today</h3>
@@ -640,37 +654,92 @@
 
     }
 
+    const _AI_SECTIONS = [
+        { icon: '🔍', label: "WHY WE'RE HERE",      color: '#5ba3e0',
+          rx: [/why\s+we.?re\s+here/i, /why\s+the\s+market/i, /^\s*1[.)]/m] },
+        { icon: '🧠', label: 'PSYCHOLOGICAL INSIGHT', color: '#a07bc5',
+          rx: [/psychological\s+insight/i, /psychology/i, /^\s*2[.)]/m] },
+        { icon: '📅', label: 'REGIME CONTEXT',        color: '#c8922a',
+          rx: [/regime\s+context/i, /^\s*3[.)]/m, /how\s+long.*regime/i] },
+        { icon: '⚡', label: 'WHAT TO WATCH',         color: '#2ecc71',
+          rx: [/what\s+to\s+watch/i, /^\s*4[.)]/m] },
+    ];
+
+    function _parseAILens(raw) {
+        const text = raw.replace(/\*\*/g, '').replace(/\*/g, '').replace(/^#+\s*/gm, '').trim();
+        const splits = [];
+        for (let i = 0; i < _AI_SECTIONS.length; i++) {
+            for (const rx of _AI_SECTIONS[i].rx) {
+                const m = text.match(rx);
+                if (m && m.index !== undefined) { splits.push({pos: m.index, si: i}); break; }
+            }
+        }
+        splits.sort((a, b) => a.pos - b.pos);
+        if (splits.length >= 2) {
+            return splits.map((sp, i) => {
+                const end = i + 1 < splits.length ? splits[i + 1].pos : text.length;
+                const content = text.slice(sp.pos, end).replace(/^[^\n]+\n/, '').trim();
+                return { ..._AI_SECTIONS[sp.si], content };
+            }).filter(s => s.content.length > 0);
+        }
+        // Fallback: assign paragraphs to sections in order
+        const paras = text.split(/\n\s*\n/).map(p => p.trim()).filter(p => p.length > 20);
+        return _AI_SECTIONS.slice(0, paras.length).map((d, i) => ({ ...d, content: paras[i] }));
+    }
+
+    function _renderTriggers(content) {
+        const lines = content.split('\n').map(l => l.trim()).filter(l => l);
+        const items = lines
+            .map(l => l.replace(/^[\-•*\d]+[.)]\s*/, '').trim())
+            .filter(l => l.length > 8);
+        if (items.length > 0) return items;
+        return content.split(/(?<=\.)\s+/).map(s => s.trim()).filter(s => s.length > 15);
+    }
+
+    function _buildAIHTML(sections) {
+        return sections.map(s => {
+            let bodyHTML;
+            if (s.label === 'WHAT TO WATCH') {
+                const triggers = _renderTriggers(s.content);
+                bodyHTML = triggers.map(t =>
+                    `<div class="ai-trigger"><div class="ai-trigger-pip"></div><span>${t}</span></div>`
+                ).join('');
+            } else {
+                bodyHTML = `<div class="ai-section-body">${s.content}</div>`;
+            }
+            return `<div class="ai-section">
+                <div class="ai-section-hdr">
+                    <span style="font-size:13px">${s.icon}</span>
+                    <span class="ai-section-label" style="color:${s.color}">${s.label}</span>
+                </div>${bodyHTML}</div>`;
+        }).join('');
+    }
+
     async function loadAILens() {
         const card = document.getElementById('ai-lens-card');
         const meta = document.getElementById('ai-lens-meta');
-        const text = document.getElementById('ai-lens-text');
+        const body = document.getElementById('ai-lens-body');
+        const unavail = '<div style="color:#7a8fa8;font-size:13px">Analysis unavailable</div>';
         try {
             const resp = await fetch('/api/ai_lens');
             const data = await resp.json();
             card.style.display = 'block';
-            if (!resp.ok || !data.analysis) {
-                meta.textContent = '';
-                text.style.color = '#7a8fa8';
-                text.textContent = 'Analysis unavailable';
-                return;
-            }
-            text.style.color = '#e0e6f0';
-            text.textContent = data.analysis;
+            if (!resp.ok || !data.analysis) { meta.textContent = ''; body.innerHTML = unavail; return; }
+            body.innerHTML = _buildAIHTML(_parseAILens(data.analysis));
             const ts = new Date(data.timestamp);
-            const timeStr = ts.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York'});
-            const dateStr = ts.toLocaleDateString('en-US', {month: 'short', day: 'numeric', timeZone: 'America/New_York'});
+            const timeStr = ts.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit', timeZone:'America/New_York'});
+            const dateStr = ts.toLocaleDateString('en-US', {month:'short', day:'numeric', timeZone:'America/New_York'});
             if (data.is_fresh) {
                 meta.style.color = '#4a9eff';
                 meta.textContent = `Generated at ${timeStr} EST`;
             } else {
-                meta.style.color = '#7a8fa8';
+                meta.style.color = '#4a5a70';
                 meta.textContent = `Last updated: ${dateStr} at ${timeStr} EST`;
             }
         } catch(e) {
             card.style.display = 'block';
             meta.textContent = '';
-            text.style.color = '#7a8fa8';
-            text.textContent = 'Analysis unavailable';
+            body.innerHTML = unavail;
             console.error('AI Lens fetch failed:', e);
         }
     }
