@@ -26,7 +26,8 @@ _SYSTEM_PROMPT = (
     "Never reference raw pillar score numbers in your analysis — translate all scores into qualitative language "
     "such as 'strongly bullish', 'mildly bearish', or 'neutral'. "
     "A score of zero means neutral and must always be described as neutral, never as zero or any number. "
-    "Never use the word 'cap' anywhere in your analysis."
+    "Never use the word 'cap' anywhere in your analysis. "
+    "Never include a word count or any reference to word count in your output."
 )
 
 
