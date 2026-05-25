@@ -1,9 +1,12 @@
 import json
+from datetime import datetime
+import pytz
 from flask import Flask, render_template, jsonify, request
 from utils.file_lock import atomic_write_json
 from processors.snapshot_generator import snapshot_generator
 from pipelines.manual_input import manual_input_pipeline
 from utils.logger import pulse_logger
+from config import TIMEZONE
 
 app = Flask(__name__, template_folder='templates')
 
@@ -24,30 +27,36 @@ def _validate_manual_input(event_title, actual_value):
         return False, 'Null bytes not allowed'
     return True, None
 
-def _run_partial_refresh(label):
-    """Fresh econ fetch + cached macro/inst/geo → full bias recompute with regime params."""
+def _run_partial_refresh(label, invalidate_econ=False):
+    """Recompute bias from cached pillars and save a fresh snapshot.
+
+    invalidate_econ=True forces a live econ fetch (needed after manual
+    input changes actual values). False (default) reuses the econ cache,
+    which is correct for size_mode toggles where only the directive text
+    needs to change.
+    """
     from pipelines.economic_calendar import economic_calendar_pipeline
-    from pipelines.regime_detector import regime_detector
+    from pipelines.institutional import institutional_pipeline
     from pipelines.recommendation import recommendation_engine
     from processors.data_formatter import data_formatter
     from processors.bias_calculator import bias_calculator
     from utils.cache import cache
 
-    cache.delete('economic_calendar')
+    if invalidate_econ:
+        cache.delete('economic_calendar')
     econ_data = economic_calendar_pipeline.fetch()
 
     macro_cached = cache.load('macro_sentiment')
     macro_data = macro_cached['data'] if macro_cached else {}
 
-    inst_cached = cache.load('institutional')
-    inst_data = inst_cached['data'] if inst_cached else {}
+    # institutional_pipeline writes to /data/permanent_cot.json, not the
+    # shared cache, so cache.load('institutional') always misses. Call
+    # fetch() directly — on non-Fridays it reads the permanent file and
+    # returns immediately without hitting the CFTC endpoint.
+    inst_data = institutional_pipeline.fetch() or {}
 
     geo_cached = cache.load('geopolitical')
     geo_data = geo_cached['data'] if geo_cached else {}
-
-    regime_result = regime_detector.detect(geo_data, macro_data)
-    current_regime = regime_result['regime']
-    stability_score = regime_result['stability_score']
 
     formatted_data = data_formatter.standardize({
         'macro': macro_data,
@@ -62,21 +71,12 @@ def _run_partial_refresh(label):
     except Exception:
         size_mode = 'quarter'
 
-    bias_score = bias_calculator.compute(
-        formatted_data,
-        size_mode=size_mode,
-        regime=current_regime,
-        calm_days_count=regime_result['calm_days_count'],
-        high_uncertainty_count=regime_result['high_uncertainty_count'],
-        stability_score=stability_score,
-    )
+    bias_score = bias_calculator.compute(formatted_data, size_mode=size_mode)
 
     recommendation = recommendation_engine.compute(
         bias_score,
         formatted_data.get('geopolitical', {}),
         formatted_data.get('macro', {}),
-        regime=current_regime,
-        stability_score=stability_score,
     )
     bias_score['recommendation'] = recommendation
 
@@ -123,9 +123,17 @@ def manual_input():
 
         if success:
             try:
-                _run_partial_refresh(f"manual_input | {event_title}")
+                _run_partial_refresh(f"manual_input | {event_title}", invalidate_econ=True)
             except Exception as refresh_err:
                 pulse_logger.log(f"⚠️ manual_input partial refresh failed: {refresh_err}", level="WARNING")
+
+            try:
+                from pipelines.ai_lens import ai_lens_pipeline
+                latest = snapshot_generator.get_latest()
+                if latest:
+                    ai_lens_pipeline.generate(latest['bias'], latest['pillars'], force=True)
+            except Exception as ai_err:
+                pulse_logger.log(f"⚠️ AI Lens re-trigger on manual_input failed: {ai_err}", level="WARNING")
 
             return jsonify({'status': 'saved', 'event': event_title, 'actual': actual_value})
 
@@ -155,7 +163,7 @@ def reset_manual_input():
             atomic_write_json('/data/permanent_manual_inputs.json', inputs)
 
         try:
-            _run_partial_refresh(f"reset_manual_input | {event_title}")
+            _run_partial_refresh(f"reset_manual_input | {event_title}", invalidate_econ=True)
         except Exception as refresh_err:
             pulse_logger.log(f"⚠️ reset_manual_input partial refresh failed: {refresh_err}", level="WARNING")
 
@@ -166,15 +174,47 @@ def reset_manual_input():
 @app.route('/api/size_mode', methods=['POST'])
 def set_size_mode():
     data = request.get_json()
+    if not data:
+        return jsonify({'status': 'error', 'message': 'Missing request body'}), 400
     mode = data.get('mode', 'quarter')
     if mode not in ['quarter', 'normal']:
         return jsonify({'status': 'error', 'message': 'Invalid mode'}), 400
     size_mode_file = '/data/size_mode.json'
     try:
         atomic_write_json(size_mode_file, {'mode': mode})
+        try:
+            # Recompute immediately so the next /api/latest fetch (triggered by
+            # setSizeMode() 1 second after toggle) returns a snapshot with the
+            # updated size_mode and directive — preventing the button from
+            # reverting to the previous value on auto-refresh.
+            _run_partial_refresh('size_mode toggle')
+        except Exception as refresh_err:
+            pulse_logger.log(f"⚠️ size_mode refresh failed: {refresh_err}", level="WARNING")
         return jsonify({'status': 'saved', 'mode': mode})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/ai_lens')
+def api_ai_lens():
+    from pipelines.ai_lens import ai_lens_pipeline
+    cached = ai_lens_pipeline._load_cache()
+    if not cached or not cached.get('analysis'):
+        return jsonify({'error': 'No AI Lens data available'}), 404
+    is_fresh = False
+    try:
+        tz = pytz.timezone(TIMEZONE)
+        ts = datetime.fromisoformat(cached['timestamp'])
+        if ts.tzinfo is None:
+            ts = pytz.utc.localize(ts)
+        is_fresh = ts.astimezone(tz).date() == datetime.now(tz).date()
+    except Exception:
+        pass
+    return jsonify({
+        'analysis': cached['analysis'],
+        'timestamp': cached['timestamp'],
+        'is_fresh': is_fresh,
+    })
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=False)
