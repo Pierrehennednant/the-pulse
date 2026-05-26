@@ -148,11 +148,14 @@ class MacroSentimentPipeline:
             fg = fear_greed.get()
             score = int(fg['score'])
             rating = fg['rating']
+            pc = fg.get('indicators', {}).get('put_call_options', {})
             result = {
                 'score': score,
                 'rating': rating,
                 'signal': 'bearish' if score < 40 else 'bullish' if score > 60 else 'neutral',
-                'source': 'CNN'
+                'source': 'CNN',
+                'put_call_score': int(round(pc['score'])) if pc.get('score') is not None else None,
+                'put_call_rating': pc.get('rating'),
             }
             self._save_fg_cache(result)
             return result
