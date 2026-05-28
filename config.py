@@ -7,6 +7,7 @@ FRED_API_KEY = os.environ.get("FRED_API_KEY", "")
 THENEWS_API_KEY = os.environ.get("THENEWS_API_KEY", "")
 GROK_API_KEY = os.environ.get("GROK_API_KEY", "")
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
+SECRET_KEY = os.environ.get("SECRET_KEY", "")
 
 # Timezone
 TIMEZONE = "US/Eastern"

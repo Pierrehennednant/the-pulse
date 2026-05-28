@@ -1,26 +1,23 @@
-import hashlib
 import hmac
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 
 import pytz
 from flask import (Flask, jsonify, redirect, render_template, request,
                    session, url_for)
 
-from config import DASHBOARD_PASSWORD, TIMEZONE
+from config import DASHBOARD_PASSWORD, SECRET_KEY, TIMEZONE
 from pipelines.manual_input import manual_input_pipeline
 from processors.snapshot_generator import snapshot_generator
 from utils.file_lock import atomic_write_json
 from utils.logger import pulse_logger
 
 app = Flask(__name__, template_folder='templates')
-# Secret key derived from password so sessions survive restarts without changing.
-# If DASHBOARD_PASSWORD is unset auth is disabled, but we still need a key.
-app.secret_key = hashlib.sha256(
-    f"the-pulse-{DASHBOARD_PASSWORD}".encode()
-).digest()
+# SECRET_KEY must be set in Railway env vars. Without it sessions reset on every restart.
+app.secret_key = SECRET_KEY or os.urandom(24)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 
 _MAX_TITLE_LEN = 200
 _MAX_VALUE_LEN = 50
@@ -58,6 +55,7 @@ def login():
     if request.method == 'POST':
         submitted = request.form.get('password', '')
         if hmac.compare_digest(submitted, DASHBOARD_PASSWORD):
+            session.permanent = True
             session['authenticated'] = True
             next_url = request.args.get('next', '/')
             if not next_url.startswith('/'):
