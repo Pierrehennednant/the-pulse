@@ -1,17 +1,80 @@
+import hashlib
+import hmac
 import json
+import os
 from datetime import datetime
+from functools import wraps
+
 import pytz
-from flask import Flask, render_template, jsonify, request
-from utils.file_lock import atomic_write_json
-from processors.snapshot_generator import snapshot_generator
+from flask import (Flask, jsonify, redirect, render_template, request,
+                   session, url_for)
+
+from config import DASHBOARD_PASSWORD, TIMEZONE
 from pipelines.manual_input import manual_input_pipeline
+from processors.snapshot_generator import snapshot_generator
+from utils.file_lock import atomic_write_json
 from utils.logger import pulse_logger
-from config import TIMEZONE
 
 app = Flask(__name__, template_folder='templates')
+# Secret key derived from password so sessions survive restarts without changing.
+# If DASHBOARD_PASSWORD is unset auth is disabled, but we still need a key.
+app.secret_key = hashlib.sha256(
+    f"the-pulse-{DASHBOARD_PASSWORD}".encode()
+).digest()
 
 _MAX_TITLE_LEN = 200
 _MAX_VALUE_LEN = 50
+
+
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+
+def _is_api_request():
+    return request.path.startswith('/api/')
+
+def require_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not DASHBOARD_PASSWORD:
+            return f(*args, **kwargs)
+        if not session.get('authenticated'):
+            if _is_api_request():
+                return jsonify({'error': 'Unauthorized'}), 401
+            return redirect(url_for('login', next=request.path))
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ---------------------------------------------------------------------------
+# Login / logout
+# ---------------------------------------------------------------------------
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if not DASHBOARD_PASSWORD:
+        return redirect(url_for('home'))
+    error = None
+    if request.method == 'POST':
+        submitted = request.form.get('password', '')
+        if hmac.compare_digest(submitted, DASHBOARD_PASSWORD):
+            session['authenticated'] = True
+            next_url = request.args.get('next', '/')
+            if not next_url.startswith('/'):
+                next_url = '/'
+            return redirect(next_url)
+        error = 'Incorrect password.'
+    return render_template('login.html', error=error)
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+
+# ---------------------------------------------------------------------------
+# Validation helpers
+# ---------------------------------------------------------------------------
 
 def _validate_manual_input(event_title, actual_value):
     """Return (ok, error_message). Checks type, length, and no null bytes."""
@@ -83,24 +146,38 @@ def _run_partial_refresh(label, invalidate_econ=False):
     snapshot_generator.save(bias_score, formatted_data)
     pulse_logger.log(f"✅ {label} partial refresh complete")
 
+
+# ---------------------------------------------------------------------------
+# Dashboard routes
+# ---------------------------------------------------------------------------
+
 @app.route('/')
+@require_auth
 def home():
     latest = snapshot_generator.get_latest()
     return render_template('dashboard.html', snapshot=latest)
 
-@app.route('/api/latest')
-def api_latest():
-    latest = snapshot_generator.get_latest()
-    return jsonify(latest)
-
 @app.route('/snapshot/<snapshot_id>')
+@require_auth
 def view_snapshot(snapshot_id):
     snapshot = snapshot_generator.load(snapshot_id)
     if not snapshot:
         return "Snapshot not found", 404
     return render_template('dashboard.html', snapshot=snapshot)
 
+
+# ---------------------------------------------------------------------------
+# API routes
+# ---------------------------------------------------------------------------
+
+@app.route('/api/latest')
+@require_auth
+def api_latest():
+    latest = snapshot_generator.get_latest()
+    return jsonify(latest)
+
 @app.route('/api/snapshot/<snapshot_id>')
+@require_auth
 def api_snapshot(snapshot_id):
     snapshot = snapshot_generator.load(snapshot_id)
     if not snapshot:
@@ -108,6 +185,7 @@ def api_snapshot(snapshot_id):
     return jsonify(snapshot)
 
 @app.route('/api/manual_input', methods=['POST'])
+@require_auth
 def manual_input():
     try:
         data = request.get_json()
@@ -142,11 +220,13 @@ def manual_input():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/manual_inputs')
+@require_auth
 def get_manual_inputs():
     inputs = manual_input_pipeline.get_inputs()
     return jsonify(inputs)
 
 @app.route('/api/reset_manual_input', methods=['POST'])
+@require_auth
 def reset_manual_input():
     try:
         data = request.get_json()
@@ -172,6 +252,7 @@ def reset_manual_input():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/size_mode', methods=['POST'])
+@require_auth
 def set_size_mode():
     data = request.get_json()
     if not data:
@@ -195,6 +276,7 @@ def set_size_mode():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/ai_lens')
+@require_auth
 def api_ai_lens():
     from pipelines.ai_lens import ai_lens_pipeline
     cached = ai_lens_pipeline._load_cache()

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Pulse — Login</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0e1a;
+            color: #e0e6f0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .card {
+            background: #0d1224;
+            border: 1px solid #1e2d4a;
+            border-radius: 16px;
+            padding: 40px 32px 36px;
+            width: 100%;
+            max-width: 340px;
+        }
+        .logo {
+            font-size: 22px;
+            font-weight: 700;
+            color: #4a9eff;
+            letter-spacing: 1px;
+            text-align: center;
+            margin-bottom: 6px;
+        }
+        .subtitle {
+            font-size: 12px;
+            color: #4a5a70;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 32px;
+        }
+        .error {
+            background: #1e0a0a;
+            border: 1px solid #5a1a1a;
+            border-radius: 8px;
+            color: #e74c3c;
+            font-size: 13px;
+            padding: 10px 14px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        input[type="password"] {
+            display: block;
+            width: 100%;
+            background: #0a0e1a;
+            border: 1px solid #1e2d4a;
+            border-radius: 8px;
+            color: #e0e6f0;
+            font-family: inherit;
+            font-size: 14px;
+            padding: 12px 14px;
+            outline: none;
+            margin-bottom: 14px;
+            transition: border-color 0.15s;
+        }
+        input[type="password"]:focus {
+            border-color: #4a9eff;
+        }
+        input[type="password"]::placeholder {
+            color: #4a5a70;
+        }
+        button {
+            display: block;
+            width: 100%;
+            background: #4a9eff;
+            color: #0a0e1a;
+            border: none;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            padding: 12px;
+            cursor: pointer;
+            letter-spacing: 0.3px;
+            transition: background 0.15s;
+        }
+        button:hover { background: #6ab0ff; }
+        button:active { background: #3a8eef; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="logo">⚡ THE PULSE</div>
+        <div class="subtitle">Pre-market regime dashboard</div>
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+        <form method="POST">
+            <input type="password" name="password" placeholder="Password"
+                   autofocus autocomplete="current-password">
+            <button type="submit">Enter</button>
+        </form>
+    </div>
+</body>
+</html>
