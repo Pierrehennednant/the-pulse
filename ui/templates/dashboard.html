@@ -315,6 +315,13 @@
         if (s === 'strongly_bearish' || s === 'mildly_bearish' || s === 'bearish') return 'value-bearish';
         return 'value-neutral';
     }
+    function macroColor(s) {
+        if (s === 'strongly_bullish') return '#2ecc71';
+        if (s === 'mildly_bullish')   return '#82d9a0';
+        if (s === 'mildly_bearish')   return '#e08080';
+        if (s === 'strongly_bearish') return '#e74c3c';
+        return '#f39c12';
+    }
     function signalLabel(s) {
         return {
             'strongly_bullish': 'Strongly Bullish',
@@ -450,9 +457,9 @@
         const vxn = data.vxn || {};
         const fg = data.fear_greed || {};
         html += `
-            <div class="data-row"><span class="data-label">VIX</span><span class="data-value ${valClass(vix.signal)}">${vix.value || '--'} <small>(${vix.change >= 0 ? '+' : ''}${vix.change || 0})</small> · ${signalLabel(vix.signal)}</span></div>
-            <div class="data-row"><span class="data-label">VXN</span><span class="data-value ${valClass(vxn.signal)}">${vxn.value || '--'} <small>(${vxn.change >= 0 ? '+' : ''}${vxn.change || 0})</small> · ${signalLabel(vxn.signal)}</span></div>
-            <div class="data-row"><span class="data-label">Fear & Greed</span><span class="data-value ${valClass(fg.signal)}">${fg.score || '--'} — ${fg.rating || 'N/A'} · ${signalLabel(fg.signal)}</span></div>`;
+            <div class="data-row"><span class="data-label">VIX</span><span class="data-value" style="color:${macroColor(vix.signal)}">${vix.value || '--'} <small>(${vix.change >= 0 ? '+' : ''}${vix.change || 0})</small></span></div>
+            <div class="data-row"><span class="data-label">VXN</span><span class="data-value" style="color:${macroColor(vxn.signal)}">${vxn.value || '--'} <small>(${vxn.change >= 0 ? '+' : ''}${vxn.change || 0})</small></span></div>
+            <div class="data-row"><span class="data-label">Fear & Greed</span><span class="data-value" style="color:${macroColor(fg.signal)}">${fg.score || '--'} — ${fg.rating || 'N/A'}</span></div>`;
         return html;
     }
 
