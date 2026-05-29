@@ -310,7 +310,22 @@
 
     function scoreClass(s) { return s > 0.3 ? 'score-bullish' : s < -0.3 ? 'score-bearish' : 'score-neutral'; }
     function scoreLabel(s) { return s > 0.3 ? '↑ Bullish' : s < -0.3 ? '↓ Bearish' : '→ Neutral'; }
-    function valClass(s) { return s === 'bullish' ? 'value-bullish' : s === 'bearish' ? 'value-bearish' : 'value-neutral'; }
+    function valClass(s) {
+        if (s === 'strongly_bullish' || s === 'mildly_bullish' || s === 'bullish') return 'value-bullish';
+        if (s === 'strongly_bearish' || s === 'mildly_bearish' || s === 'bearish') return 'value-bearish';
+        return 'value-neutral';
+    }
+    function signalLabel(s) {
+        return {
+            'strongly_bullish': 'Strongly Bullish',
+            'mildly_bullish': 'Mildly Bullish',
+            'neutral': 'Neutral',
+            'mildly_bearish': 'Mildly Bearish',
+            'strongly_bearish': 'Strongly Bearish',
+            'bullish': 'Bullish',
+            'bearish': 'Bearish',
+        }[s] || '';
+    }
 
     function renderEconomic(data) {
         if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
@@ -435,9 +450,9 @@
         const vxn = data.vxn || {};
         const fg = data.fear_greed || {};
         html += `
-            <div class="data-row"><span class="data-label">VIX</span><span class="data-value ${valClass(vix.signal)}">${vix.value || '--'} <small>(${vix.change >= 0 ? '+' : ''}${vix.change || 0})</small></span></div>
-            <div class="data-row"><span class="data-label">VXN</span><span class="data-value ${valClass(vxn.signal)}">${vxn.value || '--'} <small>(${vxn.change >= 0 ? '+' : ''}${vxn.change || 0})</small></span></div>
-            <div class="data-row"><span class="data-label">Fear & Greed</span><span class="data-value ${valClass(fg.signal)}">${fg.score || '--'} — ${fg.rating || 'N/A'}</span></div>`;
+            <div class="data-row"><span class="data-label">VIX</span><span class="data-value ${valClass(vix.signal)}">${vix.value || '--'} <small>(${vix.change >= 0 ? '+' : ''}${vix.change || 0})</small> · ${signalLabel(vix.signal)}</span></div>
+            <div class="data-row"><span class="data-label">VXN</span><span class="data-value ${valClass(vxn.signal)}">${vxn.value || '--'} <small>(${vxn.change >= 0 ? '+' : ''}${vxn.change || 0})</small> · ${signalLabel(vxn.signal)}</span></div>
+            <div class="data-row"><span class="data-label">Fear & Greed</span><span class="data-value ${valClass(fg.signal)}">${fg.score || '--'} — ${fg.rating || 'N/A'} · ${signalLabel(fg.signal)}</span></div>`;
         return html;
     }
 

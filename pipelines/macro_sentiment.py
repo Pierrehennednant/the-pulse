@@ -83,7 +83,13 @@ class MacroSentimentPipeline:
                 'previous': previous,
                 'change': change,
                 'change_pct': change_pct,
-                'signal': 'bearish' if current > 20 else 'neutral' if current > 15 else 'bullish',
+                'signal': (
+                    'strongly_bullish' if current < 15.0 else
+                    'mildly_bullish' if current < 17.0 else
+                    'neutral' if current < 20.0 else
+                    'mildly_bearish' if current < 25.0 else
+                    'strongly_bearish'
+                ),
                 'source': 'fred'
             }
             self._save_vix_cache(result)
@@ -97,7 +103,7 @@ class MacroSentimentPipeline:
                 cached['source'] = 'cache'
                 return cached
             pulse_logger.log("⚠️ VIX — no cache available, defaulting to 20.0", level="WARNING")
-            return {'value': 20.0, 'previous': 20.0, 'change': 0, 'change_pct': 0, 'signal': 'neutral', 'source': 'default'}
+            return {'value': 20.0, 'previous': 20.0, 'change': 0, 'change_pct': 0, 'signal': 'mildly_bearish', 'source': 'default'}
 
     def fetch_vxn(self):
         try:
@@ -109,7 +115,13 @@ class MacroSentimentPipeline:
                 'previous': previous,
                 'change': change,
                 'change_pct': change_pct,
-                'signal': 'bearish' if current > 25 else 'neutral' if current > 18 else 'bullish',
+                'signal': (
+                    'strongly_bullish' if current < 18.0 else
+                    'mildly_bullish' if current < 20.0 else
+                    'neutral' if current < 25.0 else
+                    'mildly_bearish' if current < 28.0 else
+                    'strongly_bearish'
+                ),
                 'source': 'fred'
             }
             self._save_vxn_cache(result)
@@ -152,7 +164,13 @@ class MacroSentimentPipeline:
             result = {
                 'score': score,
                 'rating': rating,
-                'signal': 'bearish' if score < 40 else 'bullish' if score > 60 else 'neutral',
+                'signal': (
+                    'strongly_bearish' if score < 25 else
+                    'mildly_bearish' if score < 50 else
+                    'neutral' if score < 62 else
+                    'mildly_bullish' if score < 75 else
+                    'strongly_bullish'
+                ),
                 'source': 'CNN',
                 'put_call_score': int(round(pc['score'])) if pc.get('score') is not None else None,
                 'put_call_rating': pc.get('rating'),
@@ -171,7 +189,13 @@ class MacroSentimentPipeline:
     def calculate_score(self, vix, vxn, fear_greed):
         score = 0.0
         count = 0
-        signal_map = {'bearish': -1, 'neutral': 0, 'bullish': 1}
+        signal_map = {
+            'strongly_bullish': 1.0,
+            'mildly_bullish': 0.5,
+            'neutral': 0.0,
+            'mildly_bearish': -0.5,
+            'strongly_bearish': -1.0,
+        }
         if vix:
             score += signal_map.get(vix['signal'], 0)
             count += 1
