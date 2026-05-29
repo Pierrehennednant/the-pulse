@@ -100,6 +100,14 @@ class MacroSentimentPipeline:
             cached = self._load_vix_cache()
             if cached:
                 pulse_logger.log(f"⚠️ VIX — using file cache: {cached.get('value')}", level="WARNING")
+                v = cached.get('value', 20.0)
+                cached['signal'] = (
+                    'strongly_bullish' if v < 15.0 else
+                    'mildly_bullish' if v < 17.0 else
+                    'neutral' if v < 20.0 else
+                    'mildly_bearish' if v < 25.0 else
+                    'strongly_bearish'
+                )
                 cached['source'] = 'cache'
                 return cached
             pulse_logger.log("⚠️ VIX — no cache available, defaulting to 20.0", level="WARNING")

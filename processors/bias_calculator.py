@@ -45,9 +45,9 @@ class BiasCalculator:
 
             if status not in ['unavailable'] and score != 0:
                 active_pillars += 1
-                if score > 0.2:
+                if score > 0.15:
                     pillar_signals.append('bullish')
-                elif score < -0.2:
+                elif score < -0.15:
                     pillar_signals.append('bearish')
                 else:
                     pillar_signals.append('neutral')
