@@ -150,12 +150,39 @@ class EconomicCalendarPipeline:
             pulse_logger.log(f"⚠️ Speech auto-detect failed for {event_title}: {e}", level="WARNING")
             return 'neutral'
 
+    def _magnitude_score(self, event, direction):
+        """Return magnitude-weighted score for a numerical beat/miss event.
+
+        Relative deviation = abs(actual - forecast) / abs(forecast).
+        Bands: ≤20% → ±0.40 | 21–50% → ±0.63 | >50% → ±0.88
+        Falls back to flat ±1 if forecast is zero or values can't be parsed.
+        """
+        if direction == 0.0:
+            return 0.0
+        forecast_str = event.get('forecast', '')
+        actual_str = event.get('actual', '')
+        if not forecast_str or forecast_str in ('N/A', ''):
+            return direction
+        try:
+            def _parse(s):
+                return float(str(s).replace('%', '').replace('K', '').replace('M', '')
+                             .replace('B', '').replace('T', '').strip())
+            actual_val = _parse(actual_str)
+            forecast_val = _parse(forecast_str)
+        except (ValueError, TypeError):
+            return direction
+        if forecast_val == 0:
+            return direction  # avoid division by zero
+        rel_dev = abs(actual_val - forecast_val) / abs(forecast_val)
+        magnitude = 0.88 if rel_dev > 0.50 else 0.63 if rel_dev > 0.20 else 0.40
+        return magnitude if direction > 0 else -magnitude
+
     def calculate_score(self, events):
         if not events:
             return 0.0
         score = 0.0
         count = 0
-        impact_map = {'bullish': 1, 'bearish': -1, 'neutral': 0}
+        flat_map = {'bullish': 1.0, 'bearish': -1.0, 'neutral': 0.0}
         for event in events:
             # Skip pending and unknown
             if event.get('result') in ['pending', 'unknown', 'speech']:
@@ -163,11 +190,22 @@ class EconomicCalendarPipeline:
             # Skip neutral speech — no new info, nothing changed
             if event.get('is_speech') and event.get('market_impact') == 'neutral':
                 continue
-            # Only count speech if it has a directional tag
-            if event.get('result') in ['beat', 'miss', 'inline', 'improved', 'declined', 'unchanged', 'bearish', 'bullish']:
-                if event.get('market_impact') in impact_map:
-                    score += impact_map[event['market_impact']]
-                    count += 1
+            result = event.get('result', '')
+            market_impact = event.get('market_impact', 'neutral')
+            if result not in ['beat', 'miss', 'inline', 'improved', 'declined', 'unchanged', 'bearish', 'bullish']:
+                continue
+            if market_impact not in flat_map:
+                continue
+            direction = flat_map[market_impact]
+            # Magnitude-weighted scoring for numerical events with actual vs forecast.
+            # 'improved'/'declined'/'unchanged' compare against previous (no forecast) — flat.
+            # Speech/manual tags ('bearish'/'bullish') are non-numerical — flat.
+            if result in ('beat', 'miss', 'inline'):
+                evt_score = self._magnitude_score(event, direction)
+            else:
+                evt_score = direction
+            score += evt_score
+            count += 1
         return round(score / max(count, 1), 2) if count > 0 else 0.0
     
     def apply_manual_inputs(self, events):
