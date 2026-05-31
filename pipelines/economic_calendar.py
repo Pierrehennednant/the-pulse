@@ -1,12 +1,16 @@
+import json
 import os
 from datetime import datetime, timedelta
 import pytz
 from config import TIMEZONE, STALE_THRESHOLDS
 from utils.retry import fetch_with_retry
+from utils.file_lock import atomic_write_json
 from utils.cache import cache
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
 from pipelines.manual_input import manual_input_pipeline
+
+BLOCKLIST_FILE = '/data/ec_blocklist.json'
 
 class EconomicCalendarPipeline:
     def __init__(self):
@@ -16,6 +20,36 @@ class EconomicCalendarPipeline:
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
+
+    def _blocklist_key(self, title, time_est):
+        date_part = time_est.split(',')[0] if ',' in time_est else time_est[:10]
+        return f"{title}::{date_part}"
+
+    def _load_blocklist(self):
+        try:
+            if os.path.exists(BLOCKLIST_FILE):
+                with open(BLOCKLIST_FILE, 'r') as f:
+                    return json.load(f)
+        except Exception:
+            pass
+        return {}
+
+    def _save_blocklist(self, blocklist):
+        try:
+            atomic_write_json(BLOCKLIST_FILE, blocklist)
+        except Exception as e:
+            pulse_logger.log(f"⚠️ EC blocklist save failed: {e}", level="WARNING")
+
+    def add_to_blocklist(self, title, time_est):
+        blocklist = self._load_blocklist()
+        key = self._blocklist_key(title, time_est)
+        blocklist[key] = {
+            'title': title,
+            'time_est': time_est,
+            'blocked_at': datetime.now(self.timezone).isoformat()
+        }
+        self._save_blocklist(blocklist)
+        pulse_logger.log(f"🚫 EC blocklist: added '{key}'")
     
     def is_market_moving(self, event):
         if event.get('country', '').upper() != 'USD':
@@ -247,9 +281,18 @@ class EconomicCalendarPipeline:
             if not response.text.strip():
                 raise ValueError("Empty response from Forex Factory")
 
+            # Sunday = new FF week — clear blocklist
+            if datetime.now(self.timezone).weekday() == 6:
+                self._save_blocklist({})
+                blocklist = {}
+                pulse_logger.log("🗑️ EC blocklist cleared — Sunday weekly reset")
+            else:
+                blocklist = self._load_blocklist()
+
             raw_events = response.json()
             events = []
             date_strs = {}
+            ff_keys = set()
             for event in raw_events:
                 if not self.is_market_moving(event):
                     continue
@@ -257,9 +300,15 @@ class EconomicCalendarPipeline:
                 forecast = event.get('forecast', '')
                 previous = event.get('previous', '')
                 date_str = event.get('date', '')
+                time_est = self.convert_to_est(date_str)
+                bl_key = self._blocklist_key(title, time_est)
+                ff_keys.add(bl_key)
+                if bl_key in blocklist:
+                    pulse_logger.log(f"🚫 EC blocklist: skipping '{title}'")
+                    continue
                 event_row = {
                     'title': title,
-                    'time_est': self.convert_to_est(date_str),
+                    'time_est': time_est,
                     'forecast': forecast or 'N/A',
                     'previous': previous or 'N/A',
                     'actual': 'Pending',
@@ -277,6 +326,15 @@ class EconomicCalendarPipeline:
                 else:
                     event_row['is_speech'] = False
                 events.append(event_row)
+
+            # Self-clean: drop blocklist entries FF no longer serves
+            if blocklist:
+                stale = [k for k in blocklist if k not in ff_keys]
+                if stale:
+                    for k in stale:
+                        del blocklist[k]
+                    self._save_blocklist(blocklist)
+                    pulse_logger.log(f"🧹 EC blocklist self-cleaned: {stale}")
 
             # Apply saved manual inputs before speech detection so actual reflects prior tags
             events = self.apply_manual_inputs(events)

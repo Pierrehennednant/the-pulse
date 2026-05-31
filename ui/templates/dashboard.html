@@ -757,7 +757,7 @@
     }
 
     async function deleteEcEvent(eventTitle) {
-        if (!confirm('Remove "' + eventTitle + '" from today\'s calendar?\n\nIt will reappear on the next Forex Factory refresh.')) return;
+        if (!confirm('Remove "' + eventTitle + '" from this week\'s calendar?')) return;
         try {
             const response = await fetch('/api/delete_ec_event', {
                 method: 'POST',
