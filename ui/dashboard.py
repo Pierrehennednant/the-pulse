@@ -291,8 +291,16 @@ def delete_ec_event():
 
         economic_calendar_pipeline.add_to_blocklist(event_title, event.get('time_est', ''))
 
+        # Strip the deleted event from the cache so the bias recompute below doesn't
+        # need a live Forex Factory fetch to apply the blocklist. Recompute the pillar
+        # score inline then save — _run_partial_refresh(use_ec_cache=True) will read
+        # this updated cache and do only local computation.
+        ec_data['events'] = [e for e in ec_data['events'] if e.get('title') != event_title]
+        ec_data['pillar_score'] = economic_calendar_pipeline.calculate_score(ec_data['events'])
+        cache.save('economic_calendar', ec_data)
+
         try:
-            _run_partial_refresh(f"delete_ec_event | {event_title}", invalidate_econ=True)
+            _run_partial_refresh(f"delete_ec_event | {event_title}", use_ec_cache=True)
         except Exception as refresh_err:
             pulse_logger.log(f"⚠️ delete_ec_event partial refresh failed: {refresh_err}", level="WARNING")
 
