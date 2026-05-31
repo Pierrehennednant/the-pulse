@@ -277,17 +277,14 @@ def delete_ec_event():
             return jsonify({'error': 'No EC cache to modify'}), 404
 
         ec_data = ec_cached['data']
-        original_count = len(ec_data.get('events', []))
-        ec_data['events'] = [e for e in ec_data.get('events', []) if e.get('title') != event_title]
-
-        if len(ec_data['events']) == original_count:
+        event = next((e for e in ec_data.get('events', []) if e.get('title') == event_title), None)
+        if not event:
             return jsonify({'error': 'Event not found'}), 404
 
-        ec_data['pillar_score'] = economic_calendar_pipeline.calculate_score(ec_data['events'])
-        cache.save('economic_calendar', ec_data)
+        economic_calendar_pipeline.add_to_blocklist(event_title, event.get('time_est', ''))
 
         try:
-            _run_partial_refresh(f"delete_ec_event | {event_title}", use_ec_cache=True)
+            _run_partial_refresh(f"delete_ec_event | {event_title}", invalidate_econ=True)
         except Exception as refresh_err:
             pulse_logger.log(f"⚠️ delete_ec_event partial refresh failed: {refresh_err}", level="WARNING")
 
