@@ -153,6 +153,16 @@ class InstitutionalPipeline:
 
             nq_data, es_data = self.fetch_cot()
 
+            # If CFTC returned nothing, do not overwrite the permanent file with blank data.
+            # Return whatever we had (as stale) so the dashboard keeps showing real positions.
+            if nq_data is None and es_data is None:
+                if existing:
+                    existing['status'] = 'stale'
+                    pulse_logger.log("⚠️ Institutional — CFTC fetch failed, returning existing data as stale", level="WARNING")
+                    return existing
+                pulse_logger.log("⚠️ Institutional — CFTC fetch failed, no existing data", level="WARNING")
+                return None
+
             prev_nq_net = None
             prev_es_net = None
             if existing:

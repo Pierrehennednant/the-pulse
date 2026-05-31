@@ -119,11 +119,19 @@ def _run_partial_refresh(label, invalidate_econ=False, use_ec_cache=False):
     macro_cached = cache.load('macro_sentiment')
     macro_data = macro_cached['data'] if macro_cached else {}
 
-    # institutional_pipeline writes to /data/permanent_cot.json, not the
-    # shared cache, so cache.load('institutional') always misses. Call
-    # fetch() directly — on non-Fridays it reads the permanent file and
-    # returns immediately without hitting the CFTC endpoint.
-    inst_data = institutional_pipeline.fetch() or {}
+    # Read COT from the permanent file directly — never trigger a CFTC fetch
+    # during a partial refresh. fetch() can hit CFTC on Fridays and, when
+    # that fails, overwrites the file with blank data, making the display
+    # permanently blank until the next successful Friday fetch.
+    inst_data = None
+    try:
+        with open(institutional_pipeline.permanent_file, 'r') as _f:
+            _cot = json.load(_f)
+        if _cot.get('nq_futures'):
+            inst_data = _cot
+            inst_data.setdefault('status', 'live')
+    except Exception as _e:
+        pulse_logger.log(f"⚠️ Partial refresh — could not load COT file: {_e}", level="WARNING")
 
     geo_cached = cache.load('geopolitical')
     geo_data = geo_cached['data'] if geo_cached else {}
