@@ -37,6 +37,7 @@ def run_pulse():
         macro_data = {}
 
     try:
+        economic_calendar_pipeline.maybe_reset_weekly_blocklist()
         econ_data = economic_calendar_pipeline.fetch()
     except Exception as e:
         pulse_logger.log(f"⚠️ Economic failed: {e}", level="WARNING")

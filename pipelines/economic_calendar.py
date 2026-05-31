@@ -50,7 +50,20 @@ class EconomicCalendarPipeline:
         }
         self._save_blocklist(blocklist)
         pulse_logger.log(f"🚫 EC blocklist: added '{key}'")
-    
+
+    def maybe_reset_weekly_blocklist(self):
+        """Clear the blocklist when a new week's FF data arrives (Sunday only).
+        Called exclusively from the scheduled run_pulse() so partial refreshes
+        triggered by deletions or manual inputs never fire the reset."""
+        if datetime.now(self.timezone).weekday() != 6:
+            return
+        this_week = datetime.now(self.timezone).strftime('%Y-%W')
+        blocklist = self._load_blocklist()
+        if blocklist.get('__reset_week__') == this_week:
+            return
+        self._save_blocklist({'__reset_week__': this_week})
+        pulse_logger.log("🗑️ EC blocklist cleared — Sunday weekly reset")
+
     def is_market_moving(self, event):
         if event.get('country', '').upper() != 'USD':
             return False
@@ -241,7 +254,7 @@ class EconomicCalendarPipeline:
             score += evt_score
             count += 1
         return round(score / max(count, 1), 2) if count > 0 else 0.0
-    
+
     def apply_manual_inputs(self, events):
         manual_inputs = manual_input_pipeline.get_inputs()
         for event in events:
@@ -281,13 +294,7 @@ class EconomicCalendarPipeline:
             if not response.text.strip():
                 raise ValueError("Empty response from Forex Factory")
 
-            # Sunday = new FF week — clear blocklist
-            if datetime.now(self.timezone).weekday() == 6:
-                self._save_blocklist({})
-                blocklist = {}
-                pulse_logger.log("🗑️ EC blocklist cleared — Sunday weekly reset")
-            else:
-                blocklist = self._load_blocklist()
+            blocklist = self._load_blocklist()
 
             raw_events = response.json()
             events = []
@@ -303,7 +310,7 @@ class EconomicCalendarPipeline:
                 time_est = self.convert_to_est(date_str)
                 bl_key = self._blocklist_key(title, time_est)
                 ff_keys.add(bl_key)
-                if bl_key in blocklist:
+                if bl_key in blocklist and not bl_key.startswith('__'):
                     pulse_logger.log(f"🚫 EC blocklist: skipping '{title}'")
                     continue
                 event_row = {
@@ -329,7 +336,7 @@ class EconomicCalendarPipeline:
 
             # Self-clean: drop blocklist entries FF no longer serves
             if blocklist:
-                stale = [k for k in blocklist if k not in ff_keys]
+                stale = [k for k in blocklist if k not in ff_keys and not k.startswith('__')]
                 if stale:
                     for k in stale:
                         del blocklist[k]
