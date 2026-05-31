@@ -88,33 +88,21 @@ def _validate_manual_input(event_title, actual_value):
         return False, 'Null bytes not allowed'
     return True, None
 
-def _run_partial_refresh(label, invalidate_econ=False, use_ec_cache=False):
+def _run_partial_refresh(label):
     """Recompute bias from cached pillars and save a fresh snapshot.
-
-    invalidate_econ=True forces a live econ fetch (needed after manual
-    input changes actual values). False (default) reuses the econ cache,
-    which is correct for size_mode toggles where only the directive text
-    needs to change.
-    use_ec_cache=True skips the live fetch entirely and reads the already-
-    modified EC cache — used by delete_ec_event so the deleted event is not
-    restored before the next scheduled Forex Factory refresh.
+    Always reads EC data from cache — callers must update the cache before
+    calling if their action changed EC event data. No outbound HTTP calls.
     """
-    from pipelines.economic_calendar import economic_calendar_pipeline
     from pipelines.institutional import institutional_pipeline
     from pipelines.recommendation import recommendation_engine
     from processors.data_formatter import data_formatter
     from processors.bias_calculator import bias_calculator
     from utils.cache import cache
 
-    if use_ec_cache:
-        ec_cached = cache.load('economic_calendar')
-        econ_data = ec_cached['data'] if ec_cached else {
-            'pillar': 'economic_calendar', 'events': [], 'pillar_score': 0, 'status': 'live'
-        }
-    else:
-        if invalidate_econ:
-            cache.delete('economic_calendar')
-        econ_data = economic_calendar_pipeline.fetch()
+    ec_cached = cache.load('economic_calendar')
+    econ_data = ec_cached['data'] if ec_cached else {
+        'pillar': 'economic_calendar', 'events': [], 'pillar_score': 0, 'status': 'live'
+    }
 
     macro_cached = cache.load('macro_sentiment')
     macro_data = macro_cached['data'] if macro_cached else {}
@@ -215,8 +203,32 @@ def manual_input():
         success = manual_input_pipeline.save_actual(event_title, actual_value, story_url)
 
         if success:
+            # Update the EC cache in place — no live Forex Factory fetch needed.
             try:
-                _run_partial_refresh(f"manual_input | {event_title}", invalidate_econ=True)
+                from pipelines.economic_calendar import economic_calendar_pipeline
+                from utils.cache import cache as _cache
+                ec_cached = _cache.load('economic_calendar')
+                if ec_cached:
+                    ec_data = ec_cached['data']
+                    for event in ec_data.get('events', []):
+                        if event.get('title') == event_title:
+                            result, market_impact, reason = economic_calendar_pipeline.get_market_implication(
+                                event_title, actual_value,
+                                event.get('forecast', ''), event.get('previous', '')
+                            )
+                            event['actual'] = actual_value
+                            event['result'] = result
+                            event['market_impact'] = market_impact
+                            event['reason'] = reason
+                            if story_url:
+                                event['story_url'] = story_url
+                            break
+                    ec_data['pillar_score'] = economic_calendar_pipeline.calculate_score(ec_data['events'])
+                    _cache.save('economic_calendar', ec_data)
+            except Exception as cache_err:
+                pulse_logger.log(f"⚠️ manual_input cache update failed: {cache_err}", level="WARNING")
+            try:
+                _run_partial_refresh(f"manual_input | {event_title}")
             except Exception as refresh_err:
                 pulse_logger.log(f"⚠️ manual_input partial refresh failed: {refresh_err}", level="WARNING")
 
@@ -257,8 +269,33 @@ def reset_manual_input():
             del inputs[event_title]
             atomic_write_json('/data/permanent_manual_inputs.json', inputs)
 
+        # Reset the event in the EC cache in place — no live Forex Factory fetch needed.
         try:
-            _run_partial_refresh(f"reset_manual_input | {event_title}", invalidate_econ=True)
+            from pipelines.economic_calendar import economic_calendar_pipeline
+            from utils.cache import cache as _cache
+            ec_cached = _cache.load('economic_calendar')
+            if ec_cached:
+                ec_data = ec_cached['data']
+                for event in ec_data.get('events', []):
+                    if event.get('title') == event_title:
+                        event['actual'] = 'Pending'
+                        if event.get('is_speech'):
+                            event['result'] = 'speech'
+                            event['market_impact'] = 'unknown'
+                            event['reason'] = f"{event_title} — No data to parse. Market will reprice on tone. No trade 30 minutes before."
+                        else:
+                            event['result'] = 'pending'
+                            event['market_impact'] = 'unknown'
+                            event['reason'] = f'{event_title} not yet released'
+                        event.pop('story_url', None)
+                        event.pop('story_context', None)
+                        break
+                ec_data['pillar_score'] = economic_calendar_pipeline.calculate_score(ec_data['events'])
+                _cache.save('economic_calendar', ec_data)
+        except Exception as cache_err:
+            pulse_logger.log(f"⚠️ reset_manual_input cache update failed: {cache_err}", level="WARNING")
+        try:
+            _run_partial_refresh(f"reset_manual_input | {event_title}")
         except Exception as refresh_err:
             pulse_logger.log(f"⚠️ reset_manual_input partial refresh failed: {refresh_err}", level="WARNING")
 
@@ -292,15 +329,13 @@ def delete_ec_event():
         economic_calendar_pipeline.add_to_blocklist(event_title, event.get('time_est', ''))
 
         # Strip the deleted event from the cache so the bias recompute below doesn't
-        # need a live Forex Factory fetch to apply the blocklist. Recompute the pillar
-        # score inline then save — _run_partial_refresh(use_ec_cache=True) will read
-        # this updated cache and do only local computation.
+        # need a live Forex Factory fetch to apply the blocklist.
         ec_data['events'] = [e for e in ec_data['events'] if e.get('title') != event_title]
         ec_data['pillar_score'] = economic_calendar_pipeline.calculate_score(ec_data['events'])
         cache.save('economic_calendar', ec_data)
 
         try:
-            _run_partial_refresh(f"delete_ec_event | {event_title}", use_ec_cache=True)
+            _run_partial_refresh(f"delete_ec_event | {event_title}")
         except Exception as refresh_err:
             pulse_logger.log(f"⚠️ delete_ec_event partial refresh failed: {refresh_err}", level="WARNING")
 
