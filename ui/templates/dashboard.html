@@ -355,6 +355,7 @@
                 <div class="flag-meta">
                     <span class="flag-status ${statusClass}">${isPending ? 'Pending' : e.result.toUpperCase()}</span>
                     <span class="flag-source">${e.time_est}</span>
+                    ${(isPending || (isSpeech && e.actual === 'Pending')) ? `<button onclick="deleteEcEvent('${e.title}')" style="margin-left:auto;background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Remove from today's calendar">✕</button>` : ''}
                 </div>
                 <div class="data-row"><span class="data-label">Previous</span><span class="data-value">${e.previous}</span></div>
                 <div class="data-row"><span class="data-label">Expected</span><span class="data-value">${e.forecast}</span></div>
@@ -749,6 +750,25 @@
                     fetchData();
                     scheduleRefresh();
                 }, 500);
+            }
+        } catch(e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function deleteEcEvent(eventTitle) {
+        if (!confirm('Remove "' + eventTitle + '" from today\'s calendar?\n\nIt will reappear on the next Forex Factory refresh.')) return;
+        try {
+            const response = await fetch('/api/delete_ec_event', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({event_title: eventTitle})
+            });
+            const result = await response.json();
+            if (result.status === 'deleted') {
+                setTimeout(() => { fetchData(); scheduleRefresh(); }, 500);
+            } else {
+                alert('Error: ' + (result.error || 'Unknown error'));
             }
         } catch(e) {
             alert('Error: ' + e.message);

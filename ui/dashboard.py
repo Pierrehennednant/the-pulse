@@ -88,13 +88,16 @@ def _validate_manual_input(event_title, actual_value):
         return False, 'Null bytes not allowed'
     return True, None
 
-def _run_partial_refresh(label, invalidate_econ=False):
+def _run_partial_refresh(label, invalidate_econ=False, use_ec_cache=False):
     """Recompute bias from cached pillars and save a fresh snapshot.
 
     invalidate_econ=True forces a live econ fetch (needed after manual
     input changes actual values). False (default) reuses the econ cache,
     which is correct for size_mode toggles where only the directive text
     needs to change.
+    use_ec_cache=True skips the live fetch entirely and reads the already-
+    modified EC cache — used by delete_ec_event so the deleted event is not
+    restored before the next scheduled Forex Factory refresh.
     """
     from pipelines.economic_calendar import economic_calendar_pipeline
     from pipelines.institutional import institutional_pipeline
@@ -103,9 +106,15 @@ def _run_partial_refresh(label, invalidate_econ=False):
     from processors.bias_calculator import bias_calculator
     from utils.cache import cache
 
-    if invalidate_econ:
-        cache.delete('economic_calendar')
-    econ_data = economic_calendar_pipeline.fetch()
+    if use_ec_cache:
+        ec_cached = cache.load('economic_calendar')
+        econ_data = ec_cached['data'] if ec_cached else {
+            'pillar': 'economic_calendar', 'events': [], 'pillar_score': 0, 'status': 'live'
+        }
+    else:
+        if invalidate_econ:
+            cache.delete('economic_calendar')
+        econ_data = economic_calendar_pipeline.fetch()
 
     macro_cached = cache.load('macro_sentiment')
     macro_data = macro_cached['data'] if macro_cached else {}
@@ -246,6 +255,43 @@ def reset_manual_input():
             pulse_logger.log(f"⚠️ reset_manual_input partial refresh failed: {refresh_err}", level="WARNING")
 
         return jsonify({'status': 'reset', 'event': event_title})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/delete_ec_event', methods=['POST'])
+@require_auth
+def delete_ec_event():
+    try:
+        from pipelines.economic_calendar import economic_calendar_pipeline
+        from utils.cache import cache
+
+        data = request.get_json()
+        event_title = data.get('event_title')
+        if not isinstance(event_title, str) or not event_title:
+            return jsonify({'error': 'Missing event_title'}), 400
+        if len(event_title) > _MAX_TITLE_LEN or '\x00' in event_title:
+            return jsonify({'error': 'Invalid event_title'}), 400
+
+        ec_cached = cache.load('economic_calendar')
+        if not ec_cached:
+            return jsonify({'error': 'No EC cache to modify'}), 404
+
+        ec_data = ec_cached['data']
+        original_count = len(ec_data.get('events', []))
+        ec_data['events'] = [e for e in ec_data.get('events', []) if e.get('title') != event_title]
+
+        if len(ec_data['events']) == original_count:
+            return jsonify({'error': 'Event not found'}), 404
+
+        ec_data['pillar_score'] = economic_calendar_pipeline.calculate_score(ec_data['events'])
+        cache.save('economic_calendar', ec_data)
+
+        try:
+            _run_partial_refresh(f"delete_ec_event | {event_title}", use_ec_cache=True)
+        except Exception as refresh_err:
+            pulse_logger.log(f"⚠️ delete_ec_event partial refresh failed: {refresh_err}", level="WARNING")
+
+        return jsonify({'status': 'deleted', 'event': event_title})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
