@@ -16,7 +16,7 @@ from pipelines.geopolitical import geopolitical_pipeline
 from pipelines.weekly_summary import weekly_summary_pipeline
 from pipelines.ai_lens import ai_lens_pipeline
 from pipelines.manual_input import manual_input_pipeline
-from pipelines.recommendation import recommendation_engine
+from pipelines.recommendation import recommendation_engine, prop_firm_engine
 
 from processors.data_formatter import data_formatter
 from processors.bias_calculator import bias_calculator
@@ -86,6 +86,13 @@ def run_pulse():
             formatted_data.get('macro', {}),
         )
         bias_score['recommendation'] = recommendation
+
+        prop_recommendation = prop_firm_engine.compute_prop_firm(
+            bias_score,
+            formatted_data.get('geopolitical', {}),
+            formatted_data.get('macro', {}),
+        )
+        bias_score['recommendation_prop'] = prop_recommendation
 
         weekly_summary_pipeline.fetch(formatted_data=formatted_data, bias=bias_score)
         snapshot_id = snapshot_generator.save(bias_score, formatted_data)

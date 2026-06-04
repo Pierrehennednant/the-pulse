@@ -146,6 +146,14 @@ def _run_partial_refresh(label):
     )
     bias_score['recommendation'] = recommendation
 
+    from pipelines.recommendation import prop_firm_engine
+    prop_recommendation = prop_firm_engine.compute_prop_firm(
+        bias_score,
+        formatted_data.get('geopolitical', {}),
+        formatted_data.get('macro', {}),
+    )
+    bias_score['recommendation_prop'] = prop_recommendation
+
     snapshot_generator.save(bias_score, formatted_data)
     pulse_logger.log(f"✅ {label} partial refresh complete")
 
