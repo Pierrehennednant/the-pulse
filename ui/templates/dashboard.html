@@ -220,8 +220,8 @@
         <span>⚡ THE PULSE</span>
         <div style="width:1px;height:14px;background:#1e2d4a;flex-shrink:0"></div>
         <div style="display:inline-flex;background:#080c18;border-radius:20px;padding:2px;border:1px solid #1a2438">
-            <button id="tab-btn-live" onclick="switchRecTab('live')" style="background:#152540;color:#4a9eff;border:none;border-radius:16px;padding:3px 11px;font-size:9px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:background .15s,color .15s">LIVE</button>
-            <button id="tab-btn-prop" onclick="switchRecTab('prop')" style="background:transparent;color:#4a5a70;border:none;border-radius:16px;padding:3px 11px;font-size:9px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:background .15s,color .15s">PROP FIRM</button>
+            <button id="tab-btn-live" onclick="switchRecTab('live',this)" style="background:#152540;color:#4a9eff;border:none;border-radius:16px;padding:3px 11px;font-size:9px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:background .15s,color .15s">LIVE</button>
+            <button id="tab-btn-prop" onclick="switchRecTab('prop',this)" style="background:transparent;color:#4a5a70;border:none;border-radius:16px;padding:3px 11px;font-size:9px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:background .15s,color .15s">PROP FIRM</button>
         </div>
     </div>
     <div class="datetime" id="datetime"></div>
@@ -246,8 +246,8 @@
         <div id="trading-directive" style="margin-top:10px;padding:10px 16px;border-radius:8px;background:#0d1224;border:1px solid #1e2d4a;font-size:14px;font-weight:600;text-align:center"></div>
         <div style="margin-top:8px;display:flex;align-items:center;justify-content:center;gap:10px">
             <span style="font-size:11px;color:#4a5a70;text-transform:uppercase;letter-spacing:0.5px">Size Mode:</span>
-            <button id="mode-quarter" onclick="setSizeMode('quarter')" style="padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #2a4a7a;background:#1a2d4a;color:#4a9eff">Quarter</button>
-            <button id="mode-normal" onclick="setSizeMode('normal')" style="padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #1e2d4a;background:#0d1224;color:#4a5a70">Normal</button>
+            <button id="mode-quarter" onclick="setSizeMode('quarter',this)" style="padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #2a4a7a;background:#1a2d4a;color:#4a9eff">Quarter</button>
+            <button id="mode-normal" onclick="setSizeMode('normal',this)" style="padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #1e2d4a;background:#0d1224;color:#4a5a70">Normal</button>
         </div>
         <div id="rec-container" style="display:none;margin-top:12px;background:#0d1224;border-radius:10px;border:1px solid #1a2438;padding:14px 16px 12px">
             <div id="rec-panel-live" style="text-align:center">
@@ -525,9 +525,62 @@
         return html;
     }
 
+    let _snapshot = null;
+    let _toggleLocked = false;
+
+    function _lockToggles(btn) {
+        if (_toggleLocked) return false;
+        _toggleLocked = true;
+        ['tab-btn-live', 'tab-btn-prop', 'mode-quarter', 'mode-normal'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { el.disabled = true; el.style.opacity = el === btn ? '0.65' : '0.35'; }
+        });
+        setTimeout(() => {
+            _toggleLocked = false;
+            ['tab-btn-live', 'tab-btn-prop', 'mode-quarter', 'mode-normal'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) { el.disabled = false; el.style.opacity = ''; }
+            });
+        }, 1000);
+        return true;
+    }
+
+    function _renderRecFromSnapshot() {
+        if (!_snapshot) return;
+        const bias = _snapshot.bias || {};
+        const rec = bias.recommendation;
+        const propRec = bias.recommendation_prop;
+        const container = document.getElementById('rec-container');
+        const liveLabel = document.getElementById('live-rec-label');
+        const liveReason = document.getElementById('live-rec-reason');
+        if (rec && rec.label) {
+            const liveColor = rec.mode === 'normal' ? '#2ecc71' : '#f39c12';
+            liveLabel.style.color = liveColor;
+            liveLabel.textContent = '💡 ' + rec.label;
+            liveReason.textContent = rec.reason;
+        } else {
+            liveLabel.textContent = '';
+            liveReason.textContent = '';
+        }
+        const propLabel = document.getElementById('prop-rec-label');
+        const propReason = document.getElementById('prop-rec-reason');
+        if (propRec && propRec.label) {
+            const propColor = propRec.mode === 'normal' ? '#2ecc71' : '#e67e22';
+            propLabel.style.color = propColor;
+            propLabel.textContent = '💡 ' + propRec.label;
+            propReason.textContent = propRec.reason;
+        } else {
+            propLabel.textContent = '';
+            propReason.textContent = '';
+        }
+        const activeRec = _activeRecTab === 'live' ? rec : propRec;
+        container.style.display = (activeRec && activeRec.label) ? 'block' : 'none';
+    }
+
     let _activeRecTab = 'live';
 
-    function switchRecTab(tab) {
+    function switchRecTab(tab, btn) {
+        if (btn && !_lockToggles(btn)) return;
         _activeRecTab = tab;
         localStorage.setItem('pulseRecTab', tab);
         const btnLive = document.getElementById('tab-btn-live');
@@ -543,10 +596,12 @@
             btnLive.style.background = 'transparent'; btnLive.style.color = '#4a5a70';
             panelLive.style.display = 'none'; panelProp.style.display = 'block';
         }
+        _renderRecFromSnapshot();
     }
 
     function updateDashboard(snapshot) {
         if (!snapshot) return;
+        _snapshot = snapshot;
         const bias = snapshot.bias || {};
         const pillars = snapshot.pillars || {};
         setGauge(bias.gauge_value || 50, bias);
@@ -572,36 +627,7 @@
             updateSizeModeButtons(bias.size_mode);
         }
 
-        // Recommendation card — visible only when at least one tab has an active recommendation
-        const rec = bias.recommendation;
-        const propRec = bias.recommendation_prop;
-        if (rec || propRec) {
-            document.getElementById('rec-container').style.display = 'block';
-            const liveLabel = document.getElementById('live-rec-label');
-            const liveReason = document.getElementById('live-rec-reason');
-            if (rec && rec.label) {
-                const liveColor = rec.mode === 'normal' ? '#2ecc71' : '#f39c12';
-                liveLabel.style.color = liveColor;
-                liveLabel.textContent = '💡 ' + rec.label;
-                liveReason.textContent = rec.reason;
-            } else {
-                liveLabel.textContent = '';
-                liveReason.textContent = '';
-            }
-            const propLabel = document.getElementById('prop-rec-label');
-            const propReason = document.getElementById('prop-rec-reason');
-            if (propRec && propRec.label) {
-                const propColor = propRec.mode === 'normal' ? '#2ecc71' : '#e67e22';
-                propLabel.style.color = propColor;
-                propLabel.textContent = '💡 ' + propRec.label;
-                propReason.textContent = propRec.reason;
-            } else {
-                propLabel.textContent = '';
-                propReason.textContent = '';
-            }
-        } else {
-            document.getElementById('rec-container').style.display = 'none';
-        }
+        _renderRecFromSnapshot();
 
         document.getElementById('last-updated-text').textContent = `Last updated: ${new Date(snapshot.timestamp).toLocaleTimeString('en-US', {timeZone: 'America/New_York'})} EST`;
         const staleBanner = document.getElementById('staleness-banner');
@@ -856,7 +882,8 @@
         }
     }
 
-    async function setSizeMode(mode) {
+    async function setSizeMode(mode, btn) {
+        if (btn && !_lockToggles(btn)) return;
         try {
             localStorage.setItem('pulseSizeMode', mode);
             await fetch('/api/size_mode', {
