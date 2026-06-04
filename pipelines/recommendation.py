@@ -295,8 +295,8 @@ class PropFirmRecommendationEngine(RecommendationEngine):
     """Prop Firm recommendation — same pillar data, lenient thresholds.
 
     Differences from Live:
-      Bias threshold       ±0.42  (Live ±0.50)
-      Show-card confidence   38%  (Live 20%)
+      Bias threshold       ±0.40  (Live ±0.50)
+      Show-card confidence   42%  (Live 20%)
       Normal-size confidence 45%  (Live 55%)
       Regime streak           1 day (Live 2 days)
       VIX hard limit, 2+ high-uncertainty block: unchanged
@@ -309,17 +309,17 @@ class PropFirmRecommendationEngine(RecommendationEngine):
             vix_value = vix.get('value', 0) or 0
             vix_elevated = vix_value >= 22
 
-            # Prop Firm bias threshold ±0.42
+            # Prop Firm bias threshold ±0.40
             final_score = (bias_data.get('final_score', 0) or 0) if bias_data else 0
-            if final_score >= 0.42:
+            if final_score >= 0.40:
                 bias = 'Bullish'
-            elif final_score <= -0.42:
+            elif final_score <= -0.40:
                 bias = 'Bearish'
             else:
                 return None
 
             confidence = bias_data.get('confidence', 0) if bias_data else 0
-            if confidence < 38:
+            if confidence < 42:
                 return None
 
             # Hard blocks (identical to Live)
