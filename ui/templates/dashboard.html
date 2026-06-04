@@ -242,15 +242,20 @@
             <button id="mode-quarter" onclick="setSizeMode('quarter')" style="padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #2a4a7a;background:#1a2d4a;color:#4a9eff">Quarter</button>
             <button id="mode-normal" onclick="setSizeMode('normal')" style="padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #1e2d4a;background:#0d1224;color:#4a5a70">Normal</button>
         </div>
-        <div id="recommendation-card" style="display:none;margin-top:8px;padding:10px 16px;border-radius:8px;background:#0d1224;border:1px solid #1e2d4a;text-align:center">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#4a5a70;margin-bottom:4px">Live Account</div>
-            <div id="recommendation-label" style="font-size:13px;font-weight:600;color:#4a9eff;margin-bottom:4px"></div>
-            <div id="recommendation-reason" style="font-size:11px;color:#7a8fa8;line-height:1.5"></div>
-        </div>
-        <div id="prop-recommendation-card" style="display:none;margin-top:6px;padding:10px 16px;border-radius:8px;background:#0d1224;border:1px solid #3a2800;text-align:center">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#e67e22;margin-bottom:4px">🏢 Prop Firm</div>
-            <div id="prop-recommendation-label" style="font-size:13px;font-weight:600;margin-bottom:4px"></div>
-            <div id="prop-recommendation-reason" style="font-size:11px;color:#7a8fa8;line-height:1.5"></div>
+        <div id="rec-container" style="display:none;margin-top:8px;background:#0d1224;border-radius:8px;border:1px solid #1e2d4a;overflow:hidden">
+            <div style="display:flex;background:#080c18;">
+                <button id="tab-btn-live" onclick="switchRecTab('live')" style="flex:1;background:none;border:none;border-bottom:2px solid #4a9eff;padding:9px 0 7px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#4a9eff;cursor:pointer;transition:color .15s,border-color .15s">Live</button>
+                <div style="width:1px;background:#1e2d4a;margin:4px 0"></div>
+                <button id="tab-btn-prop" onclick="switchRecTab('prop')" style="flex:1;background:none;border:none;border-bottom:2px solid transparent;padding:9px 0 7px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#4a5a70;cursor:pointer;transition:color .15s,border-color .15s">🏢 Prop Firm</button>
+            </div>
+            <div id="rec-panel-live" style="padding:12px 16px;text-align:center;border-top:1px solid #1e2d4a">
+                <div id="live-rec-label" style="font-size:13px;font-weight:600;margin-bottom:4px"></div>
+                <div id="live-rec-reason" style="font-size:11px;color:#7a8fa8;line-height:1.5"></div>
+            </div>
+            <div id="rec-panel-prop" style="display:none;padding:12px 16px;text-align:center;border-top:1px solid #1e2d4a">
+                <div id="prop-rec-label" style="font-size:13px;font-weight:600;margin-bottom:4px"></div>
+                <div id="prop-rec-reason" style="font-size:11px;color:#7a8fa8;line-height:1.5"></div>
+            </div>
         </div>
         <div class="last-updated"><span class="live-dot"></span><span id="last-updated-text">Fetching data...</span></div>
     </div>
@@ -519,6 +524,28 @@
         return html;
     }
 
+    let _activeRecTab = 'live';
+
+    function switchRecTab(tab) {
+        _activeRecTab = tab;
+        const btnLive = document.getElementById('tab-btn-live');
+        const btnProp = document.getElementById('tab-btn-prop');
+        const panelLive = document.getElementById('rec-panel-live');
+        const panelProp = document.getElementById('rec-panel-prop');
+        const container = document.getElementById('rec-container');
+        if (tab === 'live') {
+            btnLive.style.color = '#4a9eff'; btnLive.style.borderBottomColor = '#4a9eff';
+            btnProp.style.color = '#4a5a70'; btnProp.style.borderBottomColor = 'transparent';
+            panelLive.style.display = 'block'; panelProp.style.display = 'none';
+            container.style.borderColor = '#1e2d4a';
+        } else {
+            btnProp.style.color = '#e67e22'; btnProp.style.borderBottomColor = '#e67e22';
+            btnLive.style.color = '#4a5a70'; btnLive.style.borderBottomColor = 'transparent';
+            panelLive.style.display = 'none'; panelProp.style.display = 'block';
+            container.style.borderColor = '#3a2800';
+        }
+    }
+
     function updateDashboard(snapshot) {
         if (!snapshot) return;
         const bias = snapshot.bias || {};
@@ -546,36 +573,46 @@
             updateSizeModeButtons(bias.size_mode);
         }
 
-        // Recommendation display
+        // Tabbed recommendation section — always visible, always shows a reading
+        document.getElementById('rec-container').style.display = 'block';
         const rec = bias.recommendation;
-        const recCard = document.getElementById('recommendation-card');
-        const recLabel = document.getElementById('recommendation-label');
-        const recReason = document.getElementById('recommendation-reason');
+        const liveLabel = document.getElementById('live-rec-label');
+        const liveReason = document.getElementById('live-rec-reason');
         if (rec && rec.label) {
-            const recColor = rec.mode === 'normal' ? '#2ecc71' : '#f39c12';
-            recLabel.style.color = recColor;
-            recLabel.textContent = '💡 ' + rec.label;
-            recReason.textContent = rec.reason;
-            recCard.style.borderColor = recColor + '40';
-            recCard.style.display = 'block';
+            const liveColor = rec.mode === 'normal' ? '#2ecc71' : '#f39c12';
+            liveLabel.style.color = liveColor;
+            liveLabel.textContent = '💡 ' + rec.label;
+            liveReason.textContent = rec.reason;
         } else {
-            recCard.style.display = 'none';
+            liveLabel.style.color = '#4a5a70';
+            const fs = bias.final_score || 0;
+            if ((bias.bias || 'Neutral') === 'Neutral') {
+                liveLabel.textContent = '⚫ Neutral — Sit out';
+                liveReason.textContent = `Score ${fs.toFixed(3)} — no directional edge (need ±0.50)`;
+            } else {
+                liveLabel.textContent = `⚫ ${bias.bias} lean — Sit out`;
+                liveReason.textContent = `Confidence ${bias.confidence || 0}% — below Live entry floor`;
+            }
         }
-
-        // Prop Firm recommendation card
         const propRec = bias.recommendation_prop;
-        const propCard = document.getElementById('prop-recommendation-card');
-        const propLabel = document.getElementById('prop-recommendation-label');
-        const propReason = document.getElementById('prop-recommendation-reason');
+        const propLabel = document.getElementById('prop-rec-label');
+        const propReason = document.getElementById('prop-rec-reason');
+        const pfScore = bias.final_score || 0;
+        const pfBias = pfScore >= 0.42 ? 'Bullish' : pfScore <= -0.42 ? 'Bearish' : 'Neutral';
         if (propRec && propRec.label) {
             const propColor = propRec.mode === 'normal' ? '#2ecc71' : '#e67e22';
             propLabel.style.color = propColor;
             propLabel.textContent = '💡 ' + propRec.label;
             propReason.textContent = propRec.reason;
-            propCard.style.borderColor = propColor + '40';
-            propCard.style.display = 'block';
         } else {
-            propCard.style.display = 'none';
+            propLabel.style.color = '#4a5a70';
+            if (pfBias === 'Neutral') {
+                propLabel.textContent = '⚫ Neutral — Sit out';
+                propReason.textContent = `Score ${pfScore.toFixed(3)} — no directional edge (need ±0.42)`;
+            } else {
+                propLabel.textContent = `⚫ ${pfBias} lean — Sit out`;
+                propReason.textContent = `Confidence ${bias.confidence || 0}% — below Prop Firm entry floor (need 38%+)`;
+            }
         }
 
         document.getElementById('last-updated-text').textContent = `Last updated: ${new Date(snapshot.timestamp).toLocaleTimeString('en-US', {timeZone: 'America/New_York'})} EST`;
