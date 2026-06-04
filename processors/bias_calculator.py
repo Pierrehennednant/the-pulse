@@ -29,16 +29,21 @@ class BiasCalculator:
 
             # COT decay — stale weekly data weighs less as the week progresses
             if config_key == 'institutional':
-                today = datetime.now(pytz.timezone(TIMEZONE)).weekday()
+                now = datetime.now(pytz.timezone(TIMEZONE))
+                today = now.weekday()
                 if today in [5, 6]:  # Weekend — COT data maximally stale, contribute nothing
                     weight = 0
                     pulse_logger.log("📉 COT decay — weekend, institutional weight zeroed")
-                elif today not in [4]:  # Mon–Thu — apply progressive decay
-                    # Mon=0: 80%, Tue=1: 60%, Wed=2: 40%, Thu=3: 20%
-                    cot_decay = {0: 0.8, 1: 0.6, 2: 0.4, 3: 0.2}
-                    decay_factor = cot_decay[today]
+                else:
+                    if today == 4:  # Friday — 55% floor until 3:30 PM EST; full weight once COT posts
+                        cutoff = now.replace(hour=15, minute=30, second=0, microsecond=0)
+                        decay_factor = 1.0 if now >= cutoff else 0.55
+                    else:
+                        # Mon=0: 100%, Tue=1: 85%, Wed=2: 70%, Thu=3: 55%
+                        decay_factor = {0: 1.0, 1: 0.85, 2: 0.70, 3: 0.55}[today]
                     weight = weight * decay_factor
-                    pulse_logger.log(f"📉 COT decay applied — {int(decay_factor * 100)}% of {base_weight}% base = {weight:.1f}% effective")
+                    if decay_factor < 1.0:
+                        pulse_logger.log(f"📉 COT decay applied — {int(decay_factor * 100)}% of {base_weight}% base = {weight:.1f}% effective")
 
             contribution = score * (weight / 100)
             total_score += contribution
