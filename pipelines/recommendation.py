@@ -289,3 +289,125 @@ class RecommendationEngine:
             return None
 
 recommendation_engine = RecommendationEngine()
+
+
+class PropFirmRecommendationEngine(RecommendationEngine):
+    """Prop Firm recommendation — same pillar data, lenient thresholds.
+
+    Differences from Live:
+      Bias threshold       ±0.42  (Live ±0.50)
+      Show-card confidence   38%  (Live 20%)
+      Normal-size confidence 45%  (Live 55%)
+      Regime streak           1 day (Live 2 days)
+      VIX hard limit, 2+ high-uncertainty block: unchanged
+    """
+
+    def compute_prop_firm(self, bias_data, geo_data, macro_data):
+        try:
+            uncertainty = self.get_uncertainty_signal(geo_data)
+            vix = macro_data.get('vix', {}) if macro_data else {}
+            vix_value = vix.get('value', 0) or 0
+            vix_elevated = vix_value >= 22
+
+            # Prop Firm bias threshold ±0.42
+            final_score = (bias_data.get('final_score', 0) or 0) if bias_data else 0
+            if final_score >= 0.42:
+                bias = 'Bullish'
+            elif final_score <= -0.42:
+                bias = 'Bearish'
+            else:
+                return None
+
+            confidence = bias_data.get('confidence', 0) if bias_data else 0
+            if confidence < 38:
+                return None
+
+            # Hard blocks (identical to Live)
+            if uncertainty['signal'] == 'high' and uncertainty['high_count'] >= 2:
+                return {
+                    'mode': 'quarter',
+                    'label': f'Prop Firm — {bias}, Quarter entry',
+                    'reason': 'Multiple high-uncertainty events active — execution conditions fragmented',
+                    'strength': 'strong',
+                    'bias': bias,
+                }
+
+            if vix_elevated:
+                return {
+                    'mode': 'quarter',
+                    'label': f'Prop Firm — {bias}, Quarter entry',
+                    'reason': 'VIX ≥ 22 — stay at quarter',
+                    'strength': 'moderate',
+                    'bias': bias,
+                }
+
+            # Below normal-size threshold
+            if confidence < 45:
+                return {
+                    'mode': 'quarter',
+                    'label': f'Prop Firm — {bias}, Quarter entry',
+                    'reason': f'Confidence {confidence}% — Prop Firm quarter threshold met',
+                    'strength': 'weak',
+                    'bias': bias,
+                }
+
+            # Single high-uncertainty event
+            if uncertainty['signal'] == 'high':
+                return {
+                    'mode': 'quarter',
+                    'label': f'Prop Firm — {bias}, Quarter entry',
+                    'reason': 'High-uncertainty event active — stay at quarter',
+                    'strength': 'moderate',
+                    'bias': bias,
+                }
+
+            # Regime consistency: 1 day (vs Live 2 days), avg confidence ≥ 45%
+            consistency = self.get_regime_consistency()
+            prop_consistent = (
+                consistency['days'] >= 1 and
+                consistency.get('avg_confidence', 0) >= 45 and
+                consistency.get('direction') == bias
+            )
+
+            if uncertainty['signal'] == 'medium':
+                if prop_consistent:
+                    return {
+                        'mode': 'normal',
+                        'label': f'Prop Firm — {bias}, Normal entry',
+                        'reason': f"Confirmed {consistency['days']} day · Developing event manageable",
+                        'strength': 'moderate',
+                        'bias': bias,
+                    }
+                return {
+                    'mode': 'quarter',
+                    'label': f'Prop Firm — {bias}, Quarter entry',
+                    'reason': 'Developing event — awaiting regime confirmation',
+                    'strength': 'weak',
+                    'bias': bias,
+                }
+
+            # Low / no uncertainty
+            if prop_consistent:
+                days = consistency['days']
+                avg = int(consistency['avg_confidence'])
+                return {
+                    'mode': 'normal',
+                    'label': f'Prop Firm — {bias}, Normal entry',
+                    'reason': f"Regime confirmed {days} day{'s' if days > 1 else ''} · {avg}% avg confidence",
+                    'strength': 'strong',
+                    'bias': bias,
+                }
+            return {
+                'mode': 'quarter',
+                'label': f'Prop Firm — {bias}, Quarter entry',
+                'reason': 'Entry conditions met — awaiting regime confirmation for Normal',
+                'strength': 'weak',
+                'bias': bias,
+            }
+
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Prop Firm recommendation engine failed: {e}", level="WARNING")
+            return None
+
+
+prop_firm_engine = PropFirmRecommendationEngine()

@@ -243,8 +243,14 @@
             <button id="mode-normal" onclick="setSizeMode('normal')" style="padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #1e2d4a;background:#0d1224;color:#4a5a70">Normal</button>
         </div>
         <div id="recommendation-card" style="display:none;margin-top:8px;padding:10px 16px;border-radius:8px;background:#0d1224;border:1px solid #1e2d4a;text-align:center">
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#4a5a70;margin-bottom:4px">Live Account</div>
             <div id="recommendation-label" style="font-size:13px;font-weight:600;color:#4a9eff;margin-bottom:4px"></div>
             <div id="recommendation-reason" style="font-size:11px;color:#7a8fa8;line-height:1.5"></div>
+        </div>
+        <div id="prop-recommendation-card" style="display:none;margin-top:6px;padding:10px 16px;border-radius:8px;background:#0d1224;border:1px solid #3a2800;text-align:center">
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#e67e22;margin-bottom:4px">🏢 Prop Firm</div>
+            <div id="prop-recommendation-label" style="font-size:13px;font-weight:600;margin-bottom:4px"></div>
+            <div id="prop-recommendation-reason" style="font-size:11px;color:#7a8fa8;line-height:1.5"></div>
         </div>
         <div class="last-updated"><span class="live-dot"></span><span id="last-updated-text">Fetching data...</span></div>
     </div>
@@ -554,6 +560,22 @@
             recCard.style.display = 'block';
         } else {
             recCard.style.display = 'none';
+        }
+
+        // Prop Firm recommendation card
+        const propRec = bias.recommendation_prop;
+        const propCard = document.getElementById('prop-recommendation-card');
+        const propLabel = document.getElementById('prop-recommendation-label');
+        const propReason = document.getElementById('prop-recommendation-reason');
+        if (propRec && propRec.label) {
+            const propColor = propRec.mode === 'normal' ? '#2ecc71' : '#e67e22';
+            propLabel.style.color = propColor;
+            propLabel.textContent = '💡 ' + propRec.label;
+            propReason.textContent = propRec.reason;
+            propCard.style.borderColor = propColor + '40';
+            propCard.style.display = 'block';
+        } else {
+            propCard.style.display = 'none';
         }
 
         document.getElementById('last-updated-text').textContent = `Last updated: ${new Date(snapshot.timestamp).toLocaleTimeString('en-US', {timeZone: 'America/New_York'})} EST`;
