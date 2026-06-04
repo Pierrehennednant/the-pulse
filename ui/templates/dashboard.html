@@ -530,6 +530,7 @@
 
     function switchRecTab(tab) {
         _activeRecTab = tab;
+        localStorage.setItem('pulseRecTab', tab);
         const btnLive = document.getElementById('tab-btn-live');
         const btnProp = document.getElementById('tab-btn-prop');
         const panelLive = document.getElementById('rec-panel-live');
@@ -869,6 +870,7 @@
 
     async function setSizeMode(mode) {
         try {
+            localStorage.setItem('pulseSizeMode', mode);
             await fetch('/api/size_mode', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -910,6 +912,10 @@
         refreshTimer = setInterval(fetchData, 5 * 60 * 1000);
     }
 
+    const _savedTab = localStorage.getItem('pulseRecTab');
+    if (_savedTab) switchRecTab(_savedTab);
+    const _savedSize = localStorage.getItem('pulseSizeMode');
+    if (_savedSize) updateSizeModeButtons(_savedSize);
     fetchData();
     loadAILens();
     scheduleRefresh();
