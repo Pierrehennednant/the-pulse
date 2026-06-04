@@ -216,7 +216,14 @@
 </head>
 <body>
 <div class="header">
-    <div class="logo">⚡ THE PULSE</div>
+    <div class="logo" style="display:flex;align-items:center;gap:10px">
+        <span>⚡ THE PULSE</span>
+        <div style="width:1px;height:14px;background:#1e2d4a;flex-shrink:0"></div>
+        <div style="display:inline-flex;background:#080c18;border-radius:20px;padding:2px;border:1px solid #1a2438">
+            <button id="tab-btn-live" onclick="switchRecTab('live')" style="background:#152540;color:#4a9eff;border:none;border-radius:16px;padding:3px 11px;font-size:9px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:background .15s,color .15s">LIVE</button>
+            <button id="tab-btn-prop" onclick="switchRecTab('prop')" style="background:transparent;color:#4a5a70;border:none;border-radius:16px;padding:3px 11px;font-size:9px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:background .15s,color .15s">PROP FIRM</button>
+        </div>
+    </div>
     <div class="datetime" id="datetime"></div>
     <a class="share-btn" id="share-btn" href="#" onclick="copySnapshot()">📤 Share</a>
 </div>
@@ -242,17 +249,12 @@
             <button id="mode-quarter" onclick="setSizeMode('quarter')" style="padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #2a4a7a;background:#1a2d4a;color:#4a9eff">Quarter</button>
             <button id="mode-normal" onclick="setSizeMode('normal')" style="padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #1e2d4a;background:#0d1224;color:#4a5a70">Normal</button>
         </div>
-        <div id="rec-container" style="display:none;margin-top:8px;background:#0d1224;border-radius:8px;border:1px solid #1e2d4a;overflow:hidden">
-            <div style="display:flex;background:#080c18;">
-                <button id="tab-btn-live" onclick="switchRecTab('live')" style="flex:1;background:none;border:none;border-bottom:2px solid #4a9eff;padding:9px 0 7px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#4a9eff;cursor:pointer;transition:color .15s,border-color .15s">Live</button>
-                <div style="width:1px;background:#1e2d4a;margin:4px 0"></div>
-                <button id="tab-btn-prop" onclick="switchRecTab('prop')" style="flex:1;background:none;border:none;border-bottom:2px solid transparent;padding:9px 0 7px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#4a5a70;cursor:pointer;transition:color .15s,border-color .15s">🏢 Prop Firm</button>
-            </div>
-            <div id="rec-panel-live" style="padding:12px 16px;text-align:center;border-top:1px solid #1e2d4a">
+        <div id="rec-container" style="display:none;margin-top:12px;background:#0d1224;border-radius:10px;border:1px solid #1a2438;padding:14px 16px 12px">
+            <div id="rec-panel-live" style="text-align:center">
                 <div id="live-rec-label" style="font-size:13px;font-weight:600;margin-bottom:4px"></div>
                 <div id="live-rec-reason" style="font-size:11px;color:#7a8fa8;line-height:1.5"></div>
             </div>
-            <div id="rec-panel-prop" style="display:none;padding:12px 16px;text-align:center;border-top:1px solid #1e2d4a">
+            <div id="rec-panel-prop" style="display:none;text-align:center">
                 <div id="prop-rec-label" style="font-size:13px;font-weight:600;margin-bottom:4px"></div>
                 <div id="prop-rec-reason" style="font-size:11px;color:#7a8fa8;line-height:1.5"></div>
             </div>
@@ -532,17 +534,14 @@
         const btnProp = document.getElementById('tab-btn-prop');
         const panelLive = document.getElementById('rec-panel-live');
         const panelProp = document.getElementById('rec-panel-prop');
-        const container = document.getElementById('rec-container');
         if (tab === 'live') {
-            btnLive.style.color = '#4a9eff'; btnLive.style.borderBottomColor = '#4a9eff';
-            btnProp.style.color = '#4a5a70'; btnProp.style.borderBottomColor = 'transparent';
+            btnLive.style.background = '#152540'; btnLive.style.color = '#4a9eff';
+            btnProp.style.background = 'transparent'; btnProp.style.color = '#4a5a70';
             panelLive.style.display = 'block'; panelProp.style.display = 'none';
-            container.style.borderColor = '#1e2d4a';
         } else {
-            btnProp.style.color = '#e67e22'; btnProp.style.borderBottomColor = '#e67e22';
-            btnLive.style.color = '#4a5a70'; btnLive.style.borderBottomColor = 'transparent';
+            btnProp.style.background = '#2a1400'; btnProp.style.color = '#e67e22';
+            btnLive.style.background = 'transparent'; btnLive.style.color = '#4a5a70';
             panelLive.style.display = 'none'; panelProp.style.display = 'block';
-            container.style.borderColor = '#3a2800';
         }
     }
 
