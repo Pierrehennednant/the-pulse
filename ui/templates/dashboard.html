@@ -472,7 +472,7 @@
         html += `
             <div class="data-row"><span class="data-label">VIX</span><span class="data-value" style="color:${macroColor(vix.signal)}">${vix.value || '--'} <small>(${vix.change >= 0 ? '+' : ''}${vix.change || 0})</small></span></div>
             <div class="data-row"><span class="data-label">VXN</span><span class="data-value" style="color:${macroColor(vxn.signal)}">${vxn.value || '--'} <small>(${vxn.change >= 0 ? '+' : ''}${vxn.change || 0})</small></span></div>
-            <div class="data-row"><span class="data-label">Fear & Greed</span><span class="data-value" style="color:${macroColor(fg.signal)}">${fg.score || '--'} — ${fg.rating || 'N/A'}</span></div>`;
+            <div class="data-row"><span class="data-label">Fear & Greed</span><span class="data-value" style="color:${macroColor(fg.signal)}">${fg.score || '--'} — ${signalLabel(fg.signal) || fg.rating || 'N/A'}</span></div>`;
         return html;
     }
 
