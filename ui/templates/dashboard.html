@@ -249,6 +249,7 @@
             <button id="mode-quarter" onclick="setSizeMode('quarter',this)" style="padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #2a4a7a;background:#1a2d4a;color:#4a9eff">Quarter</button>
             <button id="mode-normal" onclick="setSizeMode('normal',this)" style="padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #1e2d4a;background:#0d1224;color:#4a5a70">Normal</button>
         </div>
+        <div style="text-align:center;margin-top:7px;font-size:11px;color:#4a5a70"><span class="live-dot"></span><span id="last-updated-text">Fetching data...</span></div>
         <div id="rec-container" style="display:none;margin-top:12px;background:#0d1224;border-radius:10px;border:1px solid #1a2438;padding:14px 16px 12px">
             <div id="rec-panel-live" style="text-align:center">
                 <div id="live-rec-label" style="font-size:13px;font-weight:600;margin-bottom:4px"></div>
@@ -300,7 +301,7 @@
         <div id="geo-content">Loading...</div>
     </div>
     <div class="refresh-bar">
-        <span class="live-dot"></span> Auto-refreshes every 5 minutes &nbsp;·&nbsp; <span id="last-updated-text">Fetching data...</span>
+        <span class="live-dot"></span> Auto-refreshes every 5 minutes
     </div>
 </div>
 <script>
