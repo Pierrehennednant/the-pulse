@@ -297,7 +297,7 @@ class PropFirmRecommendationEngine(RecommendationEngine):
     Differences from Live:
       Bias threshold       ±0.40  (Live ±0.50)
       Show-card confidence   42%  (Live 20%)
-      Normal-size confidence 45%  (Live 55%)
+      Normal-size confidence 42%  (Live 55%)
       Regime streak           1 day (Live 2 days)
       VIX hard limit, 2+ high-uncertainty block: unchanged
     """
@@ -342,7 +342,7 @@ class PropFirmRecommendationEngine(RecommendationEngine):
                 }
 
             # Below normal-size threshold
-            if confidence < 45:
+            if confidence < 42:
                 return {
                     'mode': 'quarter',
                     'label': f'Prop Firm — {bias}, Quarter entry',
