@@ -3,7 +3,10 @@ import os
 from datetime import datetime
 import pytz
 from config import TIMEZONE
+from utils.file_lock import atomic_write_json
 from utils.logger import pulse_logger
+
+PROP_FIRM_THRESHOLD_FILE = '/data/prop_firm_weekly_threshold.json'
 
 class RecommendationEngine:
     def __init__(self):
@@ -308,6 +311,39 @@ class PropFirmRecommendationEngine(RecommendationEngine):
             return 0
         return sum(1 for e in econ_data.get('events', []) if e.get('impact', '').lower() == 'high')
 
+    def _get_weekly_threshold(self, econ_data):
+        """Return (bias_threshold, red_folder_count, is_new_week).
+
+        Reads the cached threshold for the current ISO week. On a new week,
+        recomputes from econ_data, persists to disk, and returns is_new_week=True.
+        """
+        now = datetime.now(self.timezone)
+        iso = now.isocalendar()
+        current_week = (iso[0], iso[1])
+
+        try:
+            if os.path.exists(PROP_FIRM_THRESHOLD_FILE):
+                with open(PROP_FIRM_THRESHOLD_FILE, 'r') as f:
+                    cached = json.load(f)
+                if tuple(cached.get('week', [])) == current_week:
+                    return cached['threshold'], cached['red_folder_count'], False
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Prop Firm threshold cache read failed: {e}", level="WARNING")
+
+        red_folder_count = self._count_red_folder_events(econ_data)
+        threshold = 0.38 if red_folder_count <= 1 else 0.40
+        try:
+            atomic_write_json(PROP_FIRM_THRESHOLD_FILE, {
+                'week': list(current_week),
+                'threshold': threshold,
+                'red_folder_count': red_folder_count,
+                'set_at': now.isoformat(),
+            })
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Prop Firm threshold cache write failed: {e}", level="WARNING")
+
+        return threshold, red_folder_count, True
+
     def compute_prop_firm(self, bias_data, geo_data, macro_data, econ_data=None):
         try:
             uncertainty = self.get_uncertainty_signal(geo_data)
@@ -315,13 +351,14 @@ class PropFirmRecommendationEngine(RecommendationEngine):
             vix_value = vix.get('value', 0) or 0
             vix_elevated = vix_value >= 22
 
-            # Dynamic bias threshold: quiet week (≤1 red folder) → ±0.38, else ±0.40
-            red_folder_count = self._count_red_folder_events(econ_data)
-            bias_threshold = 0.38 if red_folder_count <= 1 else 0.40
-            pulse_logger.log(
-                f"📊 Prop Firm bias threshold: ±{bias_threshold} "
-                f"({red_folder_count} red folder event{'s' if red_folder_count != 1 else ''} this week)"
-            )
+            # Bias threshold set once per ISO week; logged only on new-week detection
+            bias_threshold, red_folder_count, is_new_week = self._get_weekly_threshold(econ_data)
+            if is_new_week:
+                ev = 'event' if red_folder_count == 1 else 'events'
+                pulse_logger.log(
+                    f"📊 Prop Firm — new week: bias threshold ±{bias_threshold} "
+                    f"({red_folder_count} red folder {ev} scheduled this week)"
+                )
 
             # Dynamic bias threshold
             final_score = (bias_data.get('final_score', 0) or 0) if bias_data else 0
