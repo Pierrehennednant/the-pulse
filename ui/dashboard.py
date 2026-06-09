@@ -151,6 +151,7 @@ def _run_partial_refresh(label):
         bias_score,
         formatted_data.get('geopolitical', {}),
         formatted_data.get('macro', {}),
+        formatted_data.get('economic', {}),
     )
     bias_score['recommendation_prop'] = prop_recommendation
 
