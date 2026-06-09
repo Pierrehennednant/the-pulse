@@ -295,25 +295,39 @@ class PropFirmRecommendationEngine(RecommendationEngine):
     """Prop Firm recommendation — same pillar data, lenient thresholds.
 
     Differences from Live:
-      Bias threshold       ±0.40  (Live ±0.50)
+      Bias threshold       ±0.38 quiet week (≤1 red folder) / ±0.40 normal week (≥2)  (Live ±0.50)
       Show-card confidence   42%  (Live 20%)
       Normal-size confidence 42%  (Live 55%)
       Regime streak           1 day (Live 2 days)
       VIX hard limit, 2+ high-uncertainty block: unchanged
     """
 
-    def compute_prop_firm(self, bias_data, geo_data, macro_data):
+    def _count_red_folder_events(self, econ_data):
+        """Count high-impact (red folder) events for the current week."""
+        if not econ_data:
+            return 0
+        return sum(1 for e in econ_data.get('events', []) if e.get('impact', '').lower() == 'high')
+
+    def compute_prop_firm(self, bias_data, geo_data, macro_data, econ_data=None):
         try:
             uncertainty = self.get_uncertainty_signal(geo_data)
             vix = macro_data.get('vix', {}) if macro_data else {}
             vix_value = vix.get('value', 0) or 0
             vix_elevated = vix_value >= 22
 
-            # Prop Firm bias threshold ±0.40
+            # Dynamic bias threshold: quiet week (≤1 red folder) → ±0.38, else ±0.40
+            red_folder_count = self._count_red_folder_events(econ_data)
+            bias_threshold = 0.38 if red_folder_count <= 1 else 0.40
+            pulse_logger.log(
+                f"📊 Prop Firm bias threshold: ±{bias_threshold} "
+                f"({red_folder_count} red folder event{'s' if red_folder_count != 1 else ''} this week)"
+            )
+
+            # Dynamic bias threshold
             final_score = (bias_data.get('final_score', 0) or 0) if bias_data else 0
-            if final_score >= 0.40:
+            if final_score >= bias_threshold:
                 bias = 'Bullish'
-            elif final_score <= -0.40:
+            elif final_score <= -bias_threshold:
                 bias = 'Bearish'
             else:
                 return None
