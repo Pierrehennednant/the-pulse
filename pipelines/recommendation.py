@@ -295,14 +295,16 @@ recommendation_engine = RecommendationEngine()
 
 
 class PropFirmRecommendationEngine(RecommendationEngine):
-    """Prop Firm recommendation — same pillar data, lenient thresholds.
+    """Prop Firm recommendation — same pillar data, aggressive entry thresholds.
 
     Differences from Live:
-      Bias threshold       ±0.38 quiet week (≤1 red folder) / ±0.40 normal week (≥2)  (Live ±0.50)
-      Show-card confidence   42%  (Live 20%)
-      Normal-size confidence 42%  (Live 55%)
-      Regime streak           1 day (Live 2 days)
-      VIX hard limit, 2+ high-uncertainty block: unchanged
+      Bias threshold         ±0.30 quiet week (≤1 red folder) / ±0.33 normal week (≥2)  (Live ±0.50)
+      Show-card confidence     30%  (Live 20%)
+      Quarter-entry confidence 35%  (Live 55%)
+      Pillar alignment         2+ pillars must agree with bias direction  (Live: none)
+      Consistency streak       0 days  (Live 2 days)
+      VIX hard limit           ≤ 26  (Live ≤ 22)
+      High-uncertainty block   3+ articles ≥ 70  (Live 2+)
     """
 
     def _count_red_folder_events(self, econ_data):
@@ -331,7 +333,7 @@ class PropFirmRecommendationEngine(RecommendationEngine):
             pulse_logger.log(f"⚠️ Prop Firm threshold cache read failed: {e}", level="WARNING")
 
         red_folder_count = self._count_red_folder_events(econ_data)
-        threshold = 0.38 if red_folder_count <= 1 else 0.40
+        threshold = 0.30 if red_folder_count <= 1 else 0.33
         try:
             atomic_write_json(PROP_FIRM_THRESHOLD_FILE, {
                 'week': list(current_week),
@@ -349,7 +351,7 @@ class PropFirmRecommendationEngine(RecommendationEngine):
             uncertainty = self.get_uncertainty_signal(geo_data)
             vix = macro_data.get('vix', {}) if macro_data else {}
             vix_value = vix.get('value', 0) or 0
-            vix_elevated = vix_value >= 22
+            vix_elevated = vix_value >= 26
 
             # Bias threshold set once per ISO week; logged only on new-week detection
             bias_threshold, red_folder_count, is_new_week = self._get_weekly_threshold(econ_data)
@@ -360,7 +362,6 @@ class PropFirmRecommendationEngine(RecommendationEngine):
                     f"({red_folder_count} red folder {ev} scheduled this week)"
                 )
 
-            # Dynamic bias threshold
             final_score = (bias_data.get('final_score', 0) or 0) if bias_data else 0
             if final_score >= bias_threshold:
                 bias = 'Bullish'
@@ -369,12 +370,18 @@ class PropFirmRecommendationEngine(RecommendationEngine):
             else:
                 return None
 
-            confidence = bias_data.get('confidence', 0) if bias_data else 0
-            if confidence < 42:
+            # Minimum pillar alignment: at least 2 pillars must agree with the bias direction
+            pillar_signals = (bias_data.get('pillar_signals', []) or []) if bias_data else []
+            aligned = pillar_signals.count(bias.lower())
+            if aligned < 2:
                 return None
 
-            # Hard blocks (identical to Live)
-            if uncertainty['signal'] == 'high' and uncertainty['high_count'] >= 2:
+            confidence = bias_data.get('confidence', 0) if bias_data else 0
+            if confidence < 30:
+                return None
+
+            # Hard blocks
+            if uncertainty['signal'] == 'high' and uncertainty['high_count'] >= 3:
                 return {
                     'mode': 'quarter',
                     'label': f'Prop Firm — {bias}, Quarter entry',
@@ -387,22 +394,20 @@ class PropFirmRecommendationEngine(RecommendationEngine):
                 return {
                     'mode': 'quarter',
                     'label': f'Prop Firm — {bias}, Quarter entry',
-                    'reason': 'VIX ≥ 22 — stay at quarter',
+                    'reason': 'VIX ≥ 26 — stay at quarter',
                     'strength': 'moderate',
                     'bias': bias,
                 }
 
-            # Below normal-size threshold
-            if confidence < 42:
+            if confidence < 35:
                 return {
                     'mode': 'quarter',
                     'label': f'Prop Firm — {bias}, Quarter entry',
-                    'reason': f'Confidence {confidence}% — Prop Firm quarter threshold met',
+                    'reason': f'Confidence {confidence}% — building toward Normal',
                     'strength': 'weak',
                     'bias': bias,
                 }
 
-            # Single high-uncertainty event
             if uncertainty['signal'] == 'high':
                 return {
                     'mode': 'quarter',
@@ -412,47 +417,21 @@ class PropFirmRecommendationEngine(RecommendationEngine):
                     'bias': bias,
                 }
 
-            # Regime consistency: 1 day (vs Live 2 days), avg confidence ≥ 45%
-            consistency = self.get_regime_consistency()
-            prop_consistent = (
-                consistency['days'] >= 1 and
-                consistency.get('avg_confidence', 0) >= 45 and
-                consistency.get('direction') == bias
-            )
-
             if uncertainty['signal'] == 'medium':
-                if prop_consistent:
-                    return {
-                        'mode': 'normal',
-                        'label': f'Prop Firm — {bias}, Normal entry',
-                        'reason': f"Confirmed {consistency['days']} day · Developing event manageable",
-                        'strength': 'moderate',
-                        'bias': bias,
-                    }
-                return {
-                    'mode': 'quarter',
-                    'label': f'Prop Firm — {bias}, Quarter entry',
-                    'reason': 'Developing event — awaiting regime confirmation',
-                    'strength': 'weak',
-                    'bias': bias,
-                }
-
-            # Low / no uncertainty
-            if prop_consistent:
-                days = consistency['days']
-                avg = int(consistency['avg_confidence'])
                 return {
                     'mode': 'normal',
                     'label': f'Prop Firm — {bias}, Normal entry',
-                    'reason': f"Regime confirmed {days} day{'s' if days > 1 else ''} · {avg}% avg confidence",
-                    'strength': 'strong',
+                    'reason': 'Developing event manageable · Conditions met',
+                    'strength': 'moderate',
                     'bias': bias,
                 }
+
+            # Low / no uncertainty, confidence ≥ 35%, 2+ pillars aligned
             return {
-                'mode': 'quarter',
-                'label': f'Prop Firm — {bias}, Quarter entry',
-                'reason': 'Entry conditions met — awaiting regime confirmation for Normal',
-                'strength': 'weak',
+                'mode': 'normal',
+                'label': f'Prop Firm — {bias}, Normal entry',
+                'reason': f'{aligned} pillars aligned · Conditions clear',
+                'strength': 'strong',
                 'bias': bias,
             }
 
