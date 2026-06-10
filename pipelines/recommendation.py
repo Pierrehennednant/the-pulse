@@ -301,7 +301,7 @@ class PropFirmRecommendationEngine(RecommendationEngine):
       Bias threshold         ±0.30 quiet week (≤1 red folder) / ±0.33 normal week (≥2)  (Live ±0.50)
       Show-card confidence     30%  (Live 20%)
       Quarter-entry confidence 35%  (Live 55%)
-      Pillar alignment         2+ pillars must agree with bias direction  (Live: none)
+      Pillar alignment         ≥45% of standard pillar weight must agree with bias  (Live: none)
       Consistency streak       0 days  (Live 2 days)
       VIX hard limit           ≤ 26  (Live ≤ 22)
       High-uncertainty block   3+ articles ≥ 70  (Live 2+)
@@ -370,10 +370,16 @@ class PropFirmRecommendationEngine(RecommendationEngine):
             else:
                 return None
 
-            # Minimum pillar alignment: at least 2 pillars must agree with the bias direction
-            pillar_signals = (bias_data.get('pillar_signals', []) or []) if bias_data else []
-            aligned = pillar_signals.count(bias.lower())
-            if aligned < 2:
+            # Pillar weight alignment: pillars agreeing with bias must cover ≥45% of standard weight
+            _STANDARD_WEIGHTS = {'economic_calendar': 30, 'geopolitical': 25, 'institutional': 25, 'macro_sentiment': 20}
+            pillar_contributions = (bias_data.get('pillar_contributions', {}) or {}) if bias_data else {}
+            aligned_weight = sum(
+                _STANDARD_WEIGHTS.get(p, 0)
+                for p, c in pillar_contributions.items()
+                if (bias == 'Bullish' and c.get('raw_score', 0) > 0.15)
+                or (bias == 'Bearish' and c.get('raw_score', 0) < -0.15)
+            )
+            if aligned_weight < 45:
                 return None
 
             confidence = bias_data.get('confidence', 0) if bias_data else 0
@@ -426,11 +432,11 @@ class PropFirmRecommendationEngine(RecommendationEngine):
                     'bias': bias,
                 }
 
-            # Low / no uncertainty, confidence ≥ 35%, 2+ pillars aligned
+            # Low / no uncertainty, confidence ≥ 35%, ≥45% pillar weight aligned
             return {
                 'mode': 'normal',
                 'label': f'Prop Firm — {bias}, Normal entry',
-                'reason': f'{aligned} pillars aligned · Conditions clear',
+                'reason': f'{aligned_weight}% pillar weight aligned · Conditions clear',
                 'strength': 'strong',
                 'bias': bias,
             }
