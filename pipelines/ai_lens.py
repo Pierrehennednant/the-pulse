@@ -15,28 +15,29 @@ _GROK_MODEL = 'grok-4.20-0309-reasoning'
 _SYSTEM_PROMPT = (
     "You are writing the AI Lens for a systematic NQ and ES futures trader. "
     "Write like a sharp trader, not an analyst. No academic language, no passive constructions, no filler. "
-    "Total output must be under 180 words across all four sections. "
-    "Produce exactly four sections in this order, using these exact headers:\n\n"
+    "Total output must be under 160 words across all three sections. No word count in output. "
+    "Produce exactly three sections in this order, using these exact headers:\n\n"
     "Why We're Here\n"
-    "2-3 sentences maximum. State directly why the market is in this regime. Punchy and specific.\n\n"
+    "2-3 sentences maximum. Diagnostic and direct — explain exactly why the current pillar configuration is producing this signal or non-signal. No filler.\n\n"
     "Psychological Insight\n"
-    "Lead with what the put/call options sentiment and institutional COT positioning are actually showing. "
-    "Then contrast what the 95% are doing versus what the disciplined 5% are doing. "
-    "If put/call data is unavailable, say so plainly — do not fill with generic assumptions.\n\n"
-    "Regime Context\n"
-    "One short paragraph. State the day count, the historical range for this type of regime, "
-    "and where we are in that window.\n\n"
-    "What to Watch\n"
-    "Exactly 2-3 bullet points. Each bullet is one specific trigger that would break this regime. "
+    "Reason from the actual data passed in — current confidence level, days since last signal, "
+    "pillar agreement percentage, VIX, Fear & Greed. Do not follow a script or template. "
+    "Identify what the data actually suggests about the current psychological state of the market "
+    "and the trader. Be specific to today's numbers, not generic. Name what is actually happening, "
+    "give one concrete behavioral instruction tied to it. "
+    "Tone must be direct, coach-like, and slightly uncomfortable — never vague or encouraging.\n\n"
+    "What To Watch\n"
+    "Exactly 2-3 bullet points. Each bullet is one specific, concrete, measurable trigger with a "
+    "threshold that would change the current signal if crossed. No general themes. "
     "Start each bullet directly with the trigger — no introduction line, no label, no dash before the text. "
     "Never combine two triggers into one bullet.\n\n"
     "Hard rules: "
-    "never give directional bias or trade recommendations, always frame the contrast as 5% vs 95%. "
+    "maximum 160 words total across all three sections. "
+    "No regime context. No historical comparisons. No word count in output. "
+    "Never give directional bias or trade recommendations. "
     "Translate all pillar scores into qualitative language such as 'strongly bullish', 'mildly bearish', or 'neutral'. "
     "A score of zero is neutral — never say zero or any number. "
-    "Never include raw put/call scores or COT contract counts — translate to plain language only. "
-    "Never use the word 'cap'. "
-    "Never include a word count in your output."
+    "Never include raw COT contract counts — translate to plain language only."
 )
 
 
@@ -140,15 +141,39 @@ class AILensPipeline:
         vxn = macro.get('vxn', {})
         fg = macro.get('fear_greed', {})
 
-        # Compute regime age from daily history
+        # Derive trading context metrics from daily history
         history = self._load_daily_history()
-        regime_age = 0
-        for entry in history:
-            if entry['bias'] == bias:
-                regime_age += 1
-            else:
-                break
-        regime_age = max(regime_age, 1)
+
+        # Consecutive days confidence below 40% (today first)
+        days_below_40 = 1 if confidence < 40 else 0
+        if days_below_40:
+            for entry in history:
+                if entry['confidence'] < 40:
+                    days_below_40 += 1
+                else:
+                    break
+
+        # Days since last tradeable signal (bias != Neutral, confidence >= 20%)
+        if bias != 'Neutral' and confidence >= 20:
+            days_since_signal = 0
+        else:
+            days_since_signal = 1
+            for entry in history:
+                if entry['bias'] != 'Neutral' and entry['confidence'] >= 20:
+                    break
+                days_since_signal += 1
+
+        # Pillar agreement percentage (pillar signals aligned with current bias)
+        pillar_signals = bias_score.get('pillar_signals', [])
+        if bias != 'Neutral' and pillar_signals:
+            agreeing = pillar_signals.count(bias.lower())
+            agreement_pct = round(agreeing / len(pillar_signals) * 100)
+        else:
+            agreement_pct = 0
+
+        # Quiet week mode from prop firm recommendation metadata
+        prop_rec = bias_score.get('recommendation_prop')
+        quiet_week = prop_rec.get('quiet_week', False) if isinstance(prop_rec, dict) else False
 
         geo_items = geo.get('news_items', [])
         geo_headlines = [
@@ -161,8 +186,14 @@ class AILensPipeline:
         upcoming = [e for e in econ_events if e.get('result') in ('pending', 'speech')][:5]
 
         lines = [
-            f"CURRENT STATE:",
-            f"  Bias: {bias} | Confidence: {confidence}% | Regime age: {regime_age} day(s)",
+            "CURRENT STATE:",
+            f"  Bias: {bias} | Confidence: {confidence}%",
+            "",
+            "TRADING CONTEXT:",
+            f"  Days confidence below 40% (consecutive): {days_below_40}",
+            f"  Days since last tradeable signal: {days_since_signal}",
+            f"  Pillar agreement: {agreement_pct}% of active pillars aligned with bias",
+            f"  Quiet week mode (Prop Firm): {'ACTIVE — EC weighted at 15%' if quiet_week else 'inactive — standard weights'}",
             "",
             "PILLAR SCORES (current):",
         ]
@@ -182,51 +213,25 @@ class AILensPipeline:
             "",
         ]
 
-        # Put/call options sentiment — sourced from CNN F&G component (5-day avg put/call ratio)
-        pc_score = fg.get('put_call_score')
-        pc_rating = fg.get('put_call_rating')
-        if pc_score is not None:
-            lines += [
-                "MARKET PSYCHOLOGY INDICATORS:",
-                f"  Put/Call Options (5-day avg): {pc_rating} (score: {pc_score}/100)",
-                "  Context: low score = elevated put buying / active hedging; high score = call-heavy / complacency",
-                "",
-            ]
-        else:
-            lines += ["MARKET PSYCHOLOGY INDICATORS: put/call sentiment unavailable", ""]
-
-        # Institutional COT block — explicit behavioral anchor for psychology section
+        # Institutional COT
         nq_fut = inst.get('nq_futures', {})
         es_fut = inst.get('es_futures', {})
         cot_history = inst.get('cot_history', [])
         if inst.get('status') != 'unavailable' and (nq_fut or es_fut):
-            nq_net = nq_fut.get('combined_net', 0)
             nq_pct = nq_fut.get('net_pct', 0)
             nq_dir = nq_fut.get('direction', 'unknown')
             nq_trend = self._cot_trend(cot_history, 'nq_net_pct')
-            es_net = es_fut.get('combined_net', 0)
             es_pct = es_fut.get('net_pct', 0)
             es_dir = es_fut.get('direction', 'unknown')
             es_trend = self._cot_trend(cot_history, 'es_net_pct')
             lines += [
                 "INSTITUTIONAL POSITIONING (COT):",
-                f"  NQ: institutions net {nq_dir} at {abs(nq_net):,} contracts ({nq_pct:.1f}% net) — {nq_trend} 3-week trend",
-                f"  ES: institutions net {es_dir} at {abs(es_net):,} contracts ({es_pct:.1f}% net) — {es_trend} 3-week trend",
+                f"  NQ: institutions net {nq_dir} ({nq_pct:.1f}% net) — {nq_trend} 3-week trend",
+                f"  ES: institutions net {es_dir} ({es_pct:.1f}% net) — {es_trend} 3-week trend",
                 "",
             ]
         else:
             lines += ["INSTITUTIONAL POSITIONING (COT): unavailable", ""]
-
-        if history:
-            lines.append(f"DAILY SNAPSHOT HISTORY (last {len(history)} closing days, newest first):")
-            for i, entry in enumerate(history, 1):
-                scores = ', '.join(f"{k}={v}" for k, v in entry['pillar_scores'].items())
-                lines.append(
-                    f"  Day {i} ({entry['date']}): "
-                    f"Bias={entry['bias']}, Confidence={entry['confidence']}%, "
-                    f"pillars=[{scores}]"
-                )
-            lines.append("")
 
         if geo_headlines:
             lines.append("ACTIVE GEOPOLITICAL HEADLINES:")
