@@ -298,26 +298,45 @@ class PropFirmRecommendationEngine(RecommendationEngine):
     """Prop Firm recommendation — same pillar data, aggressive entry thresholds.
 
     Differences from Live:
-      Bias threshold         ±0.30 quiet week (≤1 red folder) / ±0.33 normal week (≥2)  (Live ±0.50)
+      Bias threshold         ±0.30 quiet week (≤1 red folder day) / ±0.33 standard week (≥2)  (Live ±0.50)
       Show-card confidence     30%  (Live 20%)
       Quarter-entry confidence 35%  (Live 55%)
-      Pillar alignment         ≥45% of standard pillar weight must agree with bias  (Live: none)
+      Pillar alignment         ≥45% of total week weight must agree with bias
+                               Quiet week: EC 15%, total 85%, threshold ≥38.25%
+                               Standard week: EC 30%, total 100%, threshold ≥45%  (Live: none)
       Consistency streak       0 days  (Live 2 days)
       VIX hard limit           ≤ 26  (Live ≤ 22)
       High-uncertainty block   3+ articles ≥ 70  (Live 2+)
+
+    Quiet week = 0 or 1 calendar days with at least one red folder event.
+    A day with multiple red folder events counts as 1 red folder day.
+    Threshold evaluated once per ISO week; persisted to PROP_FIRM_THRESHOLD_FILE.
     """
 
-    def _count_red_folder_events(self, econ_data):
-        """Count high-impact (red folder) events for the current week."""
+    _WEEK_WEIGHTS = {
+        'standard': {'economic_calendar': 30, 'geopolitical': 25, 'institutional': 25, 'macro_sentiment': 20},
+        'quiet':    {'economic_calendar': 15, 'geopolitical': 25, 'institutional': 25, 'macro_sentiment': 20},
+    }
+
+    def _count_red_folder_days(self, econ_data):
+        """Count calendar days with at least one red folder (high-impact) event this week."""
         if not econ_data:
             return 0
-        return sum(1 for e in econ_data.get('events', []) if e.get('impact', '').lower() == 'high')
+        red_days = set()
+        for e in econ_data.get('events', []):
+            if e.get('impact', '').lower() == 'high':
+                time_est = e.get('time_est', '')
+                day = time_est.split(',')[0] if ',' in time_est else time_est[:10]
+                if day:
+                    red_days.add(day)
+        return len(red_days)
 
     def _get_weekly_threshold(self, econ_data):
-        """Return (bias_threshold, red_folder_count, is_new_week).
+        """Return week mode dict. Reads cache for current ISO week; recomputes on new week.
 
-        Reads the cached threshold for the current ISO week. On a new week,
-        recomputes from econ_data, persists to disk, and returns is_new_week=True.
+        Returns dict with keys:
+          bias_threshold, red_folder_days, is_new_week, is_quiet_week,
+          ec_weight, total_weight, alignment_threshold
         """
         now = datetime.now(self.timezone)
         iso = now.isocalendar()
@@ -327,24 +346,67 @@ class PropFirmRecommendationEngine(RecommendationEngine):
             if os.path.exists(PROP_FIRM_THRESHOLD_FILE):
                 with open(PROP_FIRM_THRESHOLD_FILE, 'r') as f:
                     cached = json.load(f)
-                if tuple(cached.get('week', [])) == current_week:
-                    return cached['threshold'], cached['red_folder_count'], False
+                if tuple(cached.get('week', [])) == current_week and 'is_quiet_week' in cached:
+                    return {
+                        'bias_threshold': cached['threshold'],
+                        'red_folder_days': cached['red_folder_days'],
+                        'is_new_week': False,
+                        'is_quiet_week': cached['is_quiet_week'],
+                        'ec_weight': cached['ec_weight'],
+                        'total_weight': cached['total_weight'],
+                        'alignment_threshold': cached['alignment_threshold'],
+                    }
         except Exception as e:
             pulse_logger.log(f"⚠️ Prop Firm threshold cache read failed: {e}", level="WARNING")
 
-        red_folder_count = self._count_red_folder_events(econ_data)
-        threshold = 0.30 if red_folder_count <= 1 else 0.33
+        red_folder_days = self._count_red_folder_days(econ_data)
+        is_quiet = red_folder_days <= 1
+        threshold = 0.30 if is_quiet else 0.33
+        ec_weight = 15 if is_quiet else 30
+        total_weight = 85 if is_quiet else 100
+        alignment_threshold = round(total_weight * 0.45, 2)  # 38.25 (quiet) or 45.0 (standard)
+
         try:
             atomic_write_json(PROP_FIRM_THRESHOLD_FILE, {
                 'week': list(current_week),
                 'threshold': threshold,
-                'red_folder_count': red_folder_count,
+                'red_folder_days': red_folder_days,
+                'is_quiet_week': is_quiet,
+                'ec_weight': ec_weight,
+                'total_weight': total_weight,
+                'alignment_threshold': alignment_threshold,
                 'set_at': now.isoformat(),
             })
         except Exception as e:
             pulse_logger.log(f"⚠️ Prop Firm threshold cache write failed: {e}", level="WARNING")
 
-        return threshold, red_folder_count, True
+        return {
+            'bias_threshold': threshold,
+            'red_folder_days': red_folder_days,
+            'is_new_week': True,
+            'is_quiet_week': is_quiet,
+            'ec_weight': ec_weight,
+            'total_weight': total_weight,
+            'alignment_threshold': alignment_threshold,
+        }
+
+    def _no_rec(self, week_info):
+        """No-recommendation sentinel — carries quiet week metadata for dashboard display."""
+        return {
+            'label': None,
+            'quiet_week': week_info['is_quiet_week'],
+            'ec_weight': week_info['ec_weight'],
+            'bias_threshold': week_info['bias_threshold'],
+        }
+
+    def _rec(self, week_info, **kwargs):
+        """Build a recommendation dict with quiet week metadata attached."""
+        return {
+            'quiet_week': week_info['is_quiet_week'],
+            'ec_weight': week_info['ec_weight'],
+            'bias_threshold': week_info['bias_threshold'],
+            **kwargs,
+        }
 
     def compute_prop_firm(self, bias_data, geo_data, macro_data, econ_data=None):
         try:
@@ -353,14 +415,29 @@ class PropFirmRecommendationEngine(RecommendationEngine):
             vix_value = vix.get('value', 0) or 0
             vix_elevated = vix_value >= 26
 
-            # Bias threshold set once per ISO week; logged only on new-week detection
-            bias_threshold, red_folder_count, is_new_week = self._get_weekly_threshold(econ_data)
-            if is_new_week:
-                ev = 'event' if red_folder_count == 1 else 'events'
+            # Bias threshold and pillar weights set once per ISO week
+            week_info = self._get_weekly_threshold(econ_data)
+            is_quiet = week_info['is_quiet_week']
+            bias_threshold = week_info['bias_threshold']
+            ec_weight = week_info['ec_weight']
+            alignment_threshold = week_info['alignment_threshold']
+            red_folder_days = week_info['red_folder_days']
+
+            # Log new week detection
+            if week_info['is_new_week']:
+                mode_label = 'quiet' if is_quiet else 'standard'
+                day_s = 'day' if red_folder_days == 1 else 'days'
                 pulse_logger.log(
-                    f"📊 Prop Firm — new week: bias threshold ±{bias_threshold} "
-                    f"({red_folder_count} red folder {ev} scheduled this week)"
+                    f"📊 Prop Firm — new week detected: {mode_label} "
+                    f"({red_folder_days} red folder {day_s})"
                 )
+
+            # Log every cycle
+            day_s = 'day' if red_folder_days == 1 else 'days'
+            if is_quiet:
+                pulse_logger.log(f"🔇 Quiet week active — {red_folder_days} red folder {day_s} — EC {ec_weight}%, bias ±{bias_threshold}")
+            else:
+                pulse_logger.log(f"📅 Standard week — {red_folder_days} red folder {day_s} — EC {ec_weight}%, bias ±{bias_threshold}")
 
             final_score = (bias_data.get('final_score', 0) or 0) if bias_data else 0
             if final_score >= bias_threshold:
@@ -368,78 +445,78 @@ class PropFirmRecommendationEngine(RecommendationEngine):
             elif final_score <= -bias_threshold:
                 bias = 'Bearish'
             else:
-                return None
+                return self._no_rec(week_info)
 
-            # Pillar weight alignment: pillars agreeing with bias must cover ≥45% of standard weight
-            _STANDARD_WEIGHTS = {'economic_calendar': 30, 'geopolitical': 25, 'institutional': 25, 'macro_sentiment': 20}
+            # Pillar alignment: agreeing pillars must cover ≥45% of total week weight
+            pillar_weights = self._WEEK_WEIGHTS['quiet' if is_quiet else 'standard']
             pillar_contributions = (bias_data.get('pillar_contributions', {}) or {}) if bias_data else {}
             aligned_weight = sum(
-                _STANDARD_WEIGHTS.get(p, 0)
+                pillar_weights.get(p, 0)
                 for p, c in pillar_contributions.items()
                 if (bias == 'Bullish' and c.get('raw_score', 0) > 0.15)
                 or (bias == 'Bearish' and c.get('raw_score', 0) < -0.15)
             )
-            if aligned_weight < 45:
-                return None
+            if aligned_weight < alignment_threshold:
+                return self._no_rec(week_info)
 
             confidence = bias_data.get('confidence', 0) if bias_data else 0
             if confidence < 30:
-                return None
+                return self._no_rec(week_info)
 
             # Hard blocks
             if uncertainty['signal'] == 'high' and uncertainty['high_count'] >= 3:
-                return {
-                    'mode': 'quarter',
-                    'label': f'Prop Firm — {bias}, Quarter entry',
-                    'reason': 'Multiple high-uncertainty events active — execution conditions fragmented',
-                    'strength': 'strong',
-                    'bias': bias,
-                }
+                return self._rec(week_info,
+                    mode='quarter',
+                    label=f'Prop Firm — {bias}, Quarter entry',
+                    reason='Multiple high-uncertainty events active — execution conditions fragmented',
+                    strength='strong',
+                    bias=bias,
+                )
 
             if vix_elevated:
-                return {
-                    'mode': 'quarter',
-                    'label': f'Prop Firm — {bias}, Quarter entry',
-                    'reason': 'VIX ≥ 26 — stay at quarter',
-                    'strength': 'moderate',
-                    'bias': bias,
-                }
+                return self._rec(week_info,
+                    mode='quarter',
+                    label=f'Prop Firm — {bias}, Quarter entry',
+                    reason='VIX ≥ 26 — stay at quarter',
+                    strength='moderate',
+                    bias=bias,
+                )
 
             if confidence < 35:
-                return {
-                    'mode': 'quarter',
-                    'label': f'Prop Firm — {bias}, Quarter entry',
-                    'reason': f'Confidence {confidence}% — building toward Normal',
-                    'strength': 'weak',
-                    'bias': bias,
-                }
+                return self._rec(week_info,
+                    mode='quarter',
+                    label=f'Prop Firm — {bias}, Quarter entry',
+                    reason=f'Confidence {confidence}% — building toward Normal',
+                    strength='weak',
+                    bias=bias,
+                )
 
             if uncertainty['signal'] == 'high':
-                return {
-                    'mode': 'quarter',
-                    'label': f'Prop Firm — {bias}, Quarter entry',
-                    'reason': 'High-uncertainty event active — stay at quarter',
-                    'strength': 'moderate',
-                    'bias': bias,
-                }
+                return self._rec(week_info,
+                    mode='quarter',
+                    label=f'Prop Firm — {bias}, Quarter entry',
+                    reason='High-uncertainty event active — stay at quarter',
+                    strength='moderate',
+                    bias=bias,
+                )
 
             if uncertainty['signal'] == 'medium':
-                return {
-                    'mode': 'normal',
-                    'label': f'Prop Firm — {bias}, Normal entry',
-                    'reason': 'Developing event manageable · Conditions met',
-                    'strength': 'moderate',
-                    'bias': bias,
-                }
+                return self._rec(week_info,
+                    mode='normal',
+                    label=f'Prop Firm — {bias}, Normal entry',
+                    reason='Developing event manageable · Conditions met',
+                    strength='moderate',
+                    bias=bias,
+                )
 
-            # Low / no uncertainty, confidence ≥ 35%, ≥45% pillar weight aligned
-            return {
-                'mode': 'normal',
-                'label': f'Prop Firm — {bias}, Normal entry',
-                'reason': f'{aligned_weight}% pillar weight aligned · Conditions clear',
-                'strength': 'strong',
-                'bias': bias,
-            }
+            total_w = week_info['total_weight']
+            return self._rec(week_info,
+                mode='normal',
+                label=f'Prop Firm — {bias}, Normal entry',
+                reason=f'{aligned_weight}% of {total_w}% weight aligned · Conditions clear',
+                strength='strong',
+                bias=bias,
+            )
 
         except Exception as e:
             pulse_logger.log(f"⚠️ Prop Firm recommendation engine failed: {e}", level="WARNING")
