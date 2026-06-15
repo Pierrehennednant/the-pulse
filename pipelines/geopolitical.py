@@ -652,6 +652,8 @@ Respond with only one word: SAME or DIFFERENT"""
                     i['description'] = cached['summary']
                 if cached.get('uncertainty_score') is not None:
                     i['uncertainty_score'] = cached['uncertainty_score']
+                if cached.get('confidence') is not None:
+                    i['haiku_confidence'] = cached['confidence']
                 known_relevant.append(i)
 
         # Articles not yet classified — use keyword filter as temporary pass
@@ -830,23 +832,94 @@ Respond with only one word: SAME or DIFFERENT"""
         flags.sort(key=lambda x: x['priority'], reverse=True)
         return flags[:5]
 
+    def _get_article_priority(self, item):
+        """Return keyword-based flag priority for an article (0 = no qualifying keyword)."""
+        _keywords = {
+            'nuclear': 95, 'war': 90, 'invasion': 92, 'missile': 88,
+            'attack': 85, 'bomb': 85, 'default': 85, 'fomc': 85,
+            'rate hike': 80, 'rate cut': 80, 'powell': 78,
+            'federal reserve': 78, 'tariff': 80, 'debt ceiling': 80,
+            'shutdown': 75, 'sanctions': 75, 'troops': 78,
+            'recession': 75, 'ceasefire': 70, 'deal': 65,
+            'agreement': 65, 'escalation': 72, 'inflation': 70,
+            'gdp': 68, 'jobs': 67
+        }
+        _low_quality = [
+            'truthout', 'rawstory', 'mediaite', 'salon', 'huffpost', 'breitbart',
+            'dailykos', 'thegatewaypundit', 'thestockmarketwatch.com', 'rt.com',
+            'sputnik', 'investing.com', 'economictimes.indiatimes.com', 'asiaone.com',
+            'indiatimes.com', 'timesofindia.com', 'hindustantimes.com',
+            'thecanary.co', 'uctoday.com', 'tass.com', 'tass.ru',
+            'sputniknews.com', 'presstv.ir'
+        ]
+        _trusted = [
+            'reuters', 'associated press', 'cnbc', 'bloomberg',
+            'wall street journal', 'financial times', 'politico', 'axios',
+            'marketwatch', 'fox business', 'the hill'
+        ]
+        text = item.get('headline', '').lower()
+        source = item.get('source', '').lower()
+        if any(lqs in source for lqs in _low_quality):
+            return 0
+        priority = 0
+        for keyword, kw_score in _keywords.items():
+            if keyword in text:
+                if kw_score > priority:
+                    priority = kw_score
+        if priority >= 65 and any(ts in source for ts in _trusted):
+            priority = min(priority + 5, 99)
+        return priority
+
     def calculate_score(self, items, flags):
+        """Three-tier magnitude-weighted score. Tiers by keyword priority or Haiku confidence.
+        Tier 1 (±1.7, 4× weight): priority ≥80 or confidence ≥0.85
+        Tier 2 (±0.75, 2× weight): priority 65–79 or confidence 0.65–0.84
+        Tier 3 (±0.35, 1× weight): everything else
+        Each article score = tier_base × confidence × flag_multiplier, direction-signed.
+        Flag multiplier = 1 + 0.2 × (priority/100) when priority ≥65.
+        """
         if not items:
             return 0.0
-        scores = []
+        weighted_sum = 0.0
+        total_weight = 0.0
         for item in items:
-            if item.get('gemini_direction'):
-                scores.append(0.8 if item['gemini_direction'] == 'bullish' else -0.8 if item['gemini_direction'] == 'bearish' else 0.0)
+            # Direction
+            direction = item.get('gemini_direction')
+            if direction == 'bullish':
+                sign = 1.0
+            elif direction == 'bearish':
+                sign = -1.0
             else:
-                scores.append(item['sentiment_score'])
-        base_score = sum(scores) / len(scores) if scores else 0
-        flag_adjustment = 0
-        for flag in flags:
-            if flag['predicted_impact'] == 'bearish':
-                flag_adjustment -= 0.2 * (flag['priority'] / 100)
-            elif flag['predicted_impact'] == 'bullish':
-                flag_adjustment += 0.2 * (flag['priority'] / 100)
-        return round(max(-2.0, min(2.0, base_score + flag_adjustment)), 2)
+                s = item.get('sentiment_score', 0.0)
+                sign = 1.0 if s > 0 else (-1.0 if s < 0 else 0.0)
+            if sign == 0.0:
+                continue
+            # Haiku confidence (None for unclassified articles)
+            haiku_conf = item.get('haiku_confidence')
+            # Keyword priority for this article
+            kw_priority = self._get_article_priority(item)
+            # Step 1: Tier assignment
+            if (kw_priority >= 80) or (haiku_conf is not None and haiku_conf >= 0.85):
+                tier_score = 1.7
+                tier_weight = 4.0
+            elif (65 <= kw_priority <= 79) or (haiku_conf is not None and 0.65 <= haiku_conf < 0.85):
+                tier_score = 0.75
+                tier_weight = 2.0
+            else:
+                tier_score = 0.35
+                tier_weight = 1.0
+            # Step 2: Scale by confidence (default 1.0 when unavailable)
+            conf = haiku_conf if haiku_conf is not None else 1.0
+            article_score = tier_score * conf
+            # Step 3: Flag multiplier for keyword-qualifying articles
+            if kw_priority >= 65:
+                article_score *= (1 + 0.2 * kw_priority / 100)
+            # Apply direction and accumulate with tier weight
+            weighted_sum += article_score * sign * tier_weight
+            total_weight += tier_weight
+        if total_weight == 0:
+            return 0.0
+        return round(max(-2.0, min(2.0, weighted_sum / total_weight)), 2)
 
     def fetch(self):
         try:
