@@ -148,7 +148,12 @@ class InstitutionalPipeline:
         try:
             existing = self._load()
             if not self.is_friday() and existing:
-                pulse_logger.log("↺ Institutional — using weekly COT cache (updates Fridays)")
+                if not existing.get('pillar_score'):
+                    nq = existing.get('nq_futures') or {}
+                    es = existing.get('es_futures') or {}
+                    scores = [s for s in [nq.get('score'), es.get('score')] if s]
+                    existing['pillar_score'] = round(sum(scores) / len(scores), 2) if scores else 0
+                pulse_logger.log(f"↺ Institutional — using weekly COT cache | Score: {existing['pillar_score']}")
                 return existing
 
             nq_data, es_data = self.fetch_cot()
