@@ -6,5 +6,15 @@
     "direction": "bearish",
     "reason": "Emergency meeting with Fed, Treasury and major bank CEOs over AI cyber threat — systemic risk concern, cyber stocks already slumped",
     "classified_at": "2026-04-10T09:34:00"
+  },
+  "Oil prices fall on Iran peace deal, but may not go much lower": {
+    "relevant": true,
+    "confidence": 0.92,
+    "category": "geopolitical",
+    "direction": "bullish",
+    "reason": "Oil price drop driven by geopolitical risk premium removal on Iran peace deal — stocks jumped on the news, not fell. De-escalation reduces inflation pressure and supports equities.",
+    "summary": "Oil prices declined following an Iran peace deal as geopolitical risk premium was removed from energy markets. Equity markets reacted positively with stocks jumping on the news. The reduced energy price pressure eases inflation concerns, supporting a more dovish Fed path. For NQ and ES traders, this is a bullish signal — risk-off premium unwinding is a tailwind for growth equities.",
+    "uncertainty_score": 25,
+    "classified_at": "2026-06-15T13:58:00"
   }
 }

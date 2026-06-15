@@ -199,6 +199,8 @@ Read the FULL article text carefully before deciding direction. Do not base dire
 Consider the full chain of consequences:
 - War escalating → oil up → inflation up → Fed stays hawkish → equities down → BEARISH
 - Ceasefire → oil down → inflation eases → Fed pivots → equities up → BULLISH
+- Oil prices falling due to peace deal / ceasefire / geopolitical de-escalation → risk premium removed → inflation eases → equities up → BULLISH. CRITICAL: do NOT classify a peace-deal-driven oil price drop as Bearish. Stocks jump on this, not fall.
+- Oil prices falling due to demand destruction, recession fears, or oversupply → growth slowdown → BEARISH
 - Company adding surcharges due to war → costs rise → margins compress → BEARISH
 - Gas prices hitting new highs → consumer spending squeezed → BEARISH
 - Strong jobs data → Fed stays hawkish → rates stay high → BEARISH for growth stocks
