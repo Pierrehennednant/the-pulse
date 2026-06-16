@@ -156,7 +156,7 @@ class GeopoliticalPipeline:
 
         prompt = f"""You are assisting a professional NQ and ES futures day trader with pre-market preparation.
 
-Your job is to read each full article, then make three decisions:
+Your job is to read each full article, then make five decisions:
 
 DECISION 1 — RELEVANCE
 Is this genuinely new, market-moving information that would cause a futures trader to reconsider their directional bias for today's session?
@@ -217,10 +217,11 @@ DECISION 3 — SUMMARY
 Write a clean 3-4 sentence market-focused summary of the article. Cover: what happened, who the key actor is, what the immediate consequence is, and what it means for NQ/ES traders today. Write it as if briefing a trader in 30 seconds. Do not use jargon. Be direct and specific.
 
 Return ONLY a JSON array with no markdown, no explanation, no preamble. Exactly this format:
-[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Iran war escalation directly affects oil and risk sentiment", "summary": "Your 3-4 sentence market summary here.", "uncertainty_score": 85}}]
+[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Iran war escalation directly affects oil and risk sentiment", "summary": "Your 3-4 sentence market summary here.", "uncertainty_score": 85, "tier": 1, "reasoning": "Active war escalation directly threatens oil supply and broad risk sentiment."}}]
 
 Use only "bearish", "bullish", or "neutral" for direction.
 Use confidence between 0.0 and 1.0.
+Use tier as an integer: 1, 2, or 3.
 If relevant is false, still provide a summary field but it can be empty string.
 
 DECISION 4 — UNCERTAINTY SCORE
@@ -245,6 +246,19 @@ Score low (0-39) when:
 - Rumor with no confirmation and no market reaction yet
 
 Key rule: A confirmed bearish event with clear direction scores LOW uncertainty even if it's very negative for markets. Uncertainty means the market doesn't know what to do — not that it's going down.
+
+DECISION 5 — TIER CLASSIFICATION
+Classify the magnitude of this event's market impact into one of three tiers, using the full article context — not headline keywords.
+
+Tier 1 (±1.7): Active war or escalation between major powers, nuclear threats/incidents, major confirmed peace deals or ceasefires that meaningfully reduce geopolitical risk, or credible major supply disruptions (e.g. Hormuz closure threat).
+Tier 2 (±0.75): Significant troop buildups, major diplomatic breakdowns, new meaningful sanctions, or credible energy market threats that are not Tier 1 level.
+Tier 3 (±0.35): Minor diplomatic noise, corporate geopolitical news, speculative or secondary headlines with limited immediate market relevance.
+
+Key rules:
+- Prioritize actual market impact and context over headline keywords. The presence of words like "ceasefire" or "deal" does not automatically make something Tier 1 — evaluate whether a real, credible development occurred.
+- When uncertain between tiers, default to the lower tier.
+- De-escalation and peace developments are generally Bullish for US equities. Escalation and conflict are generally Bearish.
+- Oil/Energy Rule: Falling oil prices caused by geopolitical de-escalation or peace deals are Bullish for equities. Only classify oil price moves as Bearish when driven by demand destruction, recession fears, or oversupply.
 
 Articles to classify:
 {article_list}"""
@@ -656,6 +670,10 @@ Respond with only one word: SAME or DIFFERENT"""
                     i['uncertainty_score'] = cached['uncertainty_score']
                 if cached.get('confidence') is not None:
                     i['haiku_confidence'] = cached['confidence']
+                if cached.get('tier') in (1, 2, 3):
+                    i['haiku_tier'] = cached['tier']
+                if cached.get('tier_reasoning'):
+                    i['haiku_tier_reasoning'] = cached['tier_reasoning']
                 known_relevant.append(i)
 
         # Articles not yet classified — use keyword filter as temporary pass
@@ -741,7 +759,13 @@ Respond with only one word: SAME or DIFFERENT"""
                         for r in classifications:
                             idx = r['id'] - 1
                             if idx < len(new_items):
-                                gemini_cache[new_items[idx]['headline']] = {
+                                headline = new_items[idx]['headline']
+                                tier = r.get('tier')
+                                if tier not in (1, 2, 3):
+                                    if tier is not None:
+                                        pulse_logger.log(f"⚠️ Haiku returned malformed tier '{tier}' for '{headline[:60]}' — falling back to keyword tiering", level="WARNING")
+                                    tier = None
+                                gemini_cache[headline] = {
                                     'relevant': r.get('relevant', False),
                                     'confidence': r.get('confidence', 0),
                                     'category': r.get('category', ''),
@@ -749,8 +773,14 @@ Respond with only one word: SAME or DIFFERENT"""
                                     'reason': r.get('reason', ''),
                                     'summary': r.get('summary', ''),
                                     'uncertainty_score': r.get('uncertainty_score', 0),
+                                    'tier': tier,
+                                    'tier_reasoning': r.get('reasoning', ''),
                                     'classified_at': datetime.now(timezone.utc).isoformat()
                                 }
+                                pulse_logger.log(
+                                    f"🧭 Haiku tier | {headline[:60]} | Tier {tier if tier is not None else 'N/A (fallback)'} | "
+                                    f"{r.get('direction', 'unknown')} | conf={r.get('confidence', 0)} | {r.get('reasoning', '')}"
+                                )
                         atomic_write_json(gemini_cache_file, gemini_cache)
                         self.update_pinned_store(new_items, classifications)
                         pulse_logger.log(f"✅ Haiku background done — {len(classifications)} articles classified with summaries")
@@ -873,17 +903,20 @@ Respond with only one word: SAME or DIFFERENT"""
         return priority
 
     def calculate_score(self, items, flags):
-        """Three-tier magnitude-weighted score. Tiers by keyword priority or Haiku confidence.
-        Tier 1 (±1.7, 4× weight): priority ≥80 or confidence ≥0.85
-        Tier 2 (±0.75, 2× weight): priority 65–79 or confidence 0.65–0.84
-        Tier 3 (±0.35, 1× weight): everything else
-        Each article score = tier_base × confidence × flag_multiplier, direction-signed.
-        Flag multiplier = 1 + 0.2 × (priority/100) when priority ≥65.
+        """Three-tier magnitude-weighted score. Tier comes from Haiku's contextual classification
+        (haiku_tier, set during background classification) when available — Haiku evaluates real
+        market impact/context rather than headline keywords. Falls back to keyword priority /
+        confidence thresholds when Haiku tier is missing or malformed.
+        Tier 1 (±1.7, 4× weight) | Tier 2 (±0.75, 2× weight) | Tier 3 (±0.35, 1× weight)
+        Haiku path: article_score = tier_base × haiku_confidence.
+        Fallback path: article_score = tier_base × confidence × flag_multiplier
+        (flag_multiplier = 1 + 0.2 × priority/100 when priority ≥65).
         """
         if not items:
             return 0.0
         weighted_sum = 0.0
         total_weight = 0.0
+        tier_map = {1: (1.7, 4.0), 2: (0.75, 2.0), 3: (0.35, 1.0)}
         for item in items:
             # Direction
             direction = item.get('gemini_direction')
@@ -898,25 +931,33 @@ Respond with only one word: SAME or DIFFERENT"""
                 continue
             # Haiku confidence (None for unclassified articles)
             haiku_conf = item.get('haiku_confidence')
-            # Keyword priority for this article
-            kw_priority = self._get_article_priority(item)
-            # Step 1: Tier assignment
-            if (kw_priority >= 80) or (haiku_conf is not None and haiku_conf >= 0.85):
-                tier_score = 1.7
-                tier_weight = 4.0
-            elif (65 <= kw_priority <= 79) or (haiku_conf is not None and 0.65 <= haiku_conf < 0.85):
-                tier_score = 0.75
-                tier_weight = 2.0
+            haiku_tier = item.get('haiku_tier')
+            if haiku_tier in tier_map:
+                tier_score, tier_weight = tier_map[haiku_tier]
+                conf = haiku_conf if haiku_conf is not None else 1.0
+                article_score = tier_score * conf
+                pulse_logger.log(
+                    f"🧭 Geo tier (Haiku) | {item.get('headline', '')[:60]} | Tier {haiku_tier} | {direction} | "
+                    f"conf={conf} | {item.get('haiku_tier_reasoning', '')}"
+                )
             else:
-                tier_score = 0.35
-                tier_weight = 1.0
-            # Step 2: Scale by confidence (default 1.0 when unavailable)
-            conf = haiku_conf if haiku_conf is not None else 1.0
-            article_score = tier_score * conf
-            # Step 3: Flag multiplier for keyword-qualifying articles
-            if kw_priority >= 65:
-                article_score *= (1 + 0.2 * kw_priority / 100)
-            # Apply direction and accumulate with tier weight
+                # Fallback — keyword-based tier classification (used when Haiku tier
+                # is missing/malformed, e.g. unclassified article or failed batch)
+                kw_priority = self._get_article_priority(item)
+                if (kw_priority >= 80) or (haiku_conf is not None and haiku_conf >= 0.85):
+                    tier_score, tier_weight = 1.7, 4.0
+                elif (65 <= kw_priority <= 79) or (haiku_conf is not None and 0.65 <= haiku_conf < 0.85):
+                    tier_score, tier_weight = 0.75, 2.0
+                else:
+                    tier_score, tier_weight = 0.35, 1.0
+                conf = haiku_conf if haiku_conf is not None else 1.0
+                article_score = tier_score * conf
+                if kw_priority >= 65:
+                    article_score *= (1 + 0.2 * kw_priority / 100)
+                pulse_logger.log(
+                    f"🧭 Geo tier (keyword fallback) | {item.get('headline', '')[:60]} | base={tier_score} | "
+                    f"priority={kw_priority} | {direction} | conf={conf}"
+                )
             weighted_sum += article_score * sign * tier_weight
             total_weight += tier_weight
         if total_weight == 0:
