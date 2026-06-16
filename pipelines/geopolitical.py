@@ -410,6 +410,105 @@ Respond with only one word: SAME or DIFFERENT"""
 
         self.save_pinned_stories(pinned)
 
+    def backfill_missing_tiers(self):
+        """One-time maintenance pass: assign Haiku contextual tier to any cached
+        classification that predates the tier field (e.g. from before contextual
+        tiering was introduced). Skips entries that already have a valid tier —
+        safe to call repeatedly, becomes a no-op once the cache is fully backfilled."""
+        if self.anthropic_client is None:
+            return
+        gemini_cache_file = "/data/gemini_classifications.json"
+        try:
+            if not os.path.exists(gemini_cache_file):
+                return
+            with open(gemini_cache_file, 'r') as f:
+                gemini_cache = json.load(f)
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Tier backfill — failed to load Haiku classification cache: {e}", level="WARNING")
+            return
+
+        missing = {
+            headline: entry for headline, entry in gemini_cache.items()
+            if entry.get('relevant') and entry.get('tier') not in (1, 2, 3)
+        }
+        if not missing:
+            return
+
+        pulse_logger.log(f"🔄 Tier backfill — {len(missing)} cached article(s) missing tier field, classifying via Haiku...")
+
+        headlines = list(missing.keys())
+        article_list = ""
+        for i, headline in enumerate(headlines):
+            entry = missing[headline]
+            context = entry.get('summary') or entry.get('reason') or ''
+            article_list += f"{i+1}. TITLE: {headline}\n   CONTEXT: {context}\n\n"
+
+        prompt = f"""You are assisting a professional NQ and ES futures day trader with pre-market preparation.
+
+For each article below, classify the magnitude of its market impact into one of three tiers, using the available context — not headline keywords.
+
+Tier 1 (±1.7): Active war or escalation between major powers, nuclear threats/incidents, major confirmed peace deals or ceasefires that meaningfully reduce geopolitical risk, or credible major supply disruptions (e.g. Hormuz closure threat).
+Tier 2 (±0.75): Significant troop buildups, major diplomatic breakdowns, new meaningful sanctions, or credible energy market threats that are not Tier 1 level.
+Tier 3 (±0.35): Minor diplomatic noise, corporate geopolitical news, speculative or secondary headlines with limited immediate market relevance.
+
+Key rules:
+- Prioritize actual market impact and context over headline keywords. The presence of words like "ceasefire" or "deal" does not automatically make something Tier 1 — evaluate whether a real, credible development occurred.
+- When uncertain between tiers, default to the lower tier.
+- De-escalation and peace developments are generally Bullish for US equities. Escalation and conflict are generally Bearish.
+- Oil/Energy Rule: Falling oil prices caused by geopolitical de-escalation or peace deals are Bullish for equities. Only classify oil price moves as Bearish when driven by demand destruction, recession fears, or oversupply.
+
+Return ONLY a JSON array with no markdown, no explanation, no preamble. Exactly this format:
+[{{"id": 1, "tier": 1, "direction": "bullish", "reasoning": "One short sentence explaining the tier and direction choice", "confidence": 0.85}}]
+
+Use only "bearish", "bullish", or "neutral" for direction.
+Use tier as an integer: 1, 2, or 3.
+Use confidence between 0.0 and 1.0.
+
+Articles to classify:
+{article_list}"""
+
+        try:
+            response = self.anthropic_client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=2048,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            text = response.content[0].text.strip()
+            if '```' in text:
+                text = text.split('```')[1]
+                if text.startswith('json'):
+                    text = text[4:]
+            results = json.loads(text)
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Tier backfill — Haiku call failed: {e}", level="WARNING")
+            return
+
+        updated = 0
+        for r in results:
+            idx = r.get('id', 0) - 1
+            if idx < 0 or idx >= len(headlines):
+                continue
+            tier = r.get('tier')
+            headline = headlines[idx]
+            if tier not in (1, 2, 3):
+                pulse_logger.log(f"⚠️ Tier backfill — malformed tier '{tier}' for '{headline[:60]}', leaving for keyword fallback", level="WARNING")
+                continue
+            gemini_cache[headline]['tier'] = tier
+            gemini_cache[headline]['tier_reasoning'] = r.get('reasoning', '')
+            if r.get('direction'):
+                gemini_cache[headline]['direction'] = r['direction']
+            if r.get('confidence') is not None:
+                gemini_cache[headline]['confidence'] = r['confidence']
+            updated += 1
+            pulse_logger.log(
+                f"🧭 Tier backfill | {headline[:60]} | Tier {tier} | {r.get('direction', 'unknown')} | "
+                f"conf={r.get('confidence', 0)} | {r.get('reasoning', '')}"
+            )
+
+        if updated:
+            atomic_write_json(gemini_cache_file, gemini_cache)
+            pulse_logger.log(f"✅ Tier backfill complete — {updated} cached article(s) now have Haiku tier")
+
     # ── Existing methods (unchanged) ────────────────────────────────────────
 
     def is_market_relevant(self, text):
@@ -642,6 +741,10 @@ Respond with only one word: SAME or DIFFERENT"""
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to load Haiku classification cache: {e}", level="WARNING")
             gemini_cache = {}
+
+        # One-time-per-call maintenance: backfill tier for cache entries that predate
+        # contextual tiering. Cheap no-op once the cache is fully backfilled.
+        threading.Thread(target=self.backfill_missing_tiers, daemon=True).start()
 
         # Split into already classified vs new
         new_items = [i for i in items if i['headline'] not in gemini_cache]
