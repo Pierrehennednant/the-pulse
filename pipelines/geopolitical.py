@@ -410,11 +410,14 @@ Respond with only one word: SAME or DIFFERENT"""
 
         self.save_pinned_stories(pinned)
 
-    def backfill_missing_tiers(self):
-        """One-time maintenance pass: assign Haiku contextual tier to any cached
-        classification that predates the tier field (e.g. from before contextual
-        tiering was introduced). Skips entries that already have a valid tier —
-        safe to call repeatedly, becomes a no-op once the cache is fully backfilled."""
+    def backfill_missing_tiers(self, active_headlines):
+        """One-time-per-article maintenance pass: assign Haiku contextual tier to any
+        cached classification that predates the tier field. Restricted to headlines
+        currently active in this pipeline run (active_headlines) — never scans the
+        full historical cache. Skips entries that already have a valid tier — safe to
+        call repeatedly, becomes a no-op once the active set is fully backfilled.
+        Processes one article per Haiku call so a single malformed response can't
+        block the rest of the batch."""
         if self.anthropic_client is None:
             return
         gemini_cache_file = "/data/gemini_classifications.json"
@@ -427,25 +430,23 @@ Respond with only one word: SAME or DIFFERENT"""
             pulse_logger.log(f"⚠️ Tier backfill — failed to load Haiku classification cache: {e}", level="WARNING")
             return
 
+        active_set = set(active_headlines)
         missing = {
             headline: entry for headline, entry in gemini_cache.items()
-            if entry.get('relevant') and entry.get('tier') not in (1, 2, 3)
+            if headline in active_set and entry.get('relevant') and entry.get('tier') not in (1, 2, 3)
         }
         if not missing:
             return
 
-        pulse_logger.log(f"🔄 Tier backfill — {len(missing)} cached article(s) missing tier field, classifying via Haiku...")
+        pulse_logger.log(f"🔄 Tier backfill — {len(missing)} active article(s) missing tier field, classifying via Haiku one at a time...")
 
-        headlines = list(missing.keys())
-        article_list = ""
-        for i, headline in enumerate(headlines):
-            entry = missing[headline]
+        updated = 0
+        for headline, entry in missing.items():
             context = entry.get('summary') or entry.get('reason') or ''
-            article_list += f"{i+1}. TITLE: {headline}\n   CONTEXT: {context}\n\n"
 
-        prompt = f"""You are assisting a professional NQ and ES futures day trader with pre-market preparation.
+            prompt = f"""You are assisting a professional NQ and ES futures day trader with pre-market preparation.
 
-For each article below, classify the magnitude of its market impact into one of three tiers, using the available context — not headline keywords.
+Classify the magnitude of this article's market impact into one of three tiers, using the available context — not headline keywords.
 
 Tier 1 (±1.7): Active war or escalation between major powers, nuclear threats/incidents, major confirmed peace deals or ceasefires that meaningfully reduce geopolitical risk, or credible major supply disruptions (e.g. Hormuz closure threat).
 Tier 2 (±0.75): Significant troop buildups, major diplomatic breakdowns, new meaningful sanctions, or credible energy market threats that are not Tier 1 level.
@@ -457,39 +458,33 @@ Key rules:
 - De-escalation and peace developments are generally Bullish for US equities. Escalation and conflict are generally Bearish.
 - Oil/Energy Rule: Falling oil prices caused by geopolitical de-escalation or peace deals are Bullish for equities. Only classify oil price moves as Bearish when driven by demand destruction, recession fears, or oversupply.
 
-Return ONLY a JSON array with no markdown, no explanation, no preamble. Exactly this format:
-[{{"id": 1, "tier": 1, "direction": "bullish", "reasoning": "One short sentence explaining the tier and direction choice", "confidence": 0.85}}]
+Return ONLY a JSON object with no markdown, no explanation, no preamble. Exactly this format:
+{{"tier": 1, "direction": "bullish", "reasoning": "One short sentence explaining the tier and direction choice", "confidence": 0.85}}
 
 Use only "bearish", "bullish", or "neutral" for direction.
 Use tier as an integer: 1, 2, or 3.
 Use confidence between 0.0 and 1.0.
 
-Articles to classify:
-{article_list}"""
+TITLE: {headline}
+CONTEXT: {context}"""
 
-        try:
-            response = self.anthropic_client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=2048,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            text = response.content[0].text.strip()
-            if '```' in text:
-                text = text.split('```')[1]
-                if text.startswith('json'):
-                    text = text[4:]
-            results = json.loads(text)
-        except Exception as e:
-            pulse_logger.log(f"⚠️ Tier backfill — Haiku call failed: {e}", level="WARNING")
-            return
-
-        updated = 0
-        for r in results:
-            idx = r.get('id', 0) - 1
-            if idx < 0 or idx >= len(headlines):
+            try:
+                response = self.anthropic_client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=512,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                text = response.content[0].text.strip()
+                if '```' in text:
+                    text = text.split('```')[1]
+                    if text.startswith('json'):
+                        text = text[4:]
+                r = json.loads(text)
+            except Exception as e:
+                pulse_logger.log(f"⚠️ Tier backfill — Haiku call failed for '{headline[:60]}': {e}", level="WARNING")
                 continue
+
             tier = r.get('tier')
-            headline = headlines[idx]
             if tier not in (1, 2, 3):
                 pulse_logger.log(f"⚠️ Tier backfill — malformed tier '{tier}' for '{headline[:60]}', leaving for keyword fallback", level="WARNING")
                 continue
@@ -507,7 +502,7 @@ Articles to classify:
 
         if updated:
             atomic_write_json(gemini_cache_file, gemini_cache)
-            pulse_logger.log(f"✅ Tier backfill complete — {updated} cached article(s) now have Haiku tier")
+            pulse_logger.log(f"✅ Tier backfill complete — {updated} active article(s) now have Haiku tier")
 
     # ── Existing methods (unchanged) ────────────────────────────────────────
 
@@ -742,10 +737,6 @@ Articles to classify:
             pulse_logger.log(f"⚠️ Failed to load Haiku classification cache: {e}", level="WARNING")
             gemini_cache = {}
 
-        # One-time-per-call maintenance: backfill tier for cache entries that predate
-        # contextual tiering. Cheap no-op once the cache is fully backfilled.
-        threading.Thread(target=self.backfill_missing_tiers, daemon=True).start()
-
         # Split into already classified vs new
         new_items = [i for i in items if i['headline'] not in gemini_cache]
         known_relevant = []
@@ -851,6 +842,11 @@ Articles to classify:
             self.save_pinned_stories(surviving_pins)
 
         pulse_logger.log(f"⚡ Returning {len(immediately_available)} articles instantly ({len(known_relevant)} Haiku-verified, {len(keyword_passed)} keyword-passed, {injected} pinned)")
+
+        # Backfill tier for cache entries that predate contextual tiering — restricted
+        # to headlines active in this run, processed one Haiku call per article.
+        active_headlines = [i['headline'] for i in immediately_available]
+        threading.Thread(target=self.backfill_missing_tiers, args=(active_headlines,), daemon=True).start()
 
         # Run Gemini on new items in background
         if new_items:
@@ -1019,6 +1015,8 @@ Articles to classify:
             return 0.0
         weighted_sum = 0.0
         total_weight = 0.0
+        haiku_tier_count = 0
+        fallback_tier_count = 0
         tier_map = {1: (1.7, 4.0), 2: (0.75, 2.0), 3: (0.35, 1.0)}
         for item in items:
             # Direction
@@ -1036,6 +1034,7 @@ Articles to classify:
             haiku_conf = item.get('haiku_confidence')
             haiku_tier = item.get('haiku_tier')
             if haiku_tier in tier_map:
+                haiku_tier_count += 1
                 tier_score, tier_weight = tier_map[haiku_tier]
                 conf = haiku_conf if haiku_conf is not None else 1.0
                 article_score = tier_score * conf
@@ -1044,6 +1043,7 @@ Articles to classify:
                     f"conf={conf} | {item.get('haiku_tier_reasoning', '')}"
                 )
             else:
+                fallback_tier_count += 1
                 # Fallback — keyword-based tier classification (used when Haiku tier
                 # is missing/malformed, e.g. unclassified article or failed batch)
                 kw_priority = self._get_article_priority(item)
@@ -1063,6 +1063,12 @@ Articles to classify:
                 )
             weighted_sum += article_score * sign * tier_weight
             total_weight += tier_weight
+        tiered_count = haiku_tier_count + fallback_tier_count
+        if tiered_count:
+            pulse_logger.log(
+                f"📊 Geo tier source ratio — Haiku: {haiku_tier_count}/{tiered_count} "
+                f"({round(haiku_tier_count / tiered_count * 100)}%) | Keyword fallback: {fallback_tier_count}/{tiered_count}"
+            )
         if total_weight == 0:
             return 0.0
         return round(max(-2.0, min(2.0, weighted_sum / total_weight)), 2)
