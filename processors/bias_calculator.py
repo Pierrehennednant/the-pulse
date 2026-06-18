@@ -4,7 +4,7 @@ from config import PILLAR_WEIGHTS, TIMEZONE
 from utils.logger import pulse_logger
 
 class BiasCalculator:
-    def compute(self, formatted_data, size_mode='quarter'):
+    def compute(self, formatted_data, size_mode='quarter', bias_threshold=0.5):
         total_score = 0.0
         pillar_contributions = {}
         active_pillars = 0
@@ -69,10 +69,10 @@ class BiasCalculator:
 
         final_score = round(total_score, 3)
 
-        if final_score >= 0.5:
+        if final_score >= bias_threshold:
             bias = 'Bullish'
             bias_emoji = '🟢'
-        elif final_score <= -0.5:
+        elif final_score <= -bias_threshold:
             bias = 'Bearish'
             bias_emoji = '🔴'
         else:
