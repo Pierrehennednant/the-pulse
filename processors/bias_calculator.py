@@ -44,6 +44,8 @@ class BiasCalculator:
                     weight = weight * decay_factor
                     if decay_factor < 1.0:
                         pulse_logger.log(f"📉 COT decay applied — {int(decay_factor * 100)}% of {base_weight}% base = {weight:.1f}% effective")
+                    elif today == 0:
+                        pulse_logger.log(f"✅ COT weight — Monday, full {base_weight}% effective")
 
             contribution = score * (weight / 100)
             total_score += contribution

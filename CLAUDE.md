@@ -34,15 +34,17 @@ Final bias assembled in `processors/bias_calculator.py`. Dashboard rendered in `
 
 Institutional weight is reduced progressively Mon–Thu based on staleness since Friday's release. 55% is the floor until new data arrives.
 
-| Day / Time | Decay factor |
-|---|---|
-| Friday before 3:30 PM EST | 55% (floor — awaiting new release) |
-| Friday after 3:30 PM EST | 100% (new data posted) |
-| Monday | 100% |
-| Tuesday | 85% |
-| Wednesday | 70% |
-| Thursday | 55% |
-| Weekend | 0% |
+| Day / Time | Decay factor | Log |
+|---|---|---|
+| Friday before 3:30 PM EST | 55% (floor — awaiting new release) | `📉 COT decay applied` |
+| Friday after 3:30 PM EST | 100% (new data posted) | — |
+| Monday | 100% | `✅ COT weight — Monday, full 25% effective` |
+| Tuesday | 85% | `📉 COT decay applied` |
+| Wednesday | 70% | `📉 COT decay applied` |
+| Thursday | 55% | `📉 COT decay applied` |
+| Weekend | 0% | `📉 COT decay — weekend` |
+
+**Cache hit fix:** The Mon–Thu cache path now recomputes `pillar_score` from `nq_futures.score` and `es_futures.score` if the field is missing or zero, preventing institutional from being silently excluded from bias calculation. Score is logged on every cache hit.
 
 Each Friday after a successful COT fetch, `_append_history()` appends to `/data/cot_history.json`:
 ```json
@@ -60,7 +62,9 @@ No persistence bonuses, no uncertainty dampening, no stability micro-adjustments
 
 ## EC Magnitude-Weighted Scoring
 
-Economic calendar events are scored by relative deviation from forecast:
+Economic calendar events are scored by relative deviation from forecast with polarity-aware sign correction.
+
+**Magnitude bands** (relative deviation = abs(actual − forecast) / abs(forecast)):
 
 | Relative deviation | Impact magnitude |
 |---|---|
@@ -68,7 +72,22 @@ Economic calendar events are scored by relative deviation from forecast:
 | 21–50% | Moderate ±0.63 |
 | > 50% | Strong ±0.88 |
 
-Non-numerical events (speeches) are manually tagged via the dashboard. Blocked events are excluded via the EC blocklist.
+**Polarity map** — applied as `final_score = magnitude × POLARITY[event] × sign(surprise)`:
+
+| Event | Polarity | Meaning |
+|---|---|---|
+| Non-Farm Employment Change | +1 | Beat = bullish |
+| ADP Non-Farm Employment Change | +1 | Beat = bullish |
+| Unemployment Rate | −1 | Beat (higher) = bearish |
+| Average Hourly Earnings m/m | −1 | Beat (higher) = bearish (inflation) |
+| Core CPI m/m, CPI m/m, CPI y/y | −1 | Beat = bearish (inflation) |
+| Core PPI m/m, PPI m/m | −1 | Beat = bearish (inflation) |
+| Core PCE m/m | −1 | Beat = bearish (inflation) |
+| GDP q/q | +1 | Beat = bullish |
+| ISM Manufacturing PMI, ISM Services PMI | +1 | Beat = bullish |
+| Retail Sales m/m, Core Retail Sales m/m | +1 | Beat = bullish |
+
+Events not in the POLARITY map log a warning and fall back to the `market_impact` direction. Speeches are manually tagged via the dashboard. Unknown events use flat base score ±0.40. Blocked events are excluded via the EC blocklist.
 
 ## Macro Sentiment Signal Thresholds
 
@@ -121,21 +140,23 @@ Score is rounded (not truncated) to match CNN's own display rounding.
 
 | Setting | Value |
 |---|---|
-| Bias threshold | ± 0.40 standard / ± 0.38 quiet week |
-| Confidence to show card | 42% |
-| Confidence for quarter entry | 42% |
-| Consistency streak | 1 day |
-| VIX hard limit | ≤ 22 (unchanged from Live) |
-| High uncertainty block | Active (unchanged from Live) |
+| Bias threshold | ± 0.33 standard / ± 0.30 quiet week |
+| Confidence to show card | 30% |
+| Confidence for quarter entry | 35% |
+| Consistency streak | 0 days |
+| Pillar alignment | ≥ 45% of total week weight must agree with bias |
+| VIX hard limit | ≤ 26 |
+| High uncertainty block | 3+ articles ≥ 70 |
 
-**Dynamic bias threshold (Prop Firm only):** Evaluated once at the start of each ISO week using the Forex Factory calendar. Persisted to `/data/prop_firm_weekly_threshold.json` for the entire week — does not change mid-week.
+**Quiet week mode (Prop Firm only):** Evaluated once at the start of each ISO week. Counts red folder **days** (not individual events — a day with multiple red folder events counts as 1 red folder day). Persisted to `/data/prop_firm_weekly_threshold.json` for the entire week — does not change mid-week.
 
-- 0 or 1 red folder events this week → bias threshold ± 0.38
-- 2+ red folder events this week → bias threshold ± 0.40
+- 0 or 1 red folder days → quiet week: bias threshold ± 0.30, EC weight drops from 30% to 15%, total weight 85%, pillar alignment threshold 45% of 85% = 38.25%
+- 2+ red folder days → standard week: bias threshold ± 0.33, EC weight 30%, total weight 100%, pillar alignment threshold 45%
 
 Logged once per week in Railway logs:
 ```
-📊 Prop Firm — new week: bias threshold ±0.38 (1 red folder event scheduled this week)
+🔇 Quiet week active — 1 red folder day — EC 15%, bias ±0.30
+📅 Standard week — 3 red folder days — EC 30%, bias ±0.33
 ```
 
 ## Snapshot System
@@ -150,6 +171,31 @@ Logged once per week in Railway logs:
 1. **Layer 1:** Live feed supersedes a pin on the same story (Haiku SAME/DIFFERENT classification)
 2. **Layer 2:** Pin vs pin dedup — newest wins
 3. **Layer 3:** 48-hour expiry — last resort
+
+## Geopolitical — Haiku Contextual Tiering
+
+Haiku assigns tier, direction, confidence, and reasoning for every geo article as part of the batch classification call. Tier determines base score and weight in the weighted average.
+
+| Tier | Base score | Weight | Use case |
+|---|---|---|---|
+| Tier 1 | ±1.7 | 4× | Active war/escalation between major powers, nuclear threats, major confirmed peace deals/ceasefires, credible major supply disruptions (e.g. Hormuz closure) |
+| Tier 2 | ±0.75 | 2× | Significant troop buildups, major diplomatic breakdowns, new meaningful sanctions, credible energy market threats |
+| Tier 3 | ±0.35 | 1× | Minor diplomatic noise, corporate geopolitical news, speculative/secondary headlines |
+
+**Scoring formula:**
+- Haiku path: `article_score = tier_base × haiku_confidence`
+- Keyword fallback path: `article_score = tier_base × confidence × flag_multiplier` (flag_multiplier = `1 + 0.2 × priority/100` when priority ≥ 65)
+- Final score: `weighted_sum / total_weight`, clipped to [-2.0, +2.0]
+
+**Key rules:**
+- Prioritize context over keywords — "ceasefire" or "deal" doesn't auto-assign Tier 1
+- Default to lower tier when uncertain
+- Oil/Energy: falling oil from peace deal/de-escalation → Bullish; from demand destruction/recession → Bearish
+- Fallback to keyword-based tier if Haiku returns malformed JSON or API call fails
+- Per-article tier source logged (`Geo tier (Haiku)` vs `Geo tier (keyword fallback)`)
+- Aggregate ratio logged per scoring run: `📊 Geo tier source ratio — Haiku: X/Y (Z%) | Keyword fallback: N/Y`
+
+**Tier backfill:** On each pipeline run, active articles with cached classifications missing a `tier` field are backfilled via Haiku one article at a time (not batched). Only articles in the current active set are backfilled — historical cache entries are left as-is.
 
 ## EC Blocklist
 
@@ -166,7 +212,7 @@ Logged once per week in Railway logs:
 
 ## AI Usage
 
-- **Geopolitical pipeline:** Claude Haiku (`claude-haiku-4-5-20251001`) for story classification and pin comparison. Do not swap models without verifying prompt/cost fit.
+- **Geopolitical pipeline:** Claude Haiku (`claude-haiku-4-5-20251001`) for story classification (relevance, direction, tier, confidence, reasoning, summary), pin comparison, and tier backfill. Do not swap models without verifying prompt/cost fit.
 - **AI Lens:** Grok (`grok-4.20-0309-reasoning`). Do not swap without verifying cost/output fit.
 
 ## Data Sources
