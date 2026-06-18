@@ -78,7 +78,17 @@ def run_pulse():
             pulse_logger.log(f"⚠️ Failed to load size_mode.json, defaulting to quarter: {e}", level="WARNING")
             size_mode = 'quarter'
 
-        bias_score = bias_calculator.compute(formatted_data, size_mode=size_mode)
+        try:
+            with open('/data/prop_firm_weekly_threshold.json', 'r') as f:
+                pf_week = json.load(f)
+            if pf_week.get('is_quiet_week'):
+                bias_threshold = 0.30
+            else:
+                bias_threshold = 0.33
+        except Exception:
+            bias_threshold = 0.50
+
+        bias_score = bias_calculator.compute(formatted_data, size_mode=size_mode, bias_threshold=bias_threshold)
 
         recommendation = recommendation_engine.compute(
             bias_score,
