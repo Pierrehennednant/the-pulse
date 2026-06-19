@@ -49,6 +49,11 @@ def run_pulse():
         pulse_logger.log(f"⚠️ Institutional failed: {e}", level="WARNING")
         inst_data = {}
 
+    try:
+        geopolitical_pipeline.maybe_reset_geo_blocklist()
+    except Exception as e:
+        pulse_logger.log(f"⚠️ Geo blocklist reset check failed: {e}", level="WARNING")
+
     # Geopolitical with 45s thread timeout — parallel fetching + Haiku needs time
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:

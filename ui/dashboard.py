@@ -392,7 +392,8 @@ def _load_geo_blocklist():
     try:
         if os.path.exists(GEO_BLOCKLIST_FILE):
             with open(GEO_BLOCKLIST_FILE, 'r') as f:
-                return json.load(f)
+                raw = json.load(f)
+            return raw if isinstance(raw, list) else []
     except Exception:
         pass
     return []

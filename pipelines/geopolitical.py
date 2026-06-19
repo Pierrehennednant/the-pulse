@@ -508,6 +508,25 @@ CONTEXT: {context}"""
             atomic_write_json(gemini_cache_file, gemini_cache)
             pulse_logger.log(f"✅ Tier backfill complete — {updated} active article(s) now have Haiku tier")
 
+    def maybe_reset_geo_blocklist(self):
+        """Clear the geo blocklist on Sunday weekly reset, matching EC blocklist schedule."""
+        geo_blocklist_file = "/data/geo_blocklist.json"
+        if datetime.now(self.timezone).weekday() != 6:
+            return
+        this_week = datetime.now(self.timezone).strftime('%Y-%W')
+        try:
+            if os.path.exists(geo_blocklist_file):
+                with open(geo_blocklist_file, 'r') as f:
+                    data = json.load(f)
+                if isinstance(data, dict) and data.get('__reset_week__') == this_week:
+                    return
+                if isinstance(data, list) and len(data) == 0:
+                    return
+        except Exception:
+            pass
+        atomic_write_json(geo_blocklist_file, {'__reset_week__': this_week})
+        pulse_logger.log("🗑️ Geo blocklist cleared — Sunday weekly reset")
+
     # ── Existing methods (unchanged) ────────────────────────────────────────
 
     def is_market_relevant(self, text):
@@ -734,7 +753,8 @@ CONTEXT: {context}"""
         try:
             if os.path.exists(geo_blocklist_file):
                 with open(geo_blocklist_file, 'r') as f:
-                    geo_blocklist = json.load(f)
+                    raw = json.load(f)
+                geo_blocklist = raw if isinstance(raw, list) else []
             else:
                 geo_blocklist = []
         except Exception as e:
