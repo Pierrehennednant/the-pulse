@@ -748,28 +748,6 @@ CONTEXT: {context}"""
             pulse_logger.log("⚠️ All parallel fetches returned empty", level="WARNING")
             return []
 
-        # Geo blocklist — drop articles matching any blocked string before classification
-        geo_blocklist_file = "/data/geo_blocklist.json"
-        try:
-            if os.path.exists(geo_blocklist_file):
-                with open(geo_blocklist_file, 'r') as f:
-                    raw = json.load(f)
-                geo_blocklist = raw if isinstance(raw, list) else []
-            else:
-                geo_blocklist = []
-        except Exception as e:
-            pulse_logger.log(f"⚠️ Failed to load geo blocklist: {e}", level="WARNING")
-            geo_blocklist = []
-        if geo_blocklist:
-            before = len(items)
-            items = [
-                i for i in items
-                if not any(b.lower() in i['headline'].lower() for b in geo_blocklist)
-            ]
-            blocked = before - len(items)
-            if blocked:
-                pulse_logger.log(f"🚫 Geo blocklist — {blocked} article(s) filtered out")
-
         # Load Gemini classification cache
         gemini_cache_file = "/data/gemini_classifications.json"
         try:
@@ -885,6 +863,28 @@ CONTEXT: {context}"""
             injected += 1
         if retired:
             self.save_pinned_stories(surviving_pins)
+
+        # Geo blocklist — drop articles matching any blocked string after all sources merged
+        geo_blocklist_file = "/data/geo_blocklist.json"
+        try:
+            if os.path.exists(geo_blocklist_file):
+                with open(geo_blocklist_file, 'r') as f:
+                    raw = json.load(f)
+                geo_blocklist = raw if isinstance(raw, list) else []
+            else:
+                geo_blocklist = []
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to load geo blocklist: {e}", level="WARNING")
+            geo_blocklist = []
+        if geo_blocklist:
+            before = len(immediately_available)
+            immediately_available = [
+                i for i in immediately_available
+                if not any(b.lower() in i['headline'].lower() for b in geo_blocklist)
+            ]
+            blocked = before - len(immediately_available)
+            if blocked:
+                pulse_logger.log(f"🚫 Geo blocklist — {blocked} article(s) filtered out")
 
         pulse_logger.log(f"⚡ Returning {len(immediately_available)} articles instantly ({len(known_relevant)} Haiku-verified, {len(keyword_passed)} keyword-passed, {injected} pinned)")
 
