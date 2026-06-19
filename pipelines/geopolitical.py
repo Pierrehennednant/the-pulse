@@ -16,6 +16,8 @@ from utils.logger import pulse_logger
 from utils.error_handler import error_handler
 
 class GeopoliticalPipeline:
+    GEO_BLOCKLIST_FILE = "/data/geo_blocklist.json"
+
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "geopolitical"
@@ -28,6 +30,7 @@ class GeopoliticalPipeline:
         self.pinned_store_file = "/data/pinned_stories.json"
         self.headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
         self.sentiment_analyzer = hf_pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
+        self._ensure_geo_blocklist()
         self.market_keywords = [
             'federal reserve', 'fomc', 'interest rate', 'rate hike', 'rate cut',
             'powell', 'inflation', 'cpi', 'ppi', 'gdp', 'jobs report', 'nonfarm',
@@ -508,9 +511,27 @@ CONTEXT: {context}"""
             atomic_write_json(gemini_cache_file, gemini_cache)
             pulse_logger.log(f"✅ Tier backfill complete — {updated} active article(s) now have Haiku tier")
 
+    def _ensure_geo_blocklist(self):
+        """Seed /data/geo_blocklist.json from the repo-bundled default if it doesn't
+        exist on the persistent volume yet."""
+        if os.path.exists(self.GEO_BLOCKLIST_FILE):
+            return
+        repo_seed = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'geo_blocklist.json')
+        try:
+            if os.path.exists(repo_seed):
+                with open(repo_seed, 'r') as f:
+                    seed = json.load(f)
+                atomic_write_json(self.GEO_BLOCKLIST_FILE, seed)
+                pulse_logger.log(f"📋 Geo blocklist seeded from repo default — {len(seed)} entries")
+            else:
+                atomic_write_json(self.GEO_BLOCKLIST_FILE, [])
+                pulse_logger.log("📋 Geo blocklist created (empty)")
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to seed geo blocklist: {e}", level="WARNING")
+
     def maybe_reset_geo_blocklist(self):
         """Clear the geo blocklist on Sunday weekly reset, matching EC blocklist schedule."""
-        geo_blocklist_file = "/data/geo_blocklist.json"
+        geo_blocklist_file = self.GEO_BLOCKLIST_FILE
         if datetime.now(self.timezone).weekday() != 6:
             return
         this_week = datetime.now(self.timezone).strftime('%Y-%W')
@@ -865,7 +886,7 @@ CONTEXT: {context}"""
             self.save_pinned_stories(surviving_pins)
 
         # Geo blocklist — drop articles matching any blocked string after all sources merged
-        geo_blocklist_file = "/data/geo_blocklist.json"
+        geo_blocklist_file = self.GEO_BLOCKLIST_FILE
         try:
             if os.path.exists(geo_blocklist_file):
                 with open(geo_blocklist_file, 'r') as f:
