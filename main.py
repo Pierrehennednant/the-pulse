@@ -79,8 +79,7 @@ def run_pulse():
         try:
             with open('/data/size_mode.json', 'r') as f:
                 size_mode = json.load(f).get('mode', 'quarter')
-        except Exception as e:
-            pulse_logger.log(f"⚠️ Failed to load size_mode.json, defaulting to quarter: {e}", level="WARNING")
+        except Exception:
             size_mode = 'quarter'
 
         try:
