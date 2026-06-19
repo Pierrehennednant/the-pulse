@@ -725,6 +725,27 @@ CONTEXT: {context}"""
             pulse_logger.log("⚠️ All parallel fetches returned empty", level="WARNING")
             return []
 
+        # Geo blocklist — drop articles matching any blocked string before classification
+        geo_blocklist_file = "/data/geo_blocklist.json"
+        try:
+            if os.path.exists(geo_blocklist_file):
+                with open(geo_blocklist_file, 'r') as f:
+                    geo_blocklist = json.load(f)
+            else:
+                geo_blocklist = []
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to load geo blocklist: {e}", level="WARNING")
+            geo_blocklist = []
+        if geo_blocklist:
+            before = len(items)
+            items = [
+                i for i in items
+                if not any(b.lower() in i['headline'].lower() for b in geo_blocklist)
+            ]
+            blocked = before - len(items)
+            if blocked:
+                pulse_logger.log(f"🚫 Geo blocklist — {blocked} article(s) filtered out")
+
         # Load Gemini classification cache
         gemini_cache_file = "/data/gemini_classifications.json"
         try:
