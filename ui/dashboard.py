@@ -435,6 +435,31 @@ def remove_geo_blocklist():
         return jsonify({'status': 'removed', 'title': title, 'blocklist': blocklist})
     return jsonify({'error': 'Title not found in blocklist'}), 404
 
+@app.route('/api/geo-tier-override', methods=['PATCH'])
+@require_auth
+def geo_tier_override():
+    data = request.get_json()
+    title = data.get('title') if data else None
+    tier = data.get('tier') if data else None
+    if not isinstance(title, str) or not title.strip():
+        return jsonify({'error': 'Missing title'}), 400
+    if tier not in (1, 2, 3):
+        return jsonify({'error': 'tier must be 1, 2, or 3'}), 400
+    cache_file = '/data/gemini_classifications.json'
+    try:
+        with open(cache_file, 'r') as f:
+            cache = json.load(f)
+    except Exception as e:
+        return jsonify({'error': f'Failed to load classification cache: {e}'}), 500
+    title = title.strip()
+    if title not in cache:
+        return jsonify({'error': 'Title not found in classification cache'}), 404
+    old_tier = cache[title].get('tier')
+    cache[title]['tier'] = tier
+    atomic_write_json(cache_file, cache)
+    pulse_logger.log(f"🧭 Geo tier override | {title[:60]} | {old_tier} → {tier}")
+    return jsonify({'status': 'updated', 'title': title, 'old_tier': old_tier, 'tier': tier, 'entry': cache[title]})
+
 @app.route('/api/ai_lens')
 @require_auth
 def api_ai_lens():
