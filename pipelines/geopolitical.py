@@ -878,10 +878,16 @@ CONTEXT: {context}"""
             geo_blocklist = []
         if geo_blocklist:
             before = len(immediately_available)
-            immediately_available = [
-                i for i in immediately_available
-                if not any(b.lower() in i['headline'].lower() for b in geo_blocklist)
-            ]
+            kept = []
+            for i in immediately_available:
+                headline_lower = i['headline'].lower()
+                matched = [b for b in geo_blocklist if b.lower() in headline_lower]
+                if matched:
+                    pulse_logger.log(f"🚫 Geo blocklist HIT | {i['headline'][:80]} | matched: {matched[0][:60]}")
+                else:
+                    pulse_logger.log(f"✅ Geo blocklist PASS | {i['headline'][:80]}")
+                    kept.append(i)
+            immediately_available = kept
             blocked = before - len(immediately_available)
             if blocked:
                 pulse_logger.log(f"🚫 Geo blocklist — {blocked} article(s) filtered out")
