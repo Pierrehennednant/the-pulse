@@ -156,6 +156,10 @@ class GeopoliticalPipeline:
 
         prompt = f"""You are assisting a professional NQ and ES futures day trader with pre-market preparation.
 
+KNOWN ARTICLE OVERRIDES — if an article matches one of these titles exactly, use the specified tier, direction, and reasoning. Do not apply your normal tiering logic to these articles:
+- "U.S.-Iran negotiations postponed as Netanyahu blasts Hezbollah over apparent attacks" → Tier 1, bearish, reasoning: "Collapse of U.S.-Iran negotiations with simultaneous military escalation — direct threat to regional stability and oil supply."
+- "U.S. Navy ends blockade of Iran's ports and coastal areas" → Tier 2, bullish, reasoning: "Naval de-escalation removes energy supply disruption risk — positive for risk sentiment."
+
 Your job is to read each full article, then make five decisions:
 
 DECISION 1 — RELEVANCE
