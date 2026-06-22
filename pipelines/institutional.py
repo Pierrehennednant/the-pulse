@@ -155,7 +155,7 @@ class InstitutionalPipeline:
             if cached_dt.tzinfo is None:
                 cached_dt = cached_dt.replace(tzinfo=pytz.timezone(TIMEZONE))
             age_days = (datetime.now(pytz.timezone(TIMEZONE)) - cached_dt).total_seconds() / 86400
-            return age_days > 3
+            return age_days >= 3
         except Exception:
             return False
 
