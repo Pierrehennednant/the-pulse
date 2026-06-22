@@ -31,6 +31,7 @@ class GeopoliticalPipeline:
         self.headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
         self.sentiment_analyzer = hf_pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
         self._ensure_geo_blocklist()
+        self._seed_classifications()
         self.market_keywords = [
             'federal reserve', 'fomc', 'interest rate', 'rate hike', 'rate cut',
             'powell', 'inflation', 'cpi', 'ppi', 'gdp', 'jobs report', 'nonfarm',
@@ -528,6 +529,36 @@ CONTEXT: {context}"""
                 pulse_logger.log("📋 Geo blocklist created (empty)")
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to seed geo blocklist: {e}", level="WARNING")
+
+    def _seed_classifications(self):
+        """Merge repo-bundled classification entries into /data/gemini_classifications.json
+        without overwriting entries that already exist on the volume. This ensures locked
+        tier/direction values reach production on deploy while preserving live Haiku
+        classifications."""
+        volume_file = "/data/gemini_classifications.json"
+        repo_seed = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'gemini_classifications.json')
+        try:
+            if not os.path.exists(repo_seed):
+                return
+            with open(repo_seed, 'r') as f:
+                seed = json.load(f)
+            if not seed:
+                return
+            if os.path.exists(volume_file):
+                with open(volume_file, 'r') as f:
+                    existing = json.load(f)
+            else:
+                existing = {}
+            merged = 0
+            for title, entry in seed.items():
+                if title not in existing:
+                    existing[title] = entry
+                    merged += 1
+            if merged:
+                atomic_write_json(volume_file, existing)
+                pulse_logger.log(f"📋 Classification seed — merged {merged} new entry(ies) from repo default")
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Classification seed failed: {e}", level="WARNING")
 
     def maybe_reset_geo_blocklist(self):
         """Clear the geo blocklist on Sunday weekly reset, matching EC blocklist schedule."""

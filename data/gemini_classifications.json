@@ -16,5 +16,25 @@
     "summary": "Oil prices declined following an Iran peace deal as geopolitical risk premium was removed from energy markets. Equity markets reacted positively with stocks jumping on the news. The reduced energy price pressure eases inflation concerns, supporting a more dovish Fed path. For NQ and ES traders, this is a bullish signal — risk-off premium unwinding is a tailwind for growth equities.",
     "uncertainty_score": 25,
     "classified_at": "2026-06-15T13:58:00"
+  },
+  "Live Updates: First round of U.S.-Iran talks brings 'encouraging progress,' mediators say": {
+    "relevant": true,
+    "confidence": 0.95,
+    "category": "geopolitical",
+    "direction": "bullish",
+    "tier": 2,
+    "tier_reasoning": "Encouraging progress in U.S.-Iran talks reduces geopolitical risk premium — significant diplomatic development but not yet a confirmed deal.",
+    "reason": "First round of U.S.-Iran negotiations showing encouraging progress — de-escalation signal positive for risk sentiment and energy markets.",
+    "classified_at": "2026-06-22T00:00:00"
+  },
+  "China hits back at US sanctions on tech giants, restricting its exports to American defense firms": {
+    "relevant": true,
+    "confidence": 0.95,
+    "category": "geopolitical",
+    "direction": "bearish",
+    "tier": 2,
+    "tier_reasoning": "Retaliatory export restrictions on defense firms represent meaningful sanctions escalation — not systemic but directly impacts US-China trade sentiment.",
+    "reason": "China retaliating against US tech sanctions by restricting exports to American defense firms — trade war escalation bearish for risk sentiment.",
+    "classified_at": "2026-06-22T00:00:00"
   }
 }
