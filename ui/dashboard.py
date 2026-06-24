@@ -362,6 +362,36 @@ def delete_ec_event():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/ec-blocklist', methods=['GET'])
+@require_auth
+def get_ec_blocklist():
+    from pipelines.economic_calendar import economic_calendar_pipeline
+    blocklist = economic_calendar_pipeline._load_blocklist()
+    entries = {k: v for k, v in blocklist.items() if not k.startswith('__')}
+    return jsonify(entries)
+
+@app.route('/api/ec-blocklist', methods=['DELETE'])
+@require_auth
+def remove_ec_blocklist():
+    from pipelines.economic_calendar import economic_calendar_pipeline
+    data = request.get_json()
+    title = data.get('title') if data else None
+    if not isinstance(title, str) or not title.strip():
+        return jsonify({'error': 'Missing title'}), 400
+    title = title.strip()
+    blocklist = economic_calendar_pipeline._load_blocklist()
+    matched = [k for k in blocklist if not k.startswith('__') and k.startswith(title + '::')]
+    if not matched:
+        if title in blocklist and not title.startswith('__'):
+            matched = [title]
+    if not matched:
+        return jsonify({'error': 'Title not found in EC blocklist'}), 404
+    for key in matched:
+        del blocklist[key]
+    economic_calendar_pipeline._save_blocklist(blocklist)
+    pulse_logger.log(f"🚫 EC blocklist — removed: {matched}")
+    return jsonify({'status': 'removed', 'keys_removed': matched, 'blocklist': {k: v for k, v in blocklist.items() if not k.startswith('__')}})
+
 @app.route('/api/size_mode', methods=['POST'])
 @require_auth
 def set_size_mode():
