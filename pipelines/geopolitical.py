@@ -16,6 +16,8 @@ from utils.logger import pulse_logger
 from utils.error_handler import error_handler
 
 class GeopoliticalPipeline:
+    GEO_BLOCKLIST_FILE = "/data/geo_blocklist.json"
+
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "geopolitical"
@@ -28,6 +30,8 @@ class GeopoliticalPipeline:
         self.pinned_store_file = "/data/pinned_stories.json"
         self.headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
         self.sentiment_analyzer = hf_pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
+        self._ensure_geo_blocklist()
+        self._seed_classifications()
         self.market_keywords = [
             'federal reserve', 'fomc', 'interest rate', 'rate hike', 'rate cut',
             'powell', 'inflation', 'cpi', 'ppi', 'gdp', 'jobs report', 'nonfarm',
@@ -156,7 +160,11 @@ class GeopoliticalPipeline:
 
         prompt = f"""You are assisting a professional NQ and ES futures day trader with pre-market preparation.
 
-Your job is to read each full article, then make three decisions:
+KNOWN ARTICLE OVERRIDES — if an article matches one of these titles exactly, use the specified tier, direction, and reasoning. Do not apply your normal tiering logic to these articles:
+- "U.S.-Iran negotiations postponed as Netanyahu blasts Hezbollah over apparent attacks" → Tier 1, bearish, reasoning: "Collapse of U.S.-Iran negotiations with simultaneous military escalation — direct threat to regional stability and oil supply."
+- "U.S. Navy ends blockade of Iran's ports and coastal areas" → Tier 2, bullish, reasoning: "Naval de-escalation removes energy supply disruption risk — positive for risk sentiment."
+
+Your job is to read each full article, then make five decisions:
 
 DECISION 1 — RELEVANCE
 Is this genuinely new, market-moving information that would cause a futures trader to reconsider their directional bias for today's session?
@@ -199,6 +207,8 @@ Read the FULL article text carefully before deciding direction. Do not base dire
 Consider the full chain of consequences:
 - War escalating → oil up → inflation up → Fed stays hawkish → equities down → BEARISH
 - Ceasefire → oil down → inflation eases → Fed pivots → equities up → BULLISH
+- Oil prices falling due to peace deal / ceasefire / geopolitical de-escalation → risk premium removed → inflation eases → equities up → BULLISH. CRITICAL: do NOT classify a peace-deal-driven oil price drop as Bearish. Stocks jump on this, not fall.
+- Oil prices falling due to demand destruction, recession fears, or oversupply → growth slowdown → BEARISH
 - Company adding surcharges due to war → costs rise → margins compress → BEARISH
 - Gas prices hitting new highs → consumer spending squeezed → BEARISH
 - Strong jobs data → Fed stays hawkish → rates stay high → BEARISH for growth stocks
@@ -215,10 +225,11 @@ DECISION 3 — SUMMARY
 Write a clean 3-4 sentence market-focused summary of the article. Cover: what happened, who the key actor is, what the immediate consequence is, and what it means for NQ/ES traders today. Write it as if briefing a trader in 30 seconds. Do not use jargon. Be direct and specific.
 
 Return ONLY a JSON array with no markdown, no explanation, no preamble. Exactly this format:
-[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Iran war escalation directly affects oil and risk sentiment", "summary": "Your 3-4 sentence market summary here.", "uncertainty_score": 85}}]
+[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Iran war escalation directly affects oil and risk sentiment", "summary": "Your 3-4 sentence market summary here.", "uncertainty_score": 85, "tier": 1, "reasoning": "Active war escalation directly threatens oil supply and broad risk sentiment."}}]
 
 Use only "bearish", "bullish", or "neutral" for direction.
 Use confidence between 0.0 and 1.0.
+Use tier as an integer: 1, 2, or 3.
 If relevant is false, still provide a summary field but it can be empty string.
 
 DECISION 4 — UNCERTAINTY SCORE
@@ -243,6 +254,19 @@ Score low (0-39) when:
 - Rumor with no confirmation and no market reaction yet
 
 Key rule: A confirmed bearish event with clear direction scores LOW uncertainty even if it's very negative for markets. Uncertainty means the market doesn't know what to do — not that it's going down.
+
+DECISION 5 — TIER CLASSIFICATION
+Classify the magnitude of this event's market impact into one of three tiers, using the full article context — not headline keywords.
+
+Tier 1 (±1.7): Active war or escalation between major powers, nuclear threats/incidents, major confirmed peace deals or ceasefires that meaningfully reduce geopolitical risk, or credible major supply disruptions (e.g. Hormuz closure threat).
+Tier 2 (±0.75): Significant troop buildups, major diplomatic breakdowns, new meaningful sanctions, or credible energy market threats that are not Tier 1 level.
+Tier 3 (±0.35): Minor diplomatic noise, corporate geopolitical news, speculative or secondary headlines with limited immediate market relevance.
+
+Key rules:
+- Prioritize actual market impact and context over headline keywords. The presence of words like "ceasefire" or "deal" does not automatically make something Tier 1 — evaluate whether a real, credible development occurred.
+- When uncertain between tiers, default to the lower tier.
+- De-escalation and peace developments are generally Bullish for US equities. Escalation and conflict are generally Bearish.
+- Oil/Energy Rule: Falling oil prices caused by geopolitical de-escalation or peace deals are Bullish for equities. Only classify oil price moves as Bearish when driven by demand destruction, recession fears, or oversupply.
 
 Articles to classify:
 {article_list}"""
@@ -393,6 +417,167 @@ Respond with only one word: SAME or DIFFERENT"""
                 pulse_logger.log(f"📌 New story pinned: {headline[:60]}")
 
         self.save_pinned_stories(pinned)
+
+    def backfill_missing_tiers(self, active_headlines):
+        """One-time-per-article maintenance pass: assign Haiku contextual tier to any
+        cached classification that predates the tier field. Restricted to headlines
+        currently active in this pipeline run (active_headlines) — never scans the
+        full historical cache. Skips entries that already have a valid tier — safe to
+        call repeatedly, becomes a no-op once the active set is fully backfilled.
+        Processes one article per Haiku call so a single malformed response can't
+        block the rest of the batch."""
+        if self.anthropic_client is None:
+            return
+        gemini_cache_file = "/data/gemini_classifications.json"
+        try:
+            if not os.path.exists(gemini_cache_file):
+                return
+            with open(gemini_cache_file, 'r') as f:
+                gemini_cache = json.load(f)
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Tier backfill — failed to load Haiku classification cache: {e}", level="WARNING")
+            return
+
+        active_set = set(active_headlines)
+        missing = {
+            headline: entry for headline, entry in gemini_cache.items()
+            if headline in active_set and entry.get('relevant') and entry.get('tier') not in (1, 2, 3)
+        }
+        if not missing:
+            return
+
+        pulse_logger.log(f"🔄 Tier backfill — {len(missing)} active article(s) missing tier field, classifying via Haiku one at a time...")
+
+        updated = 0
+        for headline, entry in missing.items():
+            context = entry.get('summary') or entry.get('reason') or ''
+
+            prompt = f"""You are assisting a professional NQ and ES futures day trader with pre-market preparation.
+
+Classify the magnitude of this article's market impact into one of three tiers, using the available context — not headline keywords.
+
+Tier 1 (±1.7): Active war or escalation between major powers, nuclear threats/incidents, major confirmed peace deals or ceasefires that meaningfully reduce geopolitical risk, or credible major supply disruptions (e.g. Hormuz closure threat).
+Tier 2 (±0.75): Significant troop buildups, major diplomatic breakdowns, new meaningful sanctions, or credible energy market threats that are not Tier 1 level.
+Tier 3 (±0.35): Minor diplomatic noise, corporate geopolitical news, speculative or secondary headlines with limited immediate market relevance.
+
+Key rules:
+- Prioritize actual market impact and context over headline keywords. The presence of words like "ceasefire" or "deal" does not automatically make something Tier 1 — evaluate whether a real, credible development occurred.
+- When uncertain between tiers, default to the lower tier.
+- De-escalation and peace developments are generally Bullish for US equities. Escalation and conflict are generally Bearish.
+- Oil/Energy Rule: Falling oil prices caused by geopolitical de-escalation or peace deals are Bullish for equities. Only classify oil price moves as Bearish when driven by demand destruction, recession fears, or oversupply.
+
+Return ONLY a JSON object with no markdown, no explanation, no preamble. Exactly this format:
+{{"tier": 1, "direction": "bullish", "reasoning": "One short sentence explaining the tier and direction choice", "confidence": 0.85}}
+
+Use only "bearish", "bullish", or "neutral" for direction.
+Use tier as an integer: 1, 2, or 3.
+Use confidence between 0.0 and 1.0.
+
+TITLE: {headline}
+CONTEXT: {context}"""
+
+            try:
+                response = self.anthropic_client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=512,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                text = response.content[0].text.strip()
+                if '```' in text:
+                    text = text.split('```')[1]
+                    if text.startswith('json'):
+                        text = text[4:]
+                r = json.loads(text)
+            except Exception as e:
+                pulse_logger.log(f"⚠️ Tier backfill — Haiku call failed for '{headline[:60]}': {e}", level="WARNING")
+                continue
+
+            tier = r.get('tier')
+            if tier not in (1, 2, 3):
+                pulse_logger.log(f"⚠️ Tier backfill — malformed tier '{tier}' for '{headline[:60]}', leaving for keyword fallback", level="WARNING")
+                continue
+            gemini_cache[headline]['tier'] = tier
+            gemini_cache[headline]['tier_reasoning'] = r.get('reasoning', '')
+            if r.get('direction'):
+                gemini_cache[headline]['direction'] = r['direction']
+            if r.get('confidence') is not None:
+                gemini_cache[headline]['confidence'] = r['confidence']
+            updated += 1
+            pulse_logger.log(
+                f"🧭 Tier backfill | {headline[:60]} | Tier {tier} | {r.get('direction', 'unknown')} | "
+                f"conf={r.get('confidence', 0)} | {r.get('reasoning', '')}"
+            )
+
+        if updated:
+            atomic_write_json(gemini_cache_file, gemini_cache)
+            pulse_logger.log(f"✅ Tier backfill complete — {updated} active article(s) now have Haiku tier")
+
+    def _ensure_geo_blocklist(self):
+        """Seed /data/geo_blocklist.json from the repo-bundled default if it doesn't
+        exist on the persistent volume yet."""
+        if os.path.exists(self.GEO_BLOCKLIST_FILE):
+            return
+        repo_seed = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'geo_blocklist.json')
+        try:
+            if os.path.exists(repo_seed):
+                with open(repo_seed, 'r') as f:
+                    seed = json.load(f)
+                atomic_write_json(self.GEO_BLOCKLIST_FILE, seed)
+                pulse_logger.log(f"📋 Geo blocklist seeded from repo default — {len(seed)} entries")
+            else:
+                atomic_write_json(self.GEO_BLOCKLIST_FILE, [])
+                pulse_logger.log("📋 Geo blocklist created (empty)")
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to seed geo blocklist: {e}", level="WARNING")
+
+    def _seed_classifications(self):
+        """Merge repo-bundled classification entries into /data/gemini_classifications.json
+        without overwriting entries that already exist on the volume. This ensures locked
+        tier/direction values reach production on deploy while preserving live Haiku
+        classifications."""
+        volume_file = "/data/gemini_classifications.json"
+        repo_seed = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'gemini_classifications.json')
+        try:
+            if not os.path.exists(repo_seed):
+                return
+            with open(repo_seed, 'r') as f:
+                seed = json.load(f)
+            if not seed:
+                return
+            if os.path.exists(volume_file):
+                with open(volume_file, 'r') as f:
+                    existing = json.load(f)
+            else:
+                existing = {}
+            merged = 0
+            for title, entry in seed.items():
+                if title not in existing:
+                    existing[title] = entry
+                    merged += 1
+            if merged:
+                atomic_write_json(volume_file, existing)
+                pulse_logger.log(f"📋 Classification seed — merged {merged} new entry(ies) from repo default")
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Classification seed failed: {e}", level="WARNING")
+
+    def maybe_reset_geo_blocklist(self):
+        """Clear the geo blocklist on Sunday weekly reset, matching EC blocklist schedule."""
+        geo_blocklist_file = self.GEO_BLOCKLIST_FILE
+        if datetime.now(self.timezone).weekday() != 6:
+            return
+        this_week = datetime.now(self.timezone).strftime('%Y-%W')
+        try:
+            if os.path.exists(geo_blocklist_file):
+                with open(geo_blocklist_file, 'r') as f:
+                    data = json.load(f)
+                if isinstance(data, dict) and data.get('__reset_week__') == this_week:
+                    return
+                if isinstance(data, list) and len(data) == 0:
+                    return
+        except Exception:
+            pass
+        atomic_write_json(geo_blocklist_file, {'__reset_week__': this_week})
+        pulse_logger.log("🗑️ Geo blocklist cleared — Sunday weekly reset")
 
     # ── Existing methods (unchanged) ────────────────────────────────────────
 
@@ -654,6 +839,10 @@ Respond with only one word: SAME or DIFFERENT"""
                     i['uncertainty_score'] = cached['uncertainty_score']
                 if cached.get('confidence') is not None:
                     i['haiku_confidence'] = cached['confidence']
+                if cached.get('tier') in (1, 2, 3):
+                    i['haiku_tier'] = cached['tier']
+                if cached.get('tier_reasoning'):
+                    i['haiku_tier_reasoning'] = cached['tier_reasoning']
                 known_relevant.append(i)
 
         # Articles not yet classified — use keyword filter as temporary pass
@@ -727,7 +916,40 @@ Respond with only one word: SAME or DIFFERENT"""
         if retired:
             self.save_pinned_stories(surviving_pins)
 
+        # Geo blocklist — drop articles matching any blocked string after all sources merged
+        geo_blocklist_file = self.GEO_BLOCKLIST_FILE
+        try:
+            if os.path.exists(geo_blocklist_file):
+                with open(geo_blocklist_file, 'r') as f:
+                    raw = json.load(f)
+                geo_blocklist = raw if isinstance(raw, list) else []
+            else:
+                geo_blocklist = []
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to load geo blocklist: {e}", level="WARNING")
+            geo_blocklist = []
+        if geo_blocklist:
+            before = len(immediately_available)
+            kept = []
+            for i in immediately_available:
+                headline_lower = i['headline'].lower()
+                matched = [b for b in geo_blocklist if b.lower() in headline_lower]
+                if matched:
+                    pulse_logger.log(f"🚫 Geo blocklist HIT | {i['headline'][:80]} | matched: {matched[0][:60]}")
+                else:
+                    pulse_logger.log(f"✅ Geo blocklist PASS | {i['headline'][:80]}")
+                    kept.append(i)
+            immediately_available = kept
+            blocked = before - len(immediately_available)
+            if blocked:
+                pulse_logger.log(f"🚫 Geo blocklist — {blocked} article(s) filtered out")
+
         pulse_logger.log(f"⚡ Returning {len(immediately_available)} articles instantly ({len(known_relevant)} Haiku-verified, {len(keyword_passed)} keyword-passed, {injected} pinned)")
+
+        # Backfill tier for cache entries that predate contextual tiering — restricted
+        # to headlines active in this run, processed one Haiku call per article.
+        active_headlines = [i['headline'] for i in immediately_available]
+        threading.Thread(target=self.backfill_missing_tiers, args=(active_headlines,), daemon=True).start()
 
         # Run Gemini on new items in background
         if new_items:
@@ -739,7 +961,13 @@ Respond with only one word: SAME or DIFFERENT"""
                         for r in classifications:
                             idx = r['id'] - 1
                             if idx < len(new_items):
-                                gemini_cache[new_items[idx]['headline']] = {
+                                headline = new_items[idx]['headline']
+                                tier = r.get('tier')
+                                if tier not in (1, 2, 3):
+                                    if tier is not None:
+                                        pulse_logger.log(f"⚠️ Haiku returned malformed tier '{tier}' for '{headline[:60]}' — falling back to keyword tiering", level="WARNING")
+                                    tier = None
+                                gemini_cache[headline] = {
                                     'relevant': r.get('relevant', False),
                                     'confidence': r.get('confidence', 0),
                                     'category': r.get('category', ''),
@@ -747,8 +975,14 @@ Respond with only one word: SAME or DIFFERENT"""
                                     'reason': r.get('reason', ''),
                                     'summary': r.get('summary', ''),
                                     'uncertainty_score': r.get('uncertainty_score', 0),
+                                    'tier': tier,
+                                    'tier_reasoning': r.get('reasoning', ''),
                                     'classified_at': datetime.now(timezone.utc).isoformat()
                                 }
+                                pulse_logger.log(
+                                    f"🧭 Haiku tier | {headline[:60]} | Tier {tier if tier is not None else 'N/A (fallback)'} | "
+                                    f"{r.get('direction', 'unknown')} | conf={r.get('confidence', 0)} | {r.get('reasoning', '')}"
+                                )
                         atomic_write_json(gemini_cache_file, gemini_cache)
                         self.update_pinned_store(new_items, classifications)
                         pulse_logger.log(f"✅ Haiku background done — {len(classifications)} articles classified with summaries")
@@ -871,17 +1105,22 @@ Respond with only one word: SAME or DIFFERENT"""
         return priority
 
     def calculate_score(self, items, flags):
-        """Three-tier magnitude-weighted score. Tiers by keyword priority or Haiku confidence.
-        Tier 1 (±1.7, 4× weight): priority ≥80 or confidence ≥0.85
-        Tier 2 (±0.75, 2× weight): priority 65–79 or confidence 0.65–0.84
-        Tier 3 (±0.35, 1× weight): everything else
-        Each article score = tier_base × confidence × flag_multiplier, direction-signed.
-        Flag multiplier = 1 + 0.2 × (priority/100) when priority ≥65.
+        """Three-tier magnitude-weighted score. Tier comes from Haiku's contextual classification
+        (haiku_tier, set during background classification) when available — Haiku evaluates real
+        market impact/context rather than headline keywords. Falls back to keyword priority /
+        confidence thresholds when Haiku tier is missing or malformed.
+        Tier 1 (±1.7, 4× weight) | Tier 2 (±0.75, 2× weight) | Tier 3 (±0.35, 1× weight)
+        Haiku path: article_score = tier_base × haiku_confidence.
+        Fallback path: article_score = tier_base × confidence × flag_multiplier
+        (flag_multiplier = 1 + 0.2 × priority/100 when priority ≥65).
         """
         if not items:
             return 0.0
         weighted_sum = 0.0
         total_weight = 0.0
+        haiku_tier_count = 0
+        fallback_tier_count = 0
+        tier_map = {1: (1.7, 4.0), 2: (0.75, 2.0), 3: (0.35, 1.0)}
         for item in items:
             # Direction
             direction = item.get('gemini_direction')
@@ -896,27 +1135,43 @@ Respond with only one word: SAME or DIFFERENT"""
                 continue
             # Haiku confidence (None for unclassified articles)
             haiku_conf = item.get('haiku_confidence')
-            # Keyword priority for this article
-            kw_priority = self._get_article_priority(item)
-            # Step 1: Tier assignment
-            if (kw_priority >= 80) or (haiku_conf is not None and haiku_conf >= 0.85):
-                tier_score = 1.7
-                tier_weight = 4.0
-            elif (65 <= kw_priority <= 79) or (haiku_conf is not None and 0.65 <= haiku_conf < 0.85):
-                tier_score = 0.75
-                tier_weight = 2.0
+            haiku_tier = item.get('haiku_tier')
+            if haiku_tier in tier_map:
+                haiku_tier_count += 1
+                tier_score, tier_weight = tier_map[haiku_tier]
+                conf = haiku_conf if haiku_conf is not None else 1.0
+                article_score = tier_score * conf
+                pulse_logger.log(
+                    f"🧭 Geo tier (Haiku) | {item.get('headline', '')[:60]} | Tier {haiku_tier} | {direction} | "
+                    f"conf={conf} | {item.get('haiku_tier_reasoning', '')}"
+                )
             else:
-                tier_score = 0.35
-                tier_weight = 1.0
-            # Step 2: Scale by confidence (default 1.0 when unavailable)
-            conf = haiku_conf if haiku_conf is not None else 1.0
-            article_score = tier_score * conf
-            # Step 3: Flag multiplier for keyword-qualifying articles
-            if kw_priority >= 65:
-                article_score *= (1 + 0.2 * kw_priority / 100)
-            # Apply direction and accumulate with tier weight
+                fallback_tier_count += 1
+                # Fallback — keyword-based tier classification (used when Haiku tier
+                # is missing/malformed, e.g. unclassified article or failed batch)
+                kw_priority = self._get_article_priority(item)
+                if (kw_priority >= 80) or (haiku_conf is not None and haiku_conf >= 0.85):
+                    tier_score, tier_weight = 1.7, 4.0
+                elif (65 <= kw_priority <= 79) or (haiku_conf is not None and 0.65 <= haiku_conf < 0.85):
+                    tier_score, tier_weight = 0.75, 2.0
+                else:
+                    tier_score, tier_weight = 0.35, 1.0
+                conf = haiku_conf if haiku_conf is not None else 1.0
+                article_score = tier_score * conf
+                if kw_priority >= 65:
+                    article_score *= (1 + 0.2 * kw_priority / 100)
+                pulse_logger.log(
+                    f"🧭 Geo tier (keyword fallback) | {item.get('headline', '')[:60]} | base={tier_score} | "
+                    f"priority={kw_priority} | {direction} | conf={conf}"
+                )
             weighted_sum += article_score * sign * tier_weight
             total_weight += tier_weight
+        tiered_count = haiku_tier_count + fallback_tier_count
+        if tiered_count:
+            pulse_logger.log(
+                f"📊 Geo tier source ratio — Haiku: {haiku_tier_count}/{tiered_count} "
+                f"({round(haiku_tier_count / tiered_count * 100)}%) | Keyword fallback: {fallback_tier_count}/{tiered_count}"
+            )
         if total_weight == 0:
             return 0.0
         return round(max(-2.0, min(2.0, weighted_sum / total_weight)), 2)

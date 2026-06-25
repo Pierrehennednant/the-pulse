@@ -4,7 +4,7 @@ from config import PILLAR_WEIGHTS, TIMEZONE
 from utils.logger import pulse_logger
 
 class BiasCalculator:
-    def compute(self, formatted_data, size_mode='quarter'):
+    def compute(self, formatted_data, size_mode='quarter', bias_threshold=0.5):
         total_score = 0.0
         pillar_contributions = {}
         active_pillars = 0
@@ -44,6 +44,8 @@ class BiasCalculator:
                     weight = weight * decay_factor
                     if decay_factor < 1.0:
                         pulse_logger.log(f"📉 COT decay applied — {int(decay_factor * 100)}% of {base_weight}% base = {weight:.1f}% effective")
+                    elif today == 0:
+                        pulse_logger.log(f"✅ COT weight — Monday, full {base_weight}% effective")
 
             contribution = score * (weight / 100)
             total_score += contribution
@@ -67,10 +69,10 @@ class BiasCalculator:
 
         final_score = round(total_score, 3)
 
-        if final_score >= 0.5:
+        if final_score >= bias_threshold:
             bias = 'Bullish'
             bias_emoji = '🟢'
-        elif final_score <= -0.5:
+        elif final_score <= -bias_threshold:
             bias = 'Bearish'
             bias_emoji = '🔴'
         else:

@@ -49,6 +49,11 @@ def run_pulse():
         pulse_logger.log(f"⚠️ Institutional failed: {e}", level="WARNING")
         inst_data = {}
 
+    try:
+        geopolitical_pipeline.maybe_reset_geo_blocklist()
+    except Exception as e:
+        pulse_logger.log(f"⚠️ Geo blocklist reset check failed: {e}", level="WARNING")
+
     # Geopolitical with 45s thread timeout — parallel fetching + Haiku needs time
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
@@ -74,11 +79,20 @@ def run_pulse():
         try:
             with open('/data/size_mode.json', 'r') as f:
                 size_mode = json.load(f).get('mode', 'quarter')
-        except Exception as e:
-            pulse_logger.log(f"⚠️ Failed to load size_mode.json, defaulting to quarter: {e}", level="WARNING")
+        except Exception:
             size_mode = 'quarter'
 
-        bias_score = bias_calculator.compute(formatted_data, size_mode=size_mode)
+        try:
+            with open('/data/prop_firm_weekly_threshold.json', 'r') as f:
+                pf_week = json.load(f)
+            if pf_week.get('is_quiet_week'):
+                bias_threshold = 0.30
+            else:
+                bias_threshold = 0.33
+        except Exception:
+            bias_threshold = 0.50
+
+        bias_score = bias_calculator.compute(formatted_data, size_mode=size_mode, bias_threshold=bias_threshold)
 
         recommendation = recommendation_engine.compute(
             bias_score,

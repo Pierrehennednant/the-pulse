@@ -91,6 +91,27 @@ class EconomicCalendarPipeline:
             pulse_logger.log(f"⚠️ Failed to parse event date '{date_str}': {e}", level="WARNING")
             return date_str
 
+    # Explicit polarity per event — +1 means beating forecast is bullish for equities,
+    # -1 means beating forecast is bearish (inflation / unemployment events).
+    # Formula: final_score = magnitude × POLARITY[event] × sign(surprise)
+    POLARITY = {
+        "Non-Farm Employment Change":     +1,
+        "ADP Non-Farm Employment Change": +1,
+        "Unemployment Rate":              -1,
+        "Average Hourly Earnings m/m":    -1,
+        "Core CPI m/m":                   -1,
+        "CPI m/m":                        -1,
+        "CPI y/y":                        -1,
+        "Core PPI m/m":                   -1,
+        "PPI m/m":                        -1,
+        "Core PCE m/m":                   -1,
+        "GDP q/q":                        +1,
+        "ISM Manufacturing PMI":          +1,
+        "ISM Services PMI":               +1,
+        "Retail Sales m/m":               +1,
+        "Core Retail Sales m/m":          +1,
+    }
+
     # Inflation metrics — higher = more inflation = bearish for equities
     # Beat/miss logic inverts: miss = less inflation = bullish, beat = more inflation = bearish
     INFLATION_METRICS = [
@@ -200,9 +221,12 @@ class EconomicCalendarPipeline:
     def _magnitude_score(self, event, direction):
         """Return magnitude-weighted score for a numerical beat/miss event.
 
+        Event name is read from event['title'] — the key used throughout fetch().
         Relative deviation = abs(actual - forecast) / abs(forecast).
         Bands: ≤20% → ±0.40 | 21–50% → ±0.63 | >50% → ±0.88
-        Falls back to flat ±1 if forecast is zero or values can't be parsed.
+        When the event title is in POLARITY, sign = POLARITY[title] × sign(surprise).
+        Falls back to the market_impact direction for unrecognised events (with warning).
+        Falls back to flat direction if forecast is zero or values can't be parsed.
         """
         if direction == 0.0:
             return 0.0
@@ -222,6 +246,11 @@ class EconomicCalendarPipeline:
             return direction  # avoid division by zero
         rel_dev = abs(actual_val - forecast_val) / abs(forecast_val)
         magnitude = 0.88 if rel_dev > 0.50 else 0.63 if rel_dev > 0.20 else 0.40
+        title = event.get('title', '')
+        if title in self.POLARITY:
+            sign_surprise = 1 if actual_val > forecast_val else (-1 if actual_val < forecast_val else 0)
+            return magnitude * self.POLARITY[title] * sign_surprise
+        pulse_logger.log(f"⚠️ EC scoring: '{title}' not in POLARITY map — using market_impact direction", level="WARNING")
         return magnitude if direction > 0 else -magnitude
 
     def calculate_score(self, events):

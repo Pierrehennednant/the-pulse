@@ -424,6 +424,11 @@
             </div>`;
         });
 
+        html += `<div id="ec-blocklist-section" style="margin-top:12px;border-top:1px solid #1e2d4a;padding-top:10px">
+            <div style="font-size:11px;color:#4a9eff;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer" onclick="toggleEcBlocklist()">🚫 Blocked Events <span id="ec-bl-toggle" style="font-size:9px">▶</span></div>
+            <div id="ec-blocklist-items" style="display:none"></div>
+        </div>`;
+
         return html;
     }
 
@@ -896,6 +901,69 @@
             }
         } catch(e) {
             unlockEcActions(btn, '✕');
+            alert('Error: ' + e.message);
+        }
+    }
+
+    function toggleEcBlocklist() {
+        const items = document.getElementById('ec-blocklist-items');
+        const toggle = document.getElementById('ec-bl-toggle');
+        if (!items) return;
+        if (items.style.display === 'none') {
+            items.style.display = 'block';
+            toggle.textContent = '▼';
+            fetchEcBlocklist();
+        } else {
+            items.style.display = 'none';
+            toggle.textContent = '▶';
+        }
+    }
+
+    async function fetchEcBlocklist() {
+        const container = document.getElementById('ec-blocklist-items');
+        if (!container) return;
+        try {
+            const response = await fetch('/api/ec-blocklist');
+            const blocklist = await response.json();
+            const keys = Object.keys(blocklist);
+            if (!keys.length) {
+                container.innerHTML = '<div style="font-size:12px;color:#7a8fa8;padding:4px 0">No blocked events this week</div>';
+                return;
+            }
+            container.innerHTML = keys.map(k => {
+                const title = k.split('::')[0];
+                return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #1e2d4a">
+                    <span style="flex:1;font-size:12px;color:#7a8fa8">${title}</span>
+                    <button onclick="unblockEcEvent('${title.replace(/'/g, "\\'")}', this)" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Unblock this event">✕</button>
+                </div>`;
+            }).join('');
+        } catch(e) {
+            container.innerHTML = '<div style="font-size:12px;color:#e74c3c">Failed to load blocklist</div>';
+        }
+    }
+
+    async function unblockEcEvent(title, btn) {
+        if (!confirm('Unblock "' + title + '"?')) return;
+        btn.disabled = true;
+        btn.textContent = '…';
+        try {
+            const response = await fetch('/api/ec-blocklist', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({title: title})
+            });
+            const result = await response.json();
+            if (result.status === 'removed') {
+                fetchEcBlocklist();
+                setTimeout(() => { fetchData(); scheduleRefresh(); }, 500);
+            } else {
+                btn.disabled = false;
+                btn.textContent = '✕';
+                alert('Error: ' + (result.error || 'Unknown error'));
+            }
+        } catch(e) {
+            btn.disabled = false;
+            btn.textContent = '✕';
             alert('Error: ' + e.message);
         }
     }

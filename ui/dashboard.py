@@ -137,7 +137,17 @@ def _run_partial_refresh(label):
     except Exception:
         size_mode = 'quarter'
 
-    bias_score = bias_calculator.compute(formatted_data, size_mode=size_mode)
+    try:
+        with open('/data/prop_firm_weekly_threshold.json', 'r') as f:
+            pf_week = json.load(f)
+        if pf_week.get('is_quiet_week'):
+            bias_threshold = 0.30
+        else:
+            bias_threshold = 0.33
+    except Exception:
+        bias_threshold = 0.50
+
+    bias_score = bias_calculator.compute(formatted_data, size_mode=size_mode, bias_threshold=bias_threshold)
 
     recommendation = recommendation_engine.compute(
         bias_score,
@@ -352,6 +362,36 @@ def delete_ec_event():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/ec-blocklist', methods=['GET'])
+@require_auth
+def get_ec_blocklist():
+    from pipelines.economic_calendar import economic_calendar_pipeline
+    blocklist = economic_calendar_pipeline._load_blocklist()
+    entries = {k: v for k, v in blocklist.items() if not k.startswith('__')}
+    return jsonify(entries)
+
+@app.route('/api/ec-blocklist', methods=['DELETE'])
+@require_auth
+def remove_ec_blocklist():
+    from pipelines.economic_calendar import economic_calendar_pipeline
+    data = request.get_json()
+    title = data.get('title') if data else None
+    if not isinstance(title, str) or not title.strip():
+        return jsonify({'error': 'Missing title'}), 400
+    title = title.strip()
+    blocklist = economic_calendar_pipeline._load_blocklist()
+    matched = [k for k in blocklist if not k.startswith('__') and k.startswith(title + '::')]
+    if not matched:
+        if title in blocklist and not title.startswith('__'):
+            matched = [title]
+    if not matched:
+        return jsonify({'error': 'Title not found in EC blocklist'}), 404
+    for key in matched:
+        del blocklist[key]
+    economic_calendar_pipeline._save_blocklist(blocklist)
+    pulse_logger.log(f"🚫 EC blocklist — removed: {matched}")
+    return jsonify({'status': 'removed', 'keys_removed': matched, 'blocklist': {k: v for k, v in blocklist.items() if not k.startswith('__')}})
+
 @app.route('/api/size_mode', methods=['POST'])
 @require_auth
 def set_size_mode():
@@ -375,6 +415,81 @@ def set_size_mode():
         return jsonify({'status': 'saved', 'mode': mode})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+GEO_BLOCKLIST_FILE = '/data/geo_blocklist.json'
+
+def _load_geo_blocklist():
+    try:
+        if os.path.exists(GEO_BLOCKLIST_FILE):
+            with open(GEO_BLOCKLIST_FILE, 'r') as f:
+                raw = json.load(f)
+            return raw if isinstance(raw, list) else []
+    except Exception:
+        pass
+    return []
+
+@app.route('/api/geo-blocklist', methods=['GET'])
+@require_auth
+def get_geo_blocklist():
+    return jsonify(_load_geo_blocklist())
+
+@app.route('/api/geo-blocklist', methods=['POST'])
+@require_auth
+def add_geo_blocklist():
+    data = request.get_json()
+    title = data.get('title') if data else None
+    if not isinstance(title, str) or not title.strip():
+        return jsonify({'error': 'Missing title'}), 400
+    if len(title) > _MAX_TITLE_LEN or '\x00' in title:
+        return jsonify({'error': 'Invalid title'}), 400
+    blocklist = _load_geo_blocklist()
+    title = title.strip()
+    if title not in blocklist:
+        blocklist.append(title)
+        atomic_write_json(GEO_BLOCKLIST_FILE, blocklist)
+    pulse_logger.log(f"🚫 Geo blocklist — added: {title[:60]}")
+    return jsonify({'status': 'added', 'title': title, 'blocklist': blocklist})
+
+@app.route('/api/geo-blocklist', methods=['DELETE'])
+@require_auth
+def remove_geo_blocklist():
+    data = request.get_json()
+    title = data.get('title') if data else None
+    if not isinstance(title, str) or not title.strip():
+        return jsonify({'error': 'Missing title'}), 400
+    blocklist = _load_geo_blocklist()
+    title = title.strip()
+    if title in blocklist:
+        blocklist.remove(title)
+        atomic_write_json(GEO_BLOCKLIST_FILE, blocklist)
+        pulse_logger.log(f"🚫 Geo blocklist — removed: {title[:60]}")
+        return jsonify({'status': 'removed', 'title': title, 'blocklist': blocklist})
+    return jsonify({'error': 'Title not found in blocklist'}), 404
+
+@app.route('/api/geo-tier-override', methods=['PATCH'])
+@require_auth
+def geo_tier_override():
+    data = request.get_json()
+    title = data.get('title') if data else None
+    tier = data.get('tier') if data else None
+    if not isinstance(title, str) or not title.strip():
+        return jsonify({'error': 'Missing title'}), 400
+    if tier not in (1, 2, 3):
+        return jsonify({'error': 'tier must be 1, 2, or 3'}), 400
+    cache_file = '/data/gemini_classifications.json'
+    try:
+        with open(cache_file, 'r') as f:
+            cache = json.load(f)
+    except Exception as e:
+        return jsonify({'error': f'Failed to load classification cache: {e}'}), 500
+    title = title.strip()
+    if title not in cache:
+        return jsonify({'error': 'Title not found in classification cache'}), 404
+    old_tier = cache[title].get('tier')
+    cache[title]['tier'] = tier
+    atomic_write_json(cache_file, cache)
+    pulse_logger.log(f"🧭 Geo tier override | {title[:60]} | {old_tier} → {tier}")
+    return jsonify({'status': 'updated', 'title': title, 'old_tier': old_tier, 'tier': tier, 'entry': cache[title]})
 
 @app.route('/api/ai_lens')
 @require_auth

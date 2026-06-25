@@ -144,10 +144,30 @@ class InstitutionalPipeline:
             error_handler.handle(e, "COT Fetcher")
             return None, None
 
+    def _cache_is_stale(self, existing):
+        """True if the cached COT data is older than 3 days — used to detect
+        holiday-delayed releases where CFTC publishes Monday instead of Friday."""
+        ts = existing.get('timestamp', '')
+        if not ts:
+            return True
+        try:
+            cached_dt = datetime.fromisoformat(ts)
+            if cached_dt.tzinfo is None:
+                cached_dt = cached_dt.replace(tzinfo=pytz.timezone(TIMEZONE))
+            age_days = (datetime.now(pytz.timezone(TIMEZONE)) - cached_dt).total_seconds() / 86400
+            return age_days >= 3
+        except Exception:
+            return False
+
     def fetch(self):
         try:
             existing = self._load()
-            if not self.is_friday() and existing:
+            now = datetime.now(pytz.timezone(TIMEZONE))
+            is_monday_stale = now.weekday() == 0 and existing and self._cache_is_stale(existing)
+            if is_monday_stale:
+                pulse_logger.log("🔄 Institutional — Monday with stale cache (>3 days), checking CFTC for holiday-delayed release")
+
+            if not self.is_friday() and not is_monday_stale and existing:
                 if not existing.get('pillar_score'):
                     nq = existing.get('nq_futures') or {}
                     es = existing.get('es_futures') or {}
