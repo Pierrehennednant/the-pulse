@@ -99,10 +99,16 @@ def _run_partial_refresh(label):
     from processors.bias_calculator import bias_calculator
     from utils.cache import cache
 
+    from pipelines.economic_calendar import economic_calendar_pipeline
+
     ec_cached = cache.load('economic_calendar')
     econ_data = ec_cached['data'] if ec_cached else {
         'pillar': 'economic_calendar', 'events': [], 'pillar_score': 0, 'status': 'live'
     }
+    # Re-apply manual inputs so speech tags saved between fetch cycles are never lost
+    if econ_data.get('events'):
+        econ_data['events'] = economic_calendar_pipeline.apply_manual_inputs(econ_data['events'])
+        econ_data['pillar_score'] = economic_calendar_pipeline.calculate_score(econ_data['events'])
 
     macro_cached = cache.load('macro_sentiment')
     macro_data = macro_cached['data'] if macro_cached else {}
