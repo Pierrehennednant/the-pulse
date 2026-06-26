@@ -288,7 +288,7 @@ class EconomicCalendarPipeline:
     def apply_manual_inputs(self, events):
         manual_inputs = manual_input_pipeline.get_inputs()
         for event in events:
-            key = manual_input_pipeline.make_key(event['title'], event.get('time_est', ''))
+            key = manual_input_pipeline.make_key(event['title'], event.get('event_date', ''))
             # Fall back to title-only key for legacy entries saved before compound keys
             manual = manual_inputs.get(key) or manual_inputs.get(event['title'])
             if manual:
@@ -345,9 +345,11 @@ class EconomicCalendarPipeline:
                 if bl_key in blocklist and not bl_key.startswith('__'):
                     pulse_logger.log(f"🚫 EC blocklist: skipping '{title}'")
                     continue
+                event_date = date_str[:10] if date_str else ''
                 event_row = {
                     'title': title,
                     'time_est': time_est,
+                    'event_date': event_date,
                     'forecast': forecast or 'N/A',
                     'previous': previous or 'N/A',
                     'actual': 'Pending',
@@ -393,14 +395,14 @@ class EconomicCalendarPipeline:
                         now_utc = datetime.now(pytz.utc)
 
                         if now_utc >= trigger_time and event_row['actual'] == 'Pending':
-                            mi_key = manual_input_pipeline.make_key(event_row['title'], event_row.get('time_est', ''))
+                            mi_key = manual_input_pipeline.make_key(event_row['title'], event_row.get('event_date', ''))
                             all_inputs = manual_input_pipeline.get_inputs()
                             existing = all_inputs.get(mi_key) or all_inputs.get(event_row['title'])
                             if not existing:
                                 pulse_logger.log(f"🎙️ Auto-detecting speech sentiment for: {event_row['title']}")
                                 sentiment = self.auto_detect_speech_sentiment(event_row['title'])
                                 if sentiment:
-                                    manual_input_pipeline.save_actual(event_row['title'], sentiment, None, event_date=event_row.get('time_est', ''))
+                                    manual_input_pipeline.save_actual(event_row['title'], sentiment, None, event_date=event_row.get('event_date', ''))
                                     pulse_logger.log(f"✅ Auto-tagged {event_row['title']} as {sentiment}")
                     except Exception as e:
                         pulse_logger.log(f"⚠️ Speech trigger check failed: {e}", level="WARNING")

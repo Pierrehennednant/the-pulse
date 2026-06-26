@@ -394,9 +394,9 @@
     🚫 Speech Event — No trade 30 min before. Auto-detection triggers 60 min after start. Override below if needed.
 </div>
 <div style="margin-top:8px;display:flex;gap:6px">
-    <button onclick="submitActual('${e.title}', '${eventId}', 'bearish', this, '${e.time_est || ''}')" style="flex:1;background:#3a1a1a;color:#e74c3c;border:1px solid #5a2a2a;border-radius:6px;padding:6px;font-size:12px;cursor:pointer">🔴 Bearish</button>
-    <button onclick="submitActual('${e.title}', '${eventId}', 'neutral', this, '${e.time_est || ''}')" style="flex:1;background:#2a2a1a;color:#f39c12;border:1px solid #4a4a2a;border-radius:6px;padding:6px;font-size:12px;cursor:pointer">🟡 Neutral</button>
-    <button onclick="submitActual('${e.title}', '${eventId}', 'bullish', this, '${e.time_est || ''}')" style="flex:1;background:#1a3a1a;color:#2ecc71;border:1px solid #2a5a2a;border-radius:6px;padding:6px;font-size:12px;cursor:pointer">🟢 Bullish</button>
+    <button onclick="submitActual('${e.title}', '${eventId}', 'bearish', this, '${e.event_date || ''}')" style="flex:1;background:#3a1a1a;color:#e74c3c;border:1px solid #5a2a2a;border-radius:6px;padding:6px;font-size:12px;cursor:pointer">🔴 Bearish</button>
+    <button onclick="submitActual('${e.title}', '${eventId}', 'neutral', this, '${e.event_date || ''}')" style="flex:1;background:#2a2a1a;color:#f39c12;border:1px solid #4a4a2a;border-radius:6px;padding:6px;font-size:12px;cursor:pointer">🟡 Neutral</button>
+    <button onclick="submitActual('${e.title}', '${eventId}', 'bullish', this, '${e.event_date || ''}')" style="flex:1;background:#1a3a1a;color:#2ecc71;border:1px solid #2a5a2a;border-radius:6px;padding:6px;font-size:12px;cursor:pointer">🟢 Bullish</button>
 </div>` : '';
                 })() : ''}
 
@@ -406,7 +406,7 @@
                     <div style="display:flex;gap:6px;margin-bottom:6px">
                         <input type="text" id="actual_${eventId}" placeholder="e.g. 52.4"
                             style="flex:1;background:#0a0e1a;border:1px solid #2a4a7a;border-radius:6px;padding:6px 10px;color:#e0e6f0;font-size:13px;outline:none"/>
-                        <button onclick="submitActual('${e.title}', '${eventId}', null, this, '${e.time_est || ''}')"
+                        <button onclick="submitActual('${e.title}', '${eventId}', null, this, '${e.event_date || ''}')"
                             style="background:#1a3a6a;color:#4a9eff;border:1px solid #2a4a7a;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer">
                             Submit
                         </button>
@@ -416,7 +416,7 @@
                 </div>` : ''}
                 ${!isPending && e.title ? `
 <div style="margin-top:8px">
-    <button onclick="resetActual('${e.title}', this, '${e.time_est || ''}')"
+    <button onclick="resetActual('${e.title}', this, '${e.event_date || ''}')"
         style="background:#1a0a0a;color:#e74c3c;border:1px solid #3a1a1a;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">
         ✕ Reset Actual
     </button>

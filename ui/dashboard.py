@@ -231,7 +231,7 @@ def manual_input():
                 if ec_cached:
                     ec_data = ec_cached['data']
                     for event in ec_data.get('events', []):
-                        if event.get('title') == event_title and (not event_date or event.get('time_est', '') == event_date):
+                        if event.get('title') == event_title and (not event_date or event.get('event_date', '') == event_date):
                             result, market_impact, reason = economic_calendar_pipeline.get_market_implication(
                                 event_title, actual_value,
                                 event.get('forecast', ''), event.get('previous', '')
@@ -306,7 +306,7 @@ def reset_manual_input():
             if ec_cached:
                 ec_data = ec_cached['data']
                 for event in ec_data.get('events', []):
-                    if event.get('title') == event_title and (not event_date or event.get('time_est', '') == event_date):
+                    if event.get('title') == event_title and (not event_date or event.get('event_date', '') == event_date):
                         event['actual'] = 'Pending'
                         if event.get('is_speech'):
                             event['result'] = 'speech'
