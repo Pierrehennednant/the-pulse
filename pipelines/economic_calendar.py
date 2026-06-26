@@ -289,8 +289,13 @@ class EconomicCalendarPipeline:
         manual_inputs = manual_input_pipeline.get_inputs()
         for event in events:
             key = manual_input_pipeline.make_key(event['title'], event.get('event_date', ''))
-            # Fall back to title-only key for legacy entries saved before compound keys
-            manual = manual_inputs.get(key) or manual_inputs.get(event['title'])
+            # Lookup order: 1) exact compound key, 2) any title::* prefix match, 3) bare title
+            manual = manual_inputs.get(key)
+            if not manual:
+                prefix = event['title'] + '::'
+                manual = next((v for k, v in manual_inputs.items() if k.startswith(prefix)), None)
+            if not manual:
+                manual = manual_inputs.get(event['title'])
             if manual:
                 event['actual'] = manual['actual']
                 event['story_url'] = manual.get('story_url')
@@ -397,7 +402,8 @@ class EconomicCalendarPipeline:
                         if now_utc >= trigger_time and event_row['actual'] == 'Pending':
                             mi_key = manual_input_pipeline.make_key(event_row['title'], event_row.get('event_date', ''))
                             all_inputs = manual_input_pipeline.get_inputs()
-                            existing = all_inputs.get(mi_key) or all_inputs.get(event_row['title'])
+                            prefix = event_row['title'] + '::'
+                            existing = all_inputs.get(mi_key) or next((v for k, v in all_inputs.items() if k.startswith(prefix)), None) or all_inputs.get(event_row['title'])
                             if not existing:
                                 pulse_logger.log(f"🎙️ Auto-detecting speech sentiment for: {event_row['title']}")
                                 sentiment = self.auto_detect_speech_sentiment(event_row['title'])
