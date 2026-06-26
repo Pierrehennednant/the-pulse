@@ -287,7 +287,6 @@ class EconomicCalendarPipeline:
 
     def apply_manual_inputs(self, events):
         manual_inputs = manual_input_pipeline.get_inputs()
-        pulse_logger.log(f"🔑 Manual inputs keys: {list(manual_inputs.keys())}")
         for event in events:
             key = manual_input_pipeline.make_key(event['title'], event.get('event_date', ''))
             # Fall back to title-only key for legacy entries saved before compound keys
