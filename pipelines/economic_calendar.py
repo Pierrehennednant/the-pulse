@@ -288,8 +288,10 @@ class EconomicCalendarPipeline:
     def apply_manual_inputs(self, events):
         manual_inputs = manual_input_pipeline.get_inputs()
         for event in events:
-            if event['title'] in manual_inputs:
-                manual = manual_inputs[event['title']]
+            key = manual_input_pipeline.make_key(event['title'], event.get('time_est', ''))
+            # Fall back to title-only key for legacy entries saved before compound keys
+            manual = manual_inputs.get(key) or manual_inputs.get(event['title'])
+            if manual:
                 event['actual'] = manual['actual']
                 event['story_url'] = manual.get('story_url')
                 event['story_context'] = manual.get('story_context')
@@ -391,12 +393,14 @@ class EconomicCalendarPipeline:
                         now_utc = datetime.now(pytz.utc)
 
                         if now_utc >= trigger_time and event_row['actual'] == 'Pending':
-                            existing = manual_input_pipeline.get_inputs().get(event_row['title'])
+                            mi_key = manual_input_pipeline.make_key(event_row['title'], event_row.get('time_est', ''))
+                            all_inputs = manual_input_pipeline.get_inputs()
+                            existing = all_inputs.get(mi_key) or all_inputs.get(event_row['title'])
                             if not existing:
                                 pulse_logger.log(f"🎙️ Auto-detecting speech sentiment for: {event_row['title']}")
                                 sentiment = self.auto_detect_speech_sentiment(event_row['title'])
                                 if sentiment:
-                                    manual_input_pipeline.save_actual(event_row['title'], sentiment, None)
+                                    manual_input_pipeline.save_actual(event_row['title'], sentiment, None, event_date=event_row.get('time_est', ''))
                                     pulse_logger.log(f"✅ Auto-tagged {event_row['title']} as {sentiment}")
                     except Exception as e:
                         pulse_logger.log(f"⚠️ Speech trigger check failed: {e}", level="WARNING")

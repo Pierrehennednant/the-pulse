@@ -24,7 +24,13 @@ class ManualInputPipeline:
         if not os.path.exists(self.permanent_file):
             atomic_write_json(self.permanent_file, {})
 
-    def save_actual(self, event_title, actual_value, story_url=None):
+    @staticmethod
+    def make_key(title, event_date=''):
+        if event_date:
+            return f"{title}::{event_date}"
+        return title
+
+    def save_actual(self, event_title, actual_value, story_url=None, event_date=''):
         try:
             story_context = None
             if story_url:
@@ -33,7 +39,8 @@ class ManualInputPipeline:
             with open(self.permanent_file, 'r') as f:
                 inputs = json.load(f)
 
-            inputs[event_title] = {
+            key = self.make_key(event_title, event_date)
+            inputs[key] = {
                 'actual': actual_value,
                 'story_url': story_url,
                 'story_context': story_context,
@@ -42,7 +49,7 @@ class ManualInputPipeline:
 
             atomic_write_json(self.permanent_file, inputs)
 
-            pulse_logger.log(f"✓ Manual input saved permanently | {event_title}: {actual_value}")
+            pulse_logger.log(f"✓ Manual input saved permanently | {key}: {actual_value}")
             return True
         except Exception as e:
             error_handler.handle(e, "Manual Input")

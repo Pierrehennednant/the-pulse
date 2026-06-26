@@ -214,12 +214,13 @@ def manual_input():
         event_title = data.get('event_title')
         actual_value = data.get('actual_value')
         story_url = data.get('story_url', None)
+        event_date = data.get('event_date', '')
 
         ok, err = _validate_manual_input(event_title, actual_value)
         if not ok:
             return jsonify({'error': err}), 400
 
-        success = manual_input_pipeline.save_actual(event_title, actual_value, story_url)
+        success = manual_input_pipeline.save_actual(event_title, actual_value, story_url, event_date=event_date)
 
         if success:
             # Update the EC cache in place — no live Forex Factory fetch needed.
@@ -230,7 +231,7 @@ def manual_input():
                 if ec_cached:
                     ec_data = ec_cached['data']
                     for event in ec_data.get('events', []):
-                        if event.get('title') == event_title:
+                        if event.get('title') == event_title and (not event_date or event.get('time_est', '') == event_date):
                             result, market_impact, reason = economic_calendar_pipeline.get_market_implication(
                                 event_title, actual_value,
                                 event.get('forecast', ''), event.get('previous', '')
@@ -277,6 +278,7 @@ def reset_manual_input():
     try:
         data = request.get_json()
         event_title = data.get('event_title')
+        event_date = data.get('event_date', '')
         if not isinstance(event_title, str) or not event_title:
             return jsonify({'error': 'Missing event_title'}), 400
         if len(event_title) > _MAX_TITLE_LEN or '\x00' in event_title:
@@ -284,8 +286,16 @@ def reset_manual_input():
 
         with open('/data/permanent_manual_inputs.json', 'r') as f:
             inputs = json.load(f)
+        mi_key = manual_input_pipeline.make_key(event_title, event_date)
+        # Remove compound key; also remove legacy title-only key if present
+        changed = False
+        if mi_key in inputs:
+            del inputs[mi_key]
+            changed = True
         if event_title in inputs:
             del inputs[event_title]
+            changed = True
+        if changed:
             atomic_write_json('/data/permanent_manual_inputs.json', inputs)
 
         # Reset the event in the EC cache in place — no live Forex Factory fetch needed.
@@ -296,7 +306,7 @@ def reset_manual_input():
             if ec_cached:
                 ec_data = ec_cached['data']
                 for event in ec_data.get('events', []):
-                    if event.get('title') == event_title:
+                    if event.get('title') == event_title and (not event_date or event.get('time_est', '') == event_date):
                         event['actual'] = 'Pending'
                         if event.get('is_speech'):
                             event['result'] = 'speech'
