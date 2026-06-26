@@ -106,6 +106,7 @@ class EconomicCalendarPipeline:
         "PPI m/m":                        -1,
         "Core PCE m/m":                   -1,
         "GDP q/q":                        +1,
+        "Final GDP q/q":                  +1,
         "ISM Manufacturing PMI":          +1,
         "ISM Services PMI":               +1,
         "Retail Sales m/m":               +1,
