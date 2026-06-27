@@ -1,3 +1,4 @@
+# v2026-06-27
 from datetime import datetime
 import pytz
 from config import PILLAR_WEIGHTS, TIMEZONE
