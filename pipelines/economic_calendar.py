@@ -403,9 +403,16 @@ class EconomicCalendarPipeline:
                             mi_key = manual_input_pipeline.make_key(event_row['title'], event_row.get('event_date', ''))
                             all_inputs = manual_input_pipeline.get_inputs()
                             t = event_row['title']
-                            existing = (all_inputs.get(mi_key) or all_inputs.get(t)
-                                        or next((v for k, v in all_inputs.items()
-                                                 if '::' in k and k.split('::', 1)[0] == t), None))
+                            match_exact = all_inputs.get(mi_key)
+                            match_bare = all_inputs.get(t)
+                            match_wild = next((v for k, v in all_inputs.items()
+                                               if '::' in k and k.split('::', 1)[0] == t), None)
+                            existing = match_exact or match_bare or match_wild
+                            pulse_logger.log(
+                                f"🔍 Auto-detect guard | title='{t}' | compound='{mi_key}' | "
+                                f"exact={'HIT' if match_exact else 'MISS'} | bare={'HIT' if match_bare else 'MISS'} | "
+                                f"wild={'HIT' if match_wild else 'MISS'} | stored_keys={list(all_inputs.keys())}"
+                            )
                             if not existing:
                                 pulse_logger.log(f"🎙️ Auto-detecting speech sentiment for: {event_row['title']}")
                                 sentiment = self.auto_detect_speech_sentiment(event_row['title'])
