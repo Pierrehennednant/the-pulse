@@ -386,8 +386,11 @@ class EconomicCalendarPipeline:
             # Apply saved manual inputs before speech detection so actual reflects prior tags
             events = self.apply_manual_inputs(events)
 
+            today_str = datetime.now(self.timezone).strftime('%Y-%m-%d')
             for event_row in events:
                 if not event_row.get('is_speech'):
+                    continue
+                if event_row.get('event_date', '') != today_str:
                     continue
                 date_str = date_strs.get(event_row['title'], '')
                 if date_str:
