@@ -90,7 +90,15 @@ def run_pulse():
             else:
                 bias_threshold = 0.33
         except Exception:
+            pf_week = {}
             bias_threshold = 0.50
+
+        red_folder_days = pf_week.get('red_folder_days', 0)
+        day_s = 'day' if red_folder_days == 1 else 'days'
+        if pf_week.get('is_quiet_week'):
+            pulse_logger.log(f"🔇 Quiet week active — {red_folder_days} red folder {day_s} — EC {pf_week.get('ec_weight', 30)}%, bias ±{bias_threshold}")
+        elif pf_week:
+            pulse_logger.log(f"📅 Standard week — {red_folder_days} red folder {day_s} — EC {pf_week.get('ec_weight', 30)}%, bias ±{bias_threshold}")
 
         bias_score = bias_calculator.compute(formatted_data, size_mode=size_mode, bias_threshold=bias_threshold)
 

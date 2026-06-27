@@ -432,13 +432,6 @@ class PropFirmRecommendationEngine(RecommendationEngine):
                     f"({red_folder_days} red folder {day_s})"
                 )
 
-            # Log every cycle
-            day_s = 'day' if red_folder_days == 1 else 'days'
-            if is_quiet:
-                pulse_logger.log(f"🔇 Quiet week active — {red_folder_days} red folder {day_s} — EC {ec_weight}%, bias ±{bias_threshold}")
-            else:
-                pulse_logger.log(f"📅 Standard week — {red_folder_days} red folder {day_s} — EC {ec_weight}%, bias ±{bias_threshold}")
-
             final_score = (bias_data.get('final_score', 0) or 0) if bias_data else 0
             if final_score >= bias_threshold:
                 bias = 'Bullish'
