@@ -288,14 +288,14 @@ class EconomicCalendarPipeline:
     def apply_manual_inputs(self, events):
         manual_inputs = manual_input_pipeline.get_inputs()
         for event in events:
-            key = manual_input_pipeline.make_key(event['title'], event.get('event_date', ''))
-            # Lookup order: 1) exact compound key, 2) any title::* prefix match, 3) bare title
-            manual = manual_inputs.get(key)
+            title = event['title']
+            key = manual_input_pipeline.make_key(title, event.get('event_date', ''))
+            # Lookup order: 1) exact compound key, 2) bare title, 3) any key whose
+            # title portion (before "::") matches — catches all legacy key formats
+            manual = manual_inputs.get(key) or manual_inputs.get(title)
             if not manual:
-                prefix = event['title'] + '::'
-                manual = next((v for k, v in manual_inputs.items() if k.startswith(prefix)), None)
-            if not manual:
-                manual = manual_inputs.get(event['title'])
+                manual = next((v for k, v in manual_inputs.items()
+                               if '::' in k and k.split('::', 1)[0] == title), None)
             if manual:
                 event['actual'] = manual['actual']
                 event['story_url'] = manual.get('story_url')
@@ -402,8 +402,10 @@ class EconomicCalendarPipeline:
                         if now_utc >= trigger_time and event_row['actual'] == 'Pending':
                             mi_key = manual_input_pipeline.make_key(event_row['title'], event_row.get('event_date', ''))
                             all_inputs = manual_input_pipeline.get_inputs()
-                            prefix = event_row['title'] + '::'
-                            existing = all_inputs.get(mi_key) or next((v for k, v in all_inputs.items() if k.startswith(prefix)), None) or all_inputs.get(event_row['title'])
+                            t = event_row['title']
+                            existing = (all_inputs.get(mi_key) or all_inputs.get(t)
+                                        or next((v for k, v in all_inputs.items()
+                                                 if '::' in k and k.split('::', 1)[0] == t), None))
                             if not existing:
                                 pulse_logger.log(f"🎙️ Auto-detecting speech sentiment for: {event_row['title']}")
                                 sentiment = self.auto_detect_speech_sentiment(event_row['title'])
