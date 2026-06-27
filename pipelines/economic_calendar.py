@@ -399,7 +399,7 @@ class EconomicCalendarPipeline:
                         trigger_time = speech_dt + timedelta(minutes=60)
                         now_utc = datetime.now(pytz.utc)
 
-                        if now_utc >= trigger_time and event_row['actual'] == 'Pending':
+                        if now_utc >= trigger_time:
                             mi_key = manual_input_pipeline.make_key(event_row['title'], event_row.get('event_date', ''))
                             all_inputs = manual_input_pipeline.get_inputs()
                             t = event_row['title']
