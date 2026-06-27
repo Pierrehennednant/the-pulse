@@ -1,3 +1,4 @@
+# v2026-06-27
 import json
 import os
 from datetime import datetime, timedelta
