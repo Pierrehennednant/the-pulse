@@ -1,4 +1,4 @@
-# v2026-06-28b
+# v2026-06-28c
 import json
 import os
 import schedule
@@ -11,31 +11,31 @@ import pytz
 from config import TIMEZONE, REFRESH_INTERVAL_MINUTES
 from utils.logger import pulse_logger
 
-# Wait for Railway persistent volume at /data/ before pipeline init
-_VOLUME_DIR = '/data'
-_VOLUME_TIMEOUT = 45.0
-_VOLUME_POLL = 0.5
-_elapsed = 0.0
-_volume_ready = False
-while _elapsed < _VOLUME_TIMEOUT:
-    try:
-        probe = os.path.join(_VOLUME_DIR, '.volume_probe')
-        with open(probe, 'w') as f:
-            f.write('ok')
-        with open(probe, 'r') as f:
-            if f.read() == 'ok':
-                _volume_ready = True
-        os.remove(probe)
-    except Exception:
-        _volume_ready = False
-    if _volume_ready:
-        break
-    time.sleep(_VOLUME_POLL)
-    _elapsed += _VOLUME_POLL
-if _volume_ready:
-    pulse_logger.log(f"✅ /data/ volume ready after {_elapsed:.1f}s")
-else:
-    pulse_logger.log(f"⚠️ /data/ volume not writable after {_VOLUME_TIMEOUT}s — proceeding without it", level="WARNING")
+
+def wait_for_persistent_volume(max_wait_seconds: int = 120):
+    data_dir = "/data"
+    test_file = os.path.join(data_dir, ".volume_ready_test")
+    print(f"🔄 Waiting up to {max_wait_seconds}s for persistent volume at {data_dir}...")
+    for i in range(max_wait_seconds):
+        try:
+            if os.path.isdir(data_dir) and os.access(data_dir, os.W_OK):
+                with open(test_file, "w") as f:
+                    f.write("ok")
+                with open(test_file, "r") as f:
+                    if f.read() == "ok":
+                        os.remove(test_file)
+                        print(f"✅ Persistent volume /data is ready and writable (took {i+1}s)")
+                        return True
+        except Exception:
+            pass
+        if (i + 1) % 15 == 0:
+            print(f"   Still waiting for /data volume... ({i+1}s elapsed)")
+        time.sleep(1)
+    print(f"⚠️ WARNING: /data volume not writable after {max_wait_seconds}s — proceeding anyway")
+    return False
+
+
+wait_for_persistent_volume(max_wait_seconds=120)
 
 from pipelines.macro_sentiment import macro_sentiment_pipeline
 from pipelines.economic_calendar import economic_calendar_pipeline
