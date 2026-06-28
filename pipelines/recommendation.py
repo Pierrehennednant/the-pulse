@@ -342,22 +342,29 @@ class PropFirmRecommendationEngine(RecommendationEngine):
         iso = now.isocalendar()
         current_week = (iso[0], iso[1])
 
+        cached = None
         try:
             if os.path.exists(PROP_FIRM_THRESHOLD_FILE):
                 with open(PROP_FIRM_THRESHOLD_FILE, 'r') as f:
                     cached = json.load(f)
-                if tuple(cached.get('week', [])) == current_week and 'is_quiet_week' in cached:
-                    return {
-                        'bias_threshold': cached['threshold'],
-                        'red_folder_days': cached['red_folder_days'],
-                        'is_new_week': False,
-                        'is_quiet_week': cached['is_quiet_week'],
-                        'ec_weight': cached['ec_weight'],
-                        'total_weight': cached['total_weight'],
-                        'alignment_threshold': cached['alignment_threshold'],
-                    }
         except Exception as e:
             pulse_logger.log(f"⚠️ Prop Firm threshold cache read failed: {e}", level="WARNING")
+
+        # Cache hit — same week, return stored values
+        if cached and tuple(cached.get('week', [])) == current_week and 'is_quiet_week' in cached:
+            return {
+                'bias_threshold': cached['threshold'],
+                'red_folder_days': cached['red_folder_days'],
+                'is_new_week': False,
+                'is_quiet_week': cached['is_quiet_week'],
+                'ec_weight': cached['ec_weight'],
+                'total_weight': cached['total_weight'],
+                'alignment_threshold': cached['alignment_threshold'],
+            }
+
+        # Only a genuine week change triggers is_new_week — missing/unreadable cache does not
+        stored_week = tuple(cached.get('week', [])) if cached else None
+        is_new_week = stored_week is not None and stored_week != current_week
 
         red_folder_days = self._count_red_folder_days(econ_data)
         is_quiet = red_folder_days <= 1
@@ -383,7 +390,7 @@ class PropFirmRecommendationEngine(RecommendationEngine):
         return {
             'bias_threshold': threshold,
             'red_folder_days': red_folder_days,
-            'is_new_week': True,
+            'is_new_week': is_new_week,
             'is_quiet_week': is_quiet,
             'ec_weight': ec_weight,
             'total_weight': total_weight,
