@@ -365,7 +365,6 @@ class PropFirmRecommendationEngine(RecommendationEngine):
         # Only a genuine week change triggers is_new_week — missing/unreadable cache does not
         stored_week = tuple(cached.get('week', [])) if cached else None
         is_new_week = stored_week is not None and stored_week != current_week
-        pulse_logger.log(f"📅 Prop Firm week check — current: {current_week} (year={iso[0]}, week={iso[1]}, day={iso[2]}) | stored: {stored_week} | is_new_week: {is_new_week}")
 
         red_folder_days = self._count_red_folder_days(econ_data)
         is_quiet = red_folder_days <= 1
