@@ -1,4 +1,3 @@
-# v2026-06-28c
 import json
 import os
 import schedule

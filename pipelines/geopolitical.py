@@ -1,4 +1,3 @@
-# v2026-06-28
 import json
 import os
 import threading
