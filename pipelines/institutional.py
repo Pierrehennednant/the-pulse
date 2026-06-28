@@ -18,13 +18,6 @@ class InstitutionalPipeline:
         self.permanent_file = "/data/permanent_cot.json"
         self.cot_url = "https://www.cftc.gov/dea/futures/financial_lf.htm"
         self.headers = {'User-Agent': 'Mozilla/5.0'}
-        self._ensure_exists()
-
-    def _ensure_exists(self):
-        if not os.path.exists('/data'):
-            os.makedirs('/data')
-        if not os.path.exists(self.permanent_file):
-            atomic_write_json(self.permanent_file, {})
 
     def _load(self):
         try:

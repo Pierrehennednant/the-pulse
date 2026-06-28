@@ -1,4 +1,4 @@
-# v2026-06-28
+# v2026-06-28b
 import json
 import os
 import schedule
@@ -11,18 +11,31 @@ import pytz
 from config import TIMEZONE, REFRESH_INTERVAL_MINUTES
 from utils.logger import pulse_logger
 
-# Wait for Railway persistent volume before pipeline init creates empty default files
-_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
-_VOLUME_TIMEOUT = 10.0
+# Wait for Railway persistent volume at /data/ before pipeline init
+_VOLUME_DIR = '/data'
+_VOLUME_TIMEOUT = 45.0
 _VOLUME_POLL = 0.5
 _elapsed = 0.0
-while not os.path.isdir(_DATA_DIR) and _elapsed < _VOLUME_TIMEOUT:
+_volume_ready = False
+while _elapsed < _VOLUME_TIMEOUT:
+    try:
+        probe = os.path.join(_VOLUME_DIR, '.volume_probe')
+        with open(probe, 'w') as f:
+            f.write('ok')
+        with open(probe, 'r') as f:
+            if f.read() == 'ok':
+                _volume_ready = True
+        os.remove(probe)
+    except Exception:
+        _volume_ready = False
+    if _volume_ready:
+        break
     time.sleep(_VOLUME_POLL)
     _elapsed += _VOLUME_POLL
-if os.path.isdir(_DATA_DIR):
+if _volume_ready:
     pulse_logger.log(f"✅ /data/ volume ready after {_elapsed:.1f}s")
 else:
-    pulse_logger.log(f"⚠️ /data/ volume not found after {_VOLUME_TIMEOUT}s — proceeding without it", level="WARNING")
+    pulse_logger.log(f"⚠️ /data/ volume not writable after {_VOLUME_TIMEOUT}s — proceeding without it", level="WARNING")
 
 from pipelines.macro_sentiment import macro_sentiment_pipeline
 from pipelines.economic_calendar import economic_calendar_pipeline

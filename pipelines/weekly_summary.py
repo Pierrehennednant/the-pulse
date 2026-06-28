@@ -12,13 +12,6 @@ class WeeklySummaryPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
         self.permanent_file = "/data/permanent_weekly_summary.json"
-        self._ensure_exists()
-
-    def _ensure_exists(self):
-        if not os.path.exists('/data'):
-            os.makedirs('/data')
-        if not os.path.exists(self.permanent_file):
-            atomic_write_json(self.permanent_file, {})
 
     def _load(self):
         try:

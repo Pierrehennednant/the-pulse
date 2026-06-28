@@ -12,19 +12,16 @@ class SnapshotGenerator:
     def __init__(self, snapshot_dir="/data/snapshots"):
         self.snapshot_dir = snapshot_dir
         self.timezone = pytz.timezone(TIMEZONE)
-        self._ensure_exists()
 
     def _ensure_exists(self):
-        if not os.path.exists(self.snapshot_dir):
-            os.makedirs(self.snapshot_dir)
-        daily_dir = os.path.join(self.snapshot_dir, "daily")
-        if not os.path.exists(daily_dir):
-            os.makedirs(daily_dir)
+        os.makedirs(self.snapshot_dir, exist_ok=True)
+        os.makedirs(os.path.join(self.snapshot_dir, "daily"), exist_ok=True)
 
     def generate_id(self):
         return str(uuid.uuid4())
 
     def save(self, bias_score, formatted_data):
+        self._ensure_exists()
         timestamp = datetime.now(self.timezone).isoformat()
         snapshot_id = self.generate_id()
         weekly = {}
@@ -63,6 +60,7 @@ class SnapshotGenerator:
         return snapshot_id
 
     def save_daily(self, bias_score, formatted_data):
+        self._ensure_exists()
         daily_dir = os.path.join(self.snapshot_dir, "daily")
         timestamp = datetime.now(self.timezone).isoformat()
         snapshot_id = self.generate_id()

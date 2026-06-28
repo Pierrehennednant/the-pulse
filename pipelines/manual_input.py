@@ -17,13 +17,6 @@ class ManualInputPipeline:
         self.cache_key = "manual_inputs"
         self.permanent_file = "/data/permanent_manual_inputs.json"
         self.headers = {'User-Agent': 'Mozilla/5.0'}
-        self._ensure_exists()
-
-    def _ensure_exists(self):
-        if not os.path.exists('/data'):
-            os.makedirs('/data')
-        if not os.path.exists(self.permanent_file):
-            atomic_write_json(self.permanent_file, {})
 
     @staticmethod
     def make_key(title, event_date=''):
@@ -37,8 +30,11 @@ class ManualInputPipeline:
             if story_url:
                 story_context = self.fetch_story_context(story_url)
 
-            with open(self.permanent_file, 'r') as f:
-                inputs = json.load(f)
+            try:
+                with open(self.permanent_file, 'r') as f:
+                    inputs = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                inputs = {}
 
             key = self.make_key(event_title, event_date)
             inputs[key] = {

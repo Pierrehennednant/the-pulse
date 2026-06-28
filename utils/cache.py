@@ -6,13 +6,12 @@ from utils.file_lock import atomic_write_json
 class Cache:
     def __init__(self, cache_dir="/data"):
         self.cache_dir = cache_dir
-        self._ensure_exists()
-    
+
     def _ensure_exists(self):
-        if not os.path.exists(self.cache_dir):
-            os.makedirs(self.cache_dir)
-    
+        os.makedirs(self.cache_dir, exist_ok=True)
+
     def save(self, key, data):
+        self._ensure_exists()
         cache_file = os.path.join(self.cache_dir, f"{key}.json")
         payload = {
             'data': data,

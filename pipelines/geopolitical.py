@@ -515,7 +515,7 @@ CONTEXT: {context}"""
 
     def _ensure_geo_blocklist(self):
         """Seed /data/geo_blocklist.json from the repo-bundled default if it doesn't
-        exist on the persistent volume yet."""
+        exist on the persistent volume yet. Never creates an empty file."""
         if os.path.exists(self.GEO_BLOCKLIST_FILE):
             return
         repo_seed = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'geo_blocklist.json')
@@ -526,8 +526,7 @@ CONTEXT: {context}"""
                 atomic_write_json(self.GEO_BLOCKLIST_FILE, seed)
                 pulse_logger.log(f"📋 Geo blocklist seeded from repo default — {len(seed)} entries")
             else:
-                atomic_write_json(self.GEO_BLOCKLIST_FILE, [])
-                pulse_logger.log("📋 Geo blocklist created (empty)")
+                pulse_logger.log("📋 Geo blocklist — no repo seed and no volume file, skipping")
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to seed geo blocklist: {e}", level="WARNING")
 
