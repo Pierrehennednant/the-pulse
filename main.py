@@ -8,6 +8,20 @@ import concurrent.futures
 import pytz
 
 from config import TIMEZONE, REFRESH_INTERVAL_MINUTES
+from utils.logger import pulse_logger
+
+# Wait for Railway persistent volume before pipeline init creates empty default files
+_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
+_VOLUME_TIMEOUT = 10.0
+_VOLUME_POLL = 0.5
+_elapsed = 0.0
+while not os.path.isdir(_DATA_DIR) and _elapsed < _VOLUME_TIMEOUT:
+    time.sleep(_VOLUME_POLL)
+    _elapsed += _VOLUME_POLL
+if os.path.isdir(_DATA_DIR):
+    pulse_logger.log(f"✅ /data/ volume ready after {_elapsed:.1f}s")
+else:
+    pulse_logger.log(f"⚠️ /data/ volume not found after {_VOLUME_TIMEOUT}s — proceeding without it", level="WARNING")
 
 from pipelines.macro_sentiment import macro_sentiment_pipeline
 from pipelines.economic_calendar import economic_calendar_pipeline
@@ -22,7 +36,6 @@ from processors.data_formatter import data_formatter
 from processors.bias_calculator import bias_calculator
 from processors.snapshot_generator import snapshot_generator
 
-from utils.logger import pulse_logger
 from utils.error_handler import error_handler
 from utils.cache import cache
 
