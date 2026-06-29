@@ -947,10 +947,22 @@ CONTEXT: {context}"""
                 known_relevant.append(i)
 
         # Articles not yet classified — use keyword filter as temporary pass
-        keyword_passed = [
-            i for i in new_items
-            if self.is_market_relevant(i['headline'])
-        ]
+        # Apply blocklist and age filter before allowing keyword fallback articles
+        kw_blocklist = self._load_blocklist_strings()
+        keyword_passed = []
+        for i in new_items:
+            if not self.is_market_relevant(i['headline']):
+                continue
+            headline_lower = i['headline'].lower()
+            if kw_blocklist:
+                matched = [b for b in kw_blocklist if b in headline_lower]
+                if matched:
+                    pulse_logger.log(f"🚫 Blocked by blocklist (keyword fallback): {i['headline'][:80]} | matched: {matched[0][:60]}")
+                    continue
+            if self.is_article_too_old(i.get('published_at', '')):
+                pulse_logger.log(f"🕐 Age cutoff (keyword fallback): {i['headline'][:80]}")
+                continue
+            keyword_passed.append(i)
 
         # Return immediately — known relevant + keyword-passed new articles
         immediately_available = known_relevant + keyword_passed
