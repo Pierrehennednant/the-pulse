@@ -15,6 +15,9 @@ from utils.cache import cache
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
 
+MAX_ARTICLE_AGE_HOURS = 48
+
+
 class GeopoliticalPipeline:
     GEO_BLOCKLIST_FILE = "/data/geo_blocklist.json"
 
@@ -303,6 +306,20 @@ Articles to classify:
             pass
         return []
 
+    @staticmethod
+    def is_article_too_old(timestamp_str, max_hours=MAX_ARTICLE_AGE_HOURS):
+        """Return True if the article's timestamp is older than max_hours."""
+        if not timestamp_str:
+            return False
+        try:
+            dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            age_hours = (datetime.now(timezone.utc) - dt).total_seconds() / 3600
+            return age_hours > max_hours
+        except Exception:
+            return False
+
     def load_pinned_stories(self):
         """Load pinned stories, dropping any older than 48 hours or matching blocklist."""
         try:
@@ -310,7 +327,6 @@ Articles to classify:
                 return []
             with open(self.pinned_store_file, 'r') as f:
                 pinned = json.load(f)
-            now = datetime.now(timezone.utc)
             blocklist = self._load_blocklist_strings()
             valid = []
             dirty = False
@@ -323,19 +339,11 @@ Articles to classify:
                         pulse_logger.log(f"🚫 Blocked by blocklist (pinned): {headline[:80]} | matched: {matched[0][:60]}")
                         dirty = True
                         continue
-                try:
-                    pinned_at = datetime.fromisoformat(story.get('pinned_at', ''))
-                    if pinned_at.tzinfo is None:
-                        pinned_at = pinned_at.replace(tzinfo=timezone.utc)
-                    age_hours = (now - pinned_at).total_seconds() / 3600
-                    if age_hours > 48:
-                        pulse_logger.log(f"🕐 Age cutoff (pinned): {headline[:80]} ({age_hours:.0f}h old)")
-                        dirty = True
-                        continue
-                    valid.append(story)
-                except Exception as e:
-                    pulse_logger.log(f"⚠️ Failed to parse pinned story timestamp: {e}", level="WARNING")
+                if self.is_article_too_old(story.get('pinned_at', '')):
+                    pulse_logger.log(f"🕐 Age cutoff (pinned): {headline[:80]}")
+                    dirty = True
                     continue
+                valid.append(story)
             if dirty:
                 self.save_pinned_stories(valid)
             # Pin vs pin deduplication — keep newest when two pins cover the same story
@@ -587,31 +595,37 @@ CONTEXT: {context}"""
             pulse_logger.log(f"⚠️ Classification seed failed: {e}", level="WARNING")
 
     def _purge_blocked_from_cache(self):
-        """On startup, remove any blocklisted articles from pinned stories and
-        classification cache so they never re-enter the pipeline."""
+        """On startup, remove any blocklisted or >48h-old articles from pinned
+        stories and classification cache so they never re-enter the pipeline."""
+        pulse_logger.log("🧹 Startup purge — scanning pinned stories and classification cache")
         blocklist = self._load_blocklist_strings()
-        if not blocklist:
-            return
 
         # Purge from pinned stories
         try:
             if os.path.exists(self.pinned_store_file):
                 with open(self.pinned_store_file, 'r') as f:
                     pinned = json.load(f)
+                pulse_logger.log(f"🧹 Pinned stories: {len(pinned)} entries before cleaning")
                 cleaned = []
-                removed = 0
+                blocked = 0
+                aged = 0
                 for story in pinned:
                     headline = story.get('headline', '')
                     headline_lower = headline.lower()
-                    matched = [b for b in blocklist if b in headline_lower]
-                    if matched:
-                        pulse_logger.log(f"🗑️ Force-removed stale pinned article: {headline[:80]}")
-                        removed += 1
-                    else:
-                        cleaned.append(story)
-                if removed:
+                    if blocklist:
+                        matched = [b for b in blocklist if b in headline_lower]
+                        if matched:
+                            pulse_logger.log(f"🗑️ Force-removed pinned article (blocklist): {headline}")
+                            blocked += 1
+                            continue
+                    if self.is_article_too_old(story.get('pinned_at', '')):
+                        pulse_logger.log(f"🗑️ Force-removed pinned article (>48h old): {headline}")
+                        aged += 1
+                        continue
+                    cleaned.append(story)
+                if blocked or aged:
                     atomic_write_json(self.pinned_store_file, cleaned)
-                    pulse_logger.log(f"🗑️ Purged {removed} blocked article(s) from pinned stories")
+                pulse_logger.log(f"🧹 Pinned stories: {len(cleaned)} entries after cleaning ({blocked} blocked, {aged} aged out)")
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to purge pinned stories: {e}", level="WARNING")
 
@@ -621,20 +635,27 @@ CONTEXT: {context}"""
             if os.path.exists(cache_file):
                 with open(cache_file, 'r') as f:
                     classifications = json.load(f)
-                removed = 0
+                pulse_logger.log(f"🧹 Classification cache: {len(classifications)} entries before cleaning")
                 keys_to_remove = []
-                for title in classifications:
+                blocked = 0
+                aged = 0
+                for title, entry in classifications.items():
                     title_lower = title.lower()
-                    matched = [b for b in blocklist if b in title_lower]
-                    if matched:
-                        pulse_logger.log(f"🗑️ Force-removed cached classification: {title[:80]}")
+                    if blocklist:
+                        matched = [b for b in blocklist if b in title_lower]
+                        if matched:
+                            pulse_logger.log(f"🗑️ Force-removed classification (blocklist): {title}")
+                            keys_to_remove.append(title)
+                            blocked += 1
+                            continue
+                    if self.is_article_too_old(entry.get('classified_at', '')):
                         keys_to_remove.append(title)
-                        removed += 1
+                        aged += 1
                 if keys_to_remove:
                     for k in keys_to_remove:
                         del classifications[k]
                     atomic_write_json(cache_file, classifications)
-                    pulse_logger.log(f"🗑️ Purged {removed} blocked entry(ies) from classification cache")
+                pulse_logger.log(f"🧹 Classification cache: {len(classifications)} entries after cleaning ({blocked} blocked, {aged} aged out)")
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to purge classification cache: {e}", level="WARNING")
 
@@ -749,15 +770,8 @@ CONTEXT: {context}"""
                 pulse_logger.log(f"⚠️ Failed to parse article publish date: {e}", level="WARNING")
                 timestamp = published
                 date = datetime.now(self.timezone).strftime('%Y-%m-%d')
-            try:
-                dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=pytz.utc)
-                age_hours = (datetime.now(pytz.utc) - dt).total_seconds() / 3600
-                if age_hours > 48:
-                    continue
-            except Exception as e:
-                pulse_logger.log(f"⚠️ Failed to compute article age, including anyway: {e}", level="WARNING")
+            if self.is_article_too_old(published):
+                continue
             items.append({
                 'headline': title,
                 'description': ' '.join(description[:800].split()),
@@ -786,7 +800,7 @@ CONTEXT: {context}"""
                 f"&language=en"
                 f"&categories={category}"
                 f"&limit=25"
-                f"&published_after={(datetime.now(pytz.utc) - timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M:%S')}"
+                f"&published_after={(datetime.now(pytz.utc) - timedelta(hours=MAX_ARTICLE_AGE_HOURS)).strftime('%Y-%m-%dT%H:%M:%S')}"
                 f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,abcnews.go.com,washingtonpost.com,nytimes.com"
             )
             response = fetch_with_retry(url, timeout=6, retries=2)
@@ -803,7 +817,7 @@ CONTEXT: {context}"""
                 f"&search={requests.utils.quote(query)}"
                 f"&sort=published_at"
                 f"&limit=25"
-                f"&published_after={(datetime.now(pytz.utc) - timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M:%S')}"
+                f"&published_after={(datetime.now(pytz.utc) - timedelta(hours=MAX_ARTICLE_AGE_HOURS)).strftime('%Y-%m-%dT%H:%M:%S')}"
                 f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,washingtonpost.com,nytimes.com"
             )
             response = fetch_with_retry(url, timeout=6, retries=2)
@@ -834,8 +848,7 @@ CONTEXT: {context}"""
                     est = dt.astimezone(pytz.timezone(TIMEZONE))
                     timestamp = est.strftime('%b %d, %I:%M %p EST')
                     date = est.strftime('%Y-%m-%d')
-                    age_hours = (datetime.now(pytz.utc) - dt).total_seconds() / 3600
-                    if age_hours > 48:
+                    if self.is_article_too_old(published):
                         continue
                 except Exception as e:
                     pulse_logger.log(f"⚠️ Failed to parse article date in parallel fetch: {e}", level="WARNING")
@@ -893,25 +906,15 @@ CONTEXT: {context}"""
             gemini_cache = {}
 
         # Early blocklist filter — remove blocked articles before classification/scoring
-        geo_blocklist_file = self.GEO_BLOCKLIST_FILE
-        try:
-            if os.path.exists(geo_blocklist_file):
-                with open(geo_blocklist_file, 'r') as f:
-                    raw = json.load(f)
-                early_blocklist = raw if isinstance(raw, list) else []
-            else:
-                early_blocklist = []
-        except Exception as e:
-            pulse_logger.log(f"⚠️ Failed to load geo blocklist for early filter: {e}", level="WARNING")
-            early_blocklist = []
+        early_blocklist = self._load_blocklist_strings()
         if early_blocklist:
             pre_count = len(items)
             filtered = []
             for i in items:
                 headline_lower = i['headline'].lower()
-                matched = [b for b in early_blocklist if b.lower() in headline_lower]
+                matched = [b for b in early_blocklist if b in headline_lower]
                 if matched:
-                    pulse_logger.log(f"🚫 Blocked by blocklist (early filter): {i['headline'][:80]} | matched: {matched[0][:60]}")
+                    pulse_logger.log(f"🚫 Blocked by blocklist: {i['headline'][:80]} | matched: {matched[0][:60]}")
                 else:
                     filtered.append(i)
             items = filtered
@@ -925,17 +928,8 @@ CONTEXT: {context}"""
         for i in items:
             cached = gemini_cache.get(i['headline'], {})
             if cached.get('relevant') and cached.get('confidence', 0) >= 0.75:
-                classified_at = cached.get('classified_at', '')
-                if classified_at:
-                    try:
-                        classified_dt = datetime.fromisoformat(classified_at)
-                        if classified_dt.tzinfo is None:
-                            classified_dt = classified_dt.replace(tzinfo=timezone.utc)
-                        age_hours = (datetime.now(timezone.utc) - classified_dt).total_seconds() / 3600
-                        if age_hours > 48:
-                            continue
-                    except Exception as e:
-                        pulse_logger.log(f"⚠️ Failed to parse classified_at timestamp in cache: {e}", level="WARNING")
+                if self.is_article_too_old(cached.get('classified_at', '')):
+                    continue
                 if cached.get('direction'):
                     direction = cached['direction']
                     i['sentiment_score'] = 0.8 if direction == 'bullish' else -0.8 if direction == 'bearish' else 0.0
@@ -1023,55 +1017,35 @@ CONTEXT: {context}"""
         if retired:
             self.save_pinned_stories(surviving_pins)
 
-        # Hard 48-hour age cutoff — drop stale articles before scoring
-        now_utc = datetime.now(pytz.utc)
+        # Hard age cutoff — drop stale articles before scoring
         before_age = len(immediately_available)
         age_kept = []
         for i in immediately_available:
-            published = i.get('published_at', '')
-            if published:
-                try:
-                    dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=pytz.utc)
-                    if (now_utc - dt).total_seconds() / 3600 > 48:
-                        pulse_logger.log(f"🕐 Age cutoff — dropping >48h article: {i['headline'][:80]}")
-                        continue
-                except Exception:
-                    pass
+            if self.is_article_too_old(i.get('published_at', '')):
+                pulse_logger.log(f"🕐 Age cutoff: {i['headline'][:80]}")
+                continue
             age_kept.append(i)
         immediately_available = age_kept
         aged_out = before_age - len(immediately_available)
         if aged_out:
-            pulse_logger.log(f"🕐 Age cutoff — {aged_out} article(s) dropped (>48h old)")
+            pulse_logger.log(f"🕐 Age cutoff — {aged_out} article(s) dropped (>{MAX_ARTICLE_AGE_HOURS}h old)")
 
-        # Geo blocklist — drop articles matching any blocked string after all sources merged
-        geo_blocklist_file = self.GEO_BLOCKLIST_FILE
-        try:
-            if os.path.exists(geo_blocklist_file):
-                with open(geo_blocklist_file, 'r') as f:
-                    raw = json.load(f)
-                geo_blocklist = raw if isinstance(raw, list) else []
-            else:
-                geo_blocklist = []
-        except Exception as e:
-            pulse_logger.log(f"⚠️ Failed to load geo blocklist: {e}", level="WARNING")
-            geo_blocklist = []
-        if geo_blocklist:
+        # Final blocklist pass — catches anything injected after early filter (e.g. pins)
+        late_blocklist = self._load_blocklist_strings()
+        if late_blocklist:
             before = len(immediately_available)
             kept = []
             for i in immediately_available:
                 headline_lower = i['headline'].lower()
-                matched = [b for b in geo_blocklist if b.lower() in headline_lower]
+                matched = [b for b in late_blocklist if b in headline_lower]
                 if matched:
                     pulse_logger.log(f"🚫 Blocked by blocklist: {i['headline'][:80]} | matched: {matched[0][:60]}")
                 else:
-                    pulse_logger.log(f"✅ Geo blocklist PASS | {i['headline'][:80]}")
                     kept.append(i)
             immediately_available = kept
             blocked = before - len(immediately_available)
             if blocked:
-                pulse_logger.log(f"🚫 Geo blocklist — {blocked} article(s) filtered out")
+                pulse_logger.log(f"🚫 Final blocklist — {blocked} article(s) filtered out")
 
         pulse_logger.log(f"⚡ Returning {len(immediately_available)} articles instantly ({len(known_relevant)} Haiku-verified, {len(keyword_passed)} keyword-passed, {injected} pinned)")
 
