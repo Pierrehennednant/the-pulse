@@ -291,26 +291,52 @@ Articles to classify:
 
     # ── Pinned Stories Store ─────────────────────────────────────────────────
 
+    def _load_blocklist_strings(self):
+        """Load geo blocklist as a list of lowercase strings for matching."""
+        try:
+            if os.path.exists(self.GEO_BLOCKLIST_FILE):
+                with open(self.GEO_BLOCKLIST_FILE, 'r') as f:
+                    raw = json.load(f)
+                return [b.lower() for b in raw] if isinstance(raw, list) else []
+        except Exception:
+            pass
+        return []
+
     def load_pinned_stories(self):
-        """Load pinned stories, dropping any older than 48 hours."""
+        """Load pinned stories, dropping any older than 48 hours or matching blocklist."""
         try:
             if not os.path.exists(self.pinned_store_file):
                 return []
             with open(self.pinned_store_file, 'r') as f:
                 pinned = json.load(f)
             now = datetime.now(timezone.utc)
+            blocklist = self._load_blocklist_strings()
             valid = []
+            dirty = False
             for story in pinned:
+                headline = story.get('headline', '')
+                if blocklist:
+                    headline_lower = headline.lower()
+                    matched = [b for b in blocklist if b in headline_lower]
+                    if matched:
+                        pulse_logger.log(f"🚫 Blocked by blocklist (pinned): {headline[:80]} | matched: {matched[0][:60]}")
+                        dirty = True
+                        continue
                 try:
                     pinned_at = datetime.fromisoformat(story.get('pinned_at', ''))
                     if pinned_at.tzinfo is None:
                         pinned_at = pinned_at.replace(tzinfo=timezone.utc)
                     age_hours = (now - pinned_at).total_seconds() / 3600
-                    if age_hours <= 48:
-                        valid.append(story)
+                    if age_hours > 48:
+                        pulse_logger.log(f"🕐 Age cutoff (pinned): {headline[:80]} ({age_hours:.0f}h old)")
+                        dirty = True
+                        continue
+                    valid.append(story)
                 except Exception as e:
                     pulse_logger.log(f"⚠️ Failed to parse pinned story timestamp: {e}", level="WARNING")
                     continue
+            if dirty:
+                self.save_pinned_stories(valid)
             # Pin vs pin deduplication — keep newest when two pins cover the same story
             if len(valid) > 1:
                 try:
@@ -985,7 +1011,7 @@ CONTEXT: {context}"""
                 headline_lower = i['headline'].lower()
                 matched = [b for b in geo_blocklist if b.lower() in headline_lower]
                 if matched:
-                    pulse_logger.log(f"🚫 Geo blocklist HIT | {i['headline'][:80]} | matched: {matched[0][:60]}")
+                    pulse_logger.log(f"🚫 Blocked by blocklist: {i['headline'][:80]} | matched: {matched[0][:60]}")
                 else:
                     pulse_logger.log(f"✅ Geo blocklist PASS | {i['headline'][:80]}")
                     kept.append(i)
