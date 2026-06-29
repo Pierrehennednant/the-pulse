@@ -813,6 +813,33 @@ CONTEXT: {context}"""
             pulse_logger.log(f"⚠️ Failed to load Haiku classification cache: {e}", level="WARNING")
             gemini_cache = {}
 
+        # Early blocklist filter — remove blocked articles before classification/scoring
+        geo_blocklist_file = self.GEO_BLOCKLIST_FILE
+        try:
+            if os.path.exists(geo_blocklist_file):
+                with open(geo_blocklist_file, 'r') as f:
+                    raw = json.load(f)
+                early_blocklist = raw if isinstance(raw, list) else []
+            else:
+                early_blocklist = []
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to load geo blocklist for early filter: {e}", level="WARNING")
+            early_blocklist = []
+        if early_blocklist:
+            pre_count = len(items)
+            filtered = []
+            for i in items:
+                headline_lower = i['headline'].lower()
+                matched = [b for b in early_blocklist if b.lower() in headline_lower]
+                if matched:
+                    pulse_logger.log(f"🚫 Blocked by blocklist (early filter): {i['headline'][:80]} | matched: {matched[0][:60]}")
+                else:
+                    filtered.append(i)
+            items = filtered
+            early_blocked = pre_count - len(items)
+            if early_blocked:
+                pulse_logger.log(f"🚫 Early blocklist — {early_blocked} article(s) removed before classification")
+
         # Split into already classified vs new
         new_items = [i for i in items if i['headline'] not in gemini_cache]
         known_relevant = []
