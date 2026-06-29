@@ -32,6 +32,7 @@ class GeopoliticalPipeline:
         self.sentiment_analyzer = hf_pipeline("sentiment-analysis", model=SENTIMENT_MODEL)
         self._ensure_geo_blocklist()
         self._seed_classifications()
+        self._purge_blocked_from_cache()
         self.market_keywords = [
             'federal reserve', 'fomc', 'interest rate', 'rate hike', 'rate cut',
             'powell', 'inflation', 'cpi', 'ppi', 'gdp', 'jobs report', 'nonfarm',
@@ -584,6 +585,58 @@ CONTEXT: {context}"""
                 pulse_logger.log(f"📋 Classification seed — merged {merged} new entry(ies) from repo default")
         except Exception as e:
             pulse_logger.log(f"⚠️ Classification seed failed: {e}", level="WARNING")
+
+    def _purge_blocked_from_cache(self):
+        """On startup, remove any blocklisted articles from pinned stories and
+        classification cache so they never re-enter the pipeline."""
+        blocklist = self._load_blocklist_strings()
+        if not blocklist:
+            return
+
+        # Purge from pinned stories
+        try:
+            if os.path.exists(self.pinned_store_file):
+                with open(self.pinned_store_file, 'r') as f:
+                    pinned = json.load(f)
+                cleaned = []
+                removed = 0
+                for story in pinned:
+                    headline = story.get('headline', '')
+                    headline_lower = headline.lower()
+                    matched = [b for b in blocklist if b in headline_lower]
+                    if matched:
+                        pulse_logger.log(f"🗑️ Force-removed stale pinned article: {headline[:80]}")
+                        removed += 1
+                    else:
+                        cleaned.append(story)
+                if removed:
+                    atomic_write_json(self.pinned_store_file, cleaned)
+                    pulse_logger.log(f"🗑️ Purged {removed} blocked article(s) from pinned stories")
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to purge pinned stories: {e}", level="WARNING")
+
+        # Purge from classification cache
+        cache_file = "/data/gemini_classifications.json"
+        try:
+            if os.path.exists(cache_file):
+                with open(cache_file, 'r') as f:
+                    classifications = json.load(f)
+                removed = 0
+                keys_to_remove = []
+                for title in classifications:
+                    title_lower = title.lower()
+                    matched = [b for b in blocklist if b in title_lower]
+                    if matched:
+                        pulse_logger.log(f"🗑️ Force-removed cached classification: {title[:80]}")
+                        keys_to_remove.append(title)
+                        removed += 1
+                if keys_to_remove:
+                    for k in keys_to_remove:
+                        del classifications[k]
+                    atomic_write_json(cache_file, classifications)
+                    pulse_logger.log(f"🗑️ Purged {removed} blocked entry(ies) from classification cache")
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to purge classification cache: {e}", level="WARNING")
 
     def maybe_reset_geo_blocklist(self):
         """Clear the geo blocklist on Sunday weekly reset, matching EC blocklist schedule."""
