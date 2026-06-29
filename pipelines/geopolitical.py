@@ -672,8 +672,10 @@ CONTEXT: {context}"""
                 date = datetime.now(self.timezone).strftime('%Y-%m-%d')
             try:
                 dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
-                age_days = (datetime.now(pytz.utc) - dt.replace(tzinfo=pytz.utc) if dt.tzinfo is None else datetime.now(pytz.utc) - dt).days
-                if age_days > 7:
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=pytz.utc)
+                age_hours = (datetime.now(pytz.utc) - dt).total_seconds() / 3600
+                if age_hours > 48:
                     continue
             except Exception as e:
                 pulse_logger.log(f"⚠️ Failed to compute article age, including anyway: {e}", level="WARNING")
@@ -753,8 +755,8 @@ CONTEXT: {context}"""
                     est = dt.astimezone(pytz.timezone(TIMEZONE))
                     timestamp = est.strftime('%b %d, %I:%M %p EST')
                     date = est.strftime('%Y-%m-%d')
-                    age_days = (datetime.now(pytz.utc) - dt).days
-                    if age_days > 7:
+                    age_hours = (datetime.now(pytz.utc) - dt).total_seconds() / 3600
+                    if age_hours > 48:
                         continue
                 except Exception as e:
                     pulse_logger.log(f"⚠️ Failed to parse article date in parallel fetch: {e}", level="WARNING")
@@ -914,6 +916,28 @@ CONTEXT: {context}"""
             injected += 1
         if retired:
             self.save_pinned_stories(surviving_pins)
+
+        # Hard 48-hour age cutoff — drop stale articles before scoring
+        now_utc = datetime.now(pytz.utc)
+        before_age = len(immediately_available)
+        age_kept = []
+        for i in immediately_available:
+            published = i.get('published_at', '')
+            if published:
+                try:
+                    dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=pytz.utc)
+                    if (now_utc - dt).total_seconds() / 3600 > 48:
+                        pulse_logger.log(f"🕐 Age cutoff — dropping >48h article: {i['headline'][:80]}")
+                        continue
+                except Exception:
+                    pass
+            age_kept.append(i)
+        immediately_available = age_kept
+        aged_out = before_age - len(immediately_available)
+        if aged_out:
+            pulse_logger.log(f"🕐 Age cutoff — {aged_out} article(s) dropped (>48h old)")
 
         # Geo blocklist — drop articles matching any blocked string after all sources merged
         geo_blocklist_file = self.GEO_BLOCKLIST_FILE
