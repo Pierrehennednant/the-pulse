@@ -495,42 +495,52 @@
             .map(item => ({ ...item, _type: 'news' }));
 
         const combined = [...flags, ...newsItems];
-        if (!combined.length) return html + '<div class="data-row"><span class="data-label">No active flags</span></div>';
+        if (!combined.length) {
+            html += '<div class="data-row"><span class="data-label">No active flags</span></div>';
+        } else {
+            combined.sort((a, b) => {
+                const ta = new Date(a.timestamp || 0).getTime() || 0;
+                const tb = new Date(b.timestamp || 0).getTime() || 0;
+                return tb - ta;
+            });
 
-        combined.sort((a, b) => {
-            const ta = new Date(a.timestamp || 0).getTime() || 0;
-            const tb = new Date(b.timestamp || 0).getTime() || 0;
-            return tb - ta;
-        });
+            combined.forEach(item => {
+                if (item._type === 'flag') {
+                    html += `<div class="flag-item">
+                        <div class="flag-title">${item.title}</div>
+                        <div class="flag-meta">
+                            <span class="flag-status status-developing">${item.status}</span>
+                            <span class="flag-source">${item.source}</span>
+                            <span class="flag-source">${item.timestamp}</span>
+                            <button onclick="blockGeoArticle('${item.title.replace(/'/g, "\\'")}', this)" style="margin-left:auto;background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
+                        </div>
+                        <div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${valClass(item.predicted_impact)}">${(item.predicted_impact || '').toUpperCase()}</span></div>
+                        ${item.context ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${item.context}</div>` : ''}
+                        <div style="margin-top:8px"><a class="flag-link" href="${item.link}" target="_blank">🔗 View Source →</a></div>
+                    </div>`;
+                } else {
+                    const dirClass = item.gemini_direction ? valClass(item.gemini_direction) : '';
+                    const dirLabel = item.gemini_direction ? item.gemini_direction.toUpperCase() : '';
+                    html += `<div class="flag-item">
+                        <div class="flag-title">${item.headline}</div>
+                        <div class="flag-meta">
+                            <span class="flag-source">${item.source}</span>
+                            <span class="flag-source">${item.timestamp}</span>
+                            <button onclick="blockGeoArticle('${item.headline.replace(/'/g, "\\'")}', this)" style="margin-left:auto;background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
+                        </div>
+                        ${dirLabel ? `<div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${dirClass}">${dirLabel}</span></div>` : ''}
+                        ${item.description ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${item.description}</div>` : ''}
+                        ${item.link ? `<div style="margin-top:8px"><a class="flag-link" href="${item.link}" target="_blank">🔗 View Source →</a></div>` : ''}
+                    </div>`;
+                }
+            });
+        }
 
-        combined.forEach(item => {
-            if (item._type === 'flag') {
-                html += `<div class="flag-item">
-                    <div class="flag-title">${item.title}</div>
-                    <div class="flag-meta">
-                        <span class="flag-status status-developing">${item.status}</span>
-                        <span class="flag-source">${item.source}</span>
-                        <span class="flag-source">${item.timestamp}</span>
-                    </div>
-                    <div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${valClass(item.predicted_impact)}">${(item.predicted_impact || '').toUpperCase()}</span></div>
-                    ${item.context ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${item.context}</div>` : ''}
-                    <div style="margin-top:8px"><a class="flag-link" href="${item.link}" target="_blank">🔗 View Source →</a></div>
-                </div>`;
-            } else {
-                const dirClass = item.gemini_direction ? valClass(item.gemini_direction) : '';
-                const dirLabel = item.gemini_direction ? item.gemini_direction.toUpperCase() : '';
-                html += `<div class="flag-item">
-                    <div class="flag-title">${item.headline}</div>
-                    <div class="flag-meta">
-                        <span class="flag-source">${item.source}</span>
-                        <span class="flag-source">${item.timestamp}</span>
-                    </div>
-                    ${dirLabel ? `<div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${dirClass}">${dirLabel}</span></div>` : ''}
-                    ${item.description ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${item.description}</div>` : ''}
-                    ${item.link ? `<div style="margin-top:8px"><a class="flag-link" href="${item.link}" target="_blank">🔗 View Source →</a></div>` : ''}
-                </div>`;
-            }
-        });
+        html += `<div id="geo-blocklist-section" style="margin-top:12px;border-top:1px solid #1e2d4a;padding-top:10px;display:none">
+            <div style="font-size:11px;color:#4a9eff;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer" onclick="toggleGeoBlocklist()">🚫 Blocked Articles <span id="geo-bl-toggle" style="font-size:9px">▶</span></div>
+            <div id="geo-blocklist-items" style="display:none"></div>
+        </div>`;
+
         return html;
     }
 
@@ -675,6 +685,7 @@
         document.getElementById('geo-score-badge').textContent = scoreLabel(geo.pillar_score || 0);
         document.getElementById('geo-score-badge').className = `pillar-score ${scoreClass(geo.pillar_score || 0)}`;
         document.getElementById('geo-content').innerHTML = renderGeopolitical(geo);
+        checkGeoBlocklistVisibility();
 
         const pc = (snapshot.bias || {}).pillar_contributions || {};
         const econW = pc.economic_calendar && pc.economic_calendar.base_weight != null ? Math.round(pc.economic_calendar.base_weight) : 30;
@@ -904,6 +915,107 @@
         } catch(e) {
             unlockEcActions(btn, '✕');
             alert('Error: ' + e.message);
+        }
+    }
+
+    async function blockGeoArticle(title, btn) {
+        if (!confirm('Block "' + title + '" from the Geo pillar?')) return;
+        btn.disabled = true;
+        btn.textContent = '…';
+        try {
+            const response = await fetch('/api/geo-blocklist', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({title: title})
+            });
+            const result = await response.json();
+            if (result.status === 'added') {
+                const card = btn.closest('.flag-item');
+                if (card) card.remove();
+                setTimeout(() => { fetchData(); scheduleRefresh(); }, 500);
+            } else {
+                btn.disabled = false;
+                btn.textContent = '✕';
+                alert('Error: ' + (result.error || 'Unknown error'));
+            }
+        } catch(e) {
+            btn.disabled = false;
+            btn.textContent = '✕';
+            alert('Error: ' + e.message);
+        }
+    }
+
+    function toggleGeoBlocklist() {
+        const items = document.getElementById('geo-blocklist-items');
+        const toggle = document.getElementById('geo-bl-toggle');
+        if (!items) return;
+        if (items.style.display === 'none') {
+            items.style.display = 'block';
+            toggle.textContent = '▼';
+            fetchGeoBlocklist();
+        } else {
+            items.style.display = 'none';
+            toggle.textContent = '▶';
+        }
+    }
+
+    async function fetchGeoBlocklist() {
+        const container = document.getElementById('geo-blocklist-items');
+        if (!container) return;
+        try {
+            const response = await fetch('/api/geo-blocklist');
+            const blocklist = await response.json();
+            if (!blocklist.length) {
+                container.innerHTML = '<div style="font-size:12px;color:#7a8fa8;padding:4px 0">No blocked articles</div>';
+                return;
+            }
+            container.innerHTML = blocklist.map(entry => {
+                const title = entry.title || '';
+                return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #1e2d4a">
+                    <span style="flex:1;font-size:12px;color:#7a8fa8">${title}</span>
+                    <button onclick="unblockGeoArticle('${title.replace(/'/g, "\\'")}', this)" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Unblock this article">✕</button>
+                </div>`;
+            }).join('');
+        } catch(e) {
+            container.innerHTML = '<div style="font-size:12px;color:#e74c3c">Failed to load blocklist</div>';
+        }
+    }
+
+    async function unblockGeoArticle(title, btn) {
+        if (!confirm('Unblock "' + title + '"?')) return;
+        btn.disabled = true;
+        btn.textContent = '…';
+        try {
+            const response = await fetch('/api/geo-blocklist', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({title: title})
+            });
+            const result = await response.json();
+            if (result.status === 'removed') {
+                fetchGeoBlocklist();
+                setTimeout(() => { fetchData(); scheduleRefresh(); }, 500);
+            } else {
+                btn.disabled = false;
+                btn.textContent = '✕';
+                alert('Error: ' + (result.error || 'Unknown error'));
+            }
+        } catch(e) {
+            btn.disabled = false;
+            btn.textContent = '✕';
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function checkGeoBlocklistVisibility() {
+        const section = document.getElementById('geo-blocklist-section');
+        if (!section) return;
+        try {
+            const response = await fetch('/api/geo-blocklist');
+            const blocklist = await response.json();
+            section.style.display = blocklist.length > 0 ? 'block' : 'none';
+        } catch(e) {
+            section.style.display = 'none';
         }
     }
 

@@ -20,6 +20,7 @@ MAX_ARTICLE_AGE_HOURS = 48
 
 class GeopoliticalPipeline:
     GEO_BLOCKLIST_FILE = "/data/geo_blocklist.json"
+    GEO_MANUAL_BLOCKLIST_FILE = "/data/geo_manual_blocklist.json"
 
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
@@ -564,6 +565,18 @@ CONTEXT: {context}"""
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to seed geo blocklist: {e}", level="WARNING")
 
+    def _load_manual_blocklist_titles(self):
+        """Load titles from the user-driven manual blocklist as a lowercase set."""
+        try:
+            if os.path.exists(self.GEO_MANUAL_BLOCKLIST_FILE):
+                with open(self.GEO_MANUAL_BLOCKLIST_FILE, 'r') as f:
+                    raw = json.load(f)
+                if isinstance(raw, list):
+                    return {entry.get('title', '').lower() for entry in raw if isinstance(entry, dict) and entry.get('title')}
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to load geo manual blocklist: {e}", level="WARNING")
+        return set()
+
     def _seed_classifications(self):
         """Merge repo-bundled classification entries into /data/gemini_classifications.json
         without overwriting entries that already exist on the volume. This ensures locked
@@ -922,6 +935,21 @@ CONTEXT: {context}"""
             if early_blocked:
                 pulse_logger.log(f"🚫 Early blocklist — {early_blocked} article(s) removed before classification")
 
+        # Manual blocklist — user-driven blocks from dashboard X button
+        manual_blocked = self._load_manual_blocklist_titles()
+        if manual_blocked:
+            pre_count = len(items)
+            kept = []
+            for i in items:
+                if i['headline'].lower() in manual_blocked:
+                    pulse_logger.log(f"🚫 Manually blocked by user: {i['headline'][:80]}")
+                else:
+                    kept.append(i)
+            items = kept
+            manual_dropped = pre_count - len(items)
+            if manual_dropped:
+                pulse_logger.log(f"🚫 Manual blocklist — {manual_dropped} article(s) removed before classification")
+
         # Split into already classified vs new
         new_items = [i for i in items if i['headline'] not in gemini_cache]
         known_relevant = []
@@ -1058,6 +1086,21 @@ CONTEXT: {context}"""
             blocked = before - len(immediately_available)
             if blocked:
                 pulse_logger.log(f"🚫 Final blocklist — {blocked} article(s) filtered out")
+
+        # Manual blocklist final pass — catches pinned stories injected after early filter
+        manual_blocked_final = self._load_manual_blocklist_titles()
+        if manual_blocked_final:
+            before = len(immediately_available)
+            kept = []
+            for i in immediately_available:
+                if i['headline'].lower() in manual_blocked_final:
+                    pulse_logger.log(f"🚫 Manually blocked by user: {i['headline'][:80]}")
+                else:
+                    kept.append(i)
+            immediately_available = kept
+            manual_dropped = before - len(immediately_available)
+            if manual_dropped:
+                pulse_logger.log(f"🚫 Manual blocklist (final pass) — {manual_dropped} article(s) filtered out")
 
         pulse_logger.log(f"⚡ Returning {len(immediately_available)} articles instantly ({len(known_relevant)} Haiku-verified, {len(keyword_passed)} keyword-passed, {injected} pinned)")
 
