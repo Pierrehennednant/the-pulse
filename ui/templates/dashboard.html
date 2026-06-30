@@ -541,6 +541,11 @@
             <div id="political-blocklist-items" style="display:none"></div>
         </div>`;
 
+        html += `<div id="geo-blocklist-section" style="margin-top:8px;border-top:1px solid #1e2d4a;padding-top:10px;display:none">
+            <div style="font-size:11px;color:#4a9eff;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer" onclick="toggleGeoBlocklist()">🚫 Blocked Articles (Geo) <span id="geo-bl-toggle" style="font-size:9px">▶</span></div>
+            <div id="geo-blocklist-items" style="display:none"></div>
+        </div>`;
+
         return html;
     }
 
@@ -686,6 +691,7 @@
         document.getElementById('geo-score-badge').className = `pillar-score ${scoreClass(geo.pillar_score || 0)}`;
         document.getElementById('geo-content').innerHTML = renderGeopolitical(geo);
         checkPoliticalBlocklistVisibility();
+        checkGeoBlocklistVisibility();
 
         const pc = (snapshot.bias || {}).pillar_contributions || {};
         const econW = pc.economic_calendar && pc.economic_calendar.base_weight != null ? Math.round(pc.economic_calendar.base_weight) : 30;
@@ -1027,6 +1033,81 @@
         if (!section) return;
         try {
             const response = await fetch('/api/political-blocklist');
+            const blocklist = await response.json();
+            section.style.display = blocklist.length > 0 ? 'block' : 'none';
+        } catch(e) {
+            section.style.display = 'none';
+        }
+    }
+
+    function toggleGeoBlocklist() {
+        const items = document.getElementById('geo-blocklist-items');
+        const toggle = document.getElementById('geo-bl-toggle');
+        if (!items) return;
+        if (items.style.display === 'none') {
+            items.style.display = 'block';
+            toggle.textContent = '▼';
+            fetchGeoBlocklist();
+        } else {
+            items.style.display = 'none';
+            toggle.textContent = '▶';
+        }
+    }
+
+    async function fetchGeoBlocklist() {
+        const container = document.getElementById('geo-blocklist-items');
+        if (!container) return;
+        try {
+            const response = await fetch('/api/geo-blocklist');
+            const blocklist = await response.json();
+            if (!blocklist.length) {
+                container.innerHTML = '<div style="font-size:12px;color:#7a8fa8;padding:4px 0">No blocked articles</div>';
+                return;
+            }
+            container.innerHTML = blocklist.map(entry => {
+                const title = entry.title || '';
+                return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #1e2d4a">
+                    <span style="flex:1;font-size:12px;color:#7a8fa8">${title}</span>
+                    <button onclick="unblockGeoArticle('${title.replace(/'/g, "\\'")}', this)" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Unblock this article">✕</button>
+                </div>`;
+            }).join('');
+        } catch(e) {
+            container.innerHTML = '<div style="font-size:12px;color:#e74c3c">Failed to load blocklist</div>';
+        }
+    }
+
+    async function unblockGeoArticle(title, btn) {
+        if (!confirm('Unblock "' + title + '"?')) return;
+        btn.disabled = true;
+        btn.textContent = '…';
+        try {
+            const response = await fetch('/api/geo-blocklist', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({title: title})
+            });
+            const result = await response.json();
+            if (result.status === 'removed') {
+                fetchGeoBlocklist();
+                checkGeoBlocklistVisibility();
+                setTimeout(() => { fetchData(); scheduleRefresh(); }, 500);
+            } else {
+                btn.disabled = false;
+                btn.textContent = '✕';
+                alert('Error: ' + (result.error || 'Unknown error'));
+            }
+        } catch(e) {
+            btn.disabled = false;
+            btn.textContent = '✕';
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function checkGeoBlocklistVisibility() {
+        const section = document.getElementById('geo-blocklist-section');
+        if (!section) return;
+        try {
+            const response = await fetch('/api/geo-blocklist');
             const blocklist = await response.json();
             section.style.display = blocklist.length > 0 ? 'block' : 'none';
         } catch(e) {
