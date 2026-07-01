@@ -939,15 +939,15 @@ CONTEXT: {context}"""
             pulse_logger.log(f"⚠️ Failed to load Haiku classification cache: {e}", level="WARNING")
             gemini_cache = {}
 
-        # Scrub classification cache of politically blocked titles
-        if political_blocked:
-            scrubbed = [k for k in gemini_cache if k.lower() in political_blocked]
+        # Scrub classification cache of manually blocked titles
+        if manual_blocked:
+            scrubbed = [k for k in gemini_cache if k.lower() in manual_blocked]
             for k in scrubbed:
                 del gemini_cache[k]
-                pulse_logger.log(f"🚫 Manually blocked by user (Political, cache scrub): {k[:80]}")
+                pulse_logger.log(f"🚫 Manually blocked by user (cache scrub): {k[:80]}")
             if scrubbed:
                 atomic_write_json(gemini_cache_file, gemini_cache)
-                pulse_logger.log(f"🚫 Political blocklist — scrubbed {len(scrubbed)} entry(ies) from classification cache")
+                pulse_logger.log(f"🚫 Geo manual blocklist — scrubbed {len(scrubbed)} entry(ies) from classification cache")
 
         # Early blocklist filter — remove blocked articles before classification/scoring
         early_blocklist = self._load_blocklist_strings()
