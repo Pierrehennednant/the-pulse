@@ -512,7 +512,7 @@
                             <span class="flag-status status-developing">${item.status}</span>
                             <span class="flag-source">${item.source}</span>
                             <span class="flag-source">${item.timestamp}</span>
-                            <button onclick="blockPoliticalArticle('${item.title.replace(/'/g, "\\'")}', this)" style="margin-left:auto;background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
+                            <button onclick="blockGeoArticle('${item.title.replace(/'/g, "\\'")}', this)" style="margin-left:auto;background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
                         </div>
                         <div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${valClass(item.predicted_impact)}">${(item.predicted_impact || '').toUpperCase()}</span></div>
                         ${item.context ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${item.context}</div>` : ''}
@@ -526,7 +526,7 @@
                         <div class="flag-meta">
                             <span class="flag-source">${item.source}</span>
                             <span class="flag-source">${item.timestamp}</span>
-                            <button onclick="blockPoliticalArticle('${item.headline.replace(/'/g, "\\'")}', this)" style="margin-left:auto;background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
+                            <button onclick="blockGeoArticle('${item.headline.replace(/'/g, "\\'")}', this)" style="margin-left:auto;background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
                         </div>
                         ${dirLabel ? `<div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${dirClass}">${dirLabel}</span></div>` : ''}
                         ${item.description ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${item.description}</div>` : ''}
@@ -535,11 +535,6 @@
                 }
             });
         }
-
-        html += `<div id="political-blocklist-section" style="margin-top:12px;border-top:1px solid #1e2d4a;padding-top:10px;display:none">
-            <div style="font-size:11px;color:#4a9eff;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer" onclick="togglePoliticalBlocklist()">🚫 Blocked Articles <span id="political-bl-toggle" style="font-size:9px">▶</span></div>
-            <div id="political-blocklist-items" style="display:none"></div>
-        </div>`;
 
         html += `<div id="geo-blocklist-section" style="margin-top:8px;border-top:1px solid #1e2d4a;padding-top:10px;display:none">
             <div style="font-size:11px;color:#4a9eff;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer" onclick="toggleGeoBlocklist()">🚫 Blocked Articles (Geo) <span id="geo-bl-toggle" style="font-size:9px">▶</span></div>
@@ -690,7 +685,6 @@
         document.getElementById('geo-score-badge').textContent = scoreLabel(geo.pillar_score || 0);
         document.getElementById('geo-score-badge').className = `pillar-score ${scoreClass(geo.pillar_score || 0)}`;
         document.getElementById('geo-content').innerHTML = renderGeopolitical(geo);
-        checkPoliticalBlocklistVisibility();
         checkGeoBlocklistVisibility();
 
         const pc = (snapshot.bias || {}).pillar_contributions || {};
@@ -942,11 +936,11 @@
         if (activeBtn && originalText) { activeBtn.textContent = originalText; activeBtn.style.opacity = '1'; }
     }
 
-    async function blockPoliticalArticle(title, btn) {
+    async function blockGeoArticle(title, btn) {
         if (!confirm('Block "' + title + '" from the Political & Geopolitical pillar?')) return;
         lockGeoActions(btn, '…');
         try {
-            const response = await fetch('/api/political-blocklist', {
+            const response = await fetch('/api/geo-blocklist', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({title: title})
@@ -955,6 +949,7 @@
             if (result.status === 'added') {
                 const card = btn.closest('.flag-item');
                 if (card) card.remove();
+                checkGeoBlocklistVisibility();
                 setTimeout(() => { fetchData(); scheduleRefresh(); }, 500);
             } else {
                 unlockGeoActions(btn, '✕');
@@ -963,80 +958,6 @@
         } catch(e) {
             unlockGeoActions(btn, '✕');
             alert('Error: ' + e.message);
-        }
-    }
-
-    function togglePoliticalBlocklist() {
-        const items = document.getElementById('political-blocklist-items');
-        const toggle = document.getElementById('political-bl-toggle');
-        if (!items) return;
-        if (items.style.display === 'none') {
-            items.style.display = 'block';
-            toggle.textContent = '▼';
-            fetchPoliticalBlocklist();
-        } else {
-            items.style.display = 'none';
-            toggle.textContent = '▶';
-        }
-    }
-
-    async function fetchPoliticalBlocklist() {
-        const container = document.getElementById('political-blocklist-items');
-        if (!container) return;
-        try {
-            const response = await fetch('/api/political-blocklist');
-            const blocklist = await response.json();
-            if (!blocklist.length) {
-                container.innerHTML = '<div style="font-size:12px;color:#7a8fa8;padding:4px 0">No blocked articles</div>';
-                return;
-            }
-            container.innerHTML = blocklist.map(entry => {
-                const title = entry.title || '';
-                return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #1e2d4a">
-                    <span style="flex:1;font-size:12px;color:#7a8fa8">${title}</span>
-                    <button onclick="unblockPoliticalArticle('${title.replace(/'/g, "\\'")}', this)" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Unblock this article">✕</button>
-                </div>`;
-            }).join('');
-        } catch(e) {
-            container.innerHTML = '<div style="font-size:12px;color:#e74c3c">Failed to load blocklist</div>';
-        }
-    }
-
-    async function unblockPoliticalArticle(title, btn) {
-        if (!confirm('Unblock "' + title + '"?')) return;
-        btn.disabled = true;
-        btn.textContent = '…';
-        try {
-            const response = await fetch('/api/political-blocklist', {
-                method: 'DELETE',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({title: title})
-            });
-            const result = await response.json();
-            if (result.status === 'removed') {
-                fetchPoliticalBlocklist();
-                setTimeout(() => { fetchData(); scheduleRefresh(); }, 500);
-            } else {
-                btn.disabled = false;
-                btn.textContent = '✕';
-                alert('Error: ' + (result.error || 'Unknown error'));
-            }
-        } catch(e) {
-            btn.disabled = false;
-            btn.textContent = '✕';
-            alert('Error: ' + e.message);
-        }
-    }
-
-    async function checkPoliticalBlocklistVisibility() {
-        const section = document.getElementById('political-blocklist-section');
-        if (!section) return;
-        try {
-            const response = await fetch('/api/political-blocklist');
-            const blocklist = await response.json();
-            section.style.display = blocklist.length > 0 ? 'block' : 'none';
-        } catch(e) {
-            section.style.display = 'none';
         }
     }
 

@@ -21,7 +21,6 @@ MAX_ARTICLE_AGE_HOURS = 48
 class GeopoliticalPipeline:
     GEO_BLOCKLIST_FILE = "/data/geo_blocklist.json"
     GEO_MANUAL_BLOCKLIST_FILE = "/data/geo_manual_blocklist.json"
-    POLITICAL_MANUAL_BLOCKLIST_FILE = "/data/political_manual_blocklist.json"
 
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
@@ -329,14 +328,14 @@ Articles to classify:
                 return []
             with open(self.pinned_store_file, 'r') as f:
                 pinned = json.load(f)
-            political_blocked = self._load_political_blocklist_titles()
+            manual_blocked = self._load_manual_blocklist_titles()
             blocklist = self._load_blocklist_strings()
             valid = []
             dirty = False
             for story in pinned:
                 headline = story.get('headline', '')
-                if political_blocked and headline.lower() in political_blocked:
-                    pulse_logger.log(f"🚫 Manually blocked by user (Political, pinned): {headline[:80]}")
+                if manual_blocked and headline.lower() in manual_blocked:
+                    pulse_logger.log(f"🚫 Manually blocked by user (pinned): {headline[:80]}")
                     dirty = True
                     continue
                 if blocklist:
@@ -583,22 +582,6 @@ CONTEXT: {context}"""
             pulse_logger.log(f"⚠️ Failed to load geo manual blocklist: {e}", level="WARNING")
         return set()
 
-    def _load_political_blocklist_titles(self):
-        """Load titles from the political manual blocklist as a lowercase set.
-        This is the highest-priority filter — nothing bypasses it."""
-        titles = set()
-        for path in (self.POLITICAL_MANUAL_BLOCKLIST_FILE, self.GEO_MANUAL_BLOCKLIST_FILE):
-            try:
-                if os.path.exists(path):
-                    with open(path, 'r') as f:
-                        raw = json.load(f)
-                    if isinstance(raw, list):
-                        for entry in raw:
-                            if isinstance(entry, dict) and entry.get('title'):
-                                titles.add(entry['title'].lower())
-            except Exception as e:
-                pulse_logger.log(f"⚠️ Failed to load blocklist {path}: {e}", level="WARNING")
-        return titles
 
     def _seed_classifications(self):
         """Merge repo-bundled classification entries into /data/gemini_classifications.json
@@ -929,20 +912,20 @@ CONTEXT: {context}"""
             pulse_logger.log("⚠️ All parallel fetches returned empty", level="WARNING")
             return []
 
-        # HIGHEST PRIORITY — Political manual blocklist (absolute first filter)
-        political_blocked = self._load_political_blocklist_titles()
-        if political_blocked:
+        # HIGHEST PRIORITY — Manual geo blocklist (absolute first filter)
+        manual_blocked = self._load_manual_blocklist_titles()
+        if manual_blocked:
             pre_count = len(items)
             kept = []
             for i in items:
-                if i['headline'].lower() in political_blocked:
-                    pulse_logger.log(f"🚫 Manually blocked by user (Political): {i['headline'][:80]}")
+                if i['headline'].lower() in manual_blocked:
+                    pulse_logger.log(f"🚫 Manually blocked by user: {i['headline'][:80]}")
                 else:
                     kept.append(i)
             items = kept
             dropped = pre_count - len(items)
             if dropped:
-                pulse_logger.log(f"🚫 Political manual blocklist — {dropped} article(s) removed (highest priority)")
+                pulse_logger.log(f"🚫 Geo manual blocklist — {dropped} article(s) removed (highest priority)")
 
         # Load Gemini classification cache
         gemini_cache_file = "/data/gemini_classifications.json"
@@ -1120,20 +1103,20 @@ CONTEXT: {context}"""
             if blocked:
                 pulse_logger.log(f"🚫 Final blocklist — {blocked} article(s) filtered out")
 
-        # Political manual blocklist final pass — catches pinned stories injected after early filter
-        political_blocked_final = self._load_political_blocklist_titles()
-        if political_blocked_final:
+        # Geo manual blocklist final pass — catches pinned stories injected after early filter
+        manual_blocked_final = self._load_manual_blocklist_titles()
+        if manual_blocked_final:
             before = len(immediately_available)
             kept = []
             for i in immediately_available:
-                if i['headline'].lower() in political_blocked_final:
-                    pulse_logger.log(f"🚫 Manually blocked by user (Political): {i['headline'][:80]}")
+                if i['headline'].lower() in manual_blocked_final:
+                    pulse_logger.log(f"🚫 Manually blocked by user: {i['headline'][:80]}")
                 else:
                     kept.append(i)
             immediately_available = kept
             manual_dropped = before - len(immediately_available)
             if manual_dropped:
-                pulse_logger.log(f"🚫 Political manual blocklist (final pass) — {manual_dropped} article(s) filtered out")
+                pulse_logger.log(f"🚫 Geo manual blocklist (final pass) — {manual_dropped} article(s) filtered out")
 
         pulse_logger.log(f"⚡ Returning {len(immediately_available)} articles instantly ({len(known_relevant)} Haiku-verified, {len(keyword_passed)} keyword-passed, {injected} pinned)")
 

@@ -488,68 +488,6 @@ def remove_geo_blocklist():
         pulse_logger.log(f"⚠️ geo-unblock partial refresh failed: {refresh_err}", level="WARNING")
     return jsonify({'status': 'removed', 'title': title, 'blocklist': new_blocklist})
 
-POLITICAL_MANUAL_BLOCKLIST_FILE = '/data/political_manual_blocklist.json'
-
-def _load_political_manual_blocklist():
-    try:
-        if os.path.exists(POLITICAL_MANUAL_BLOCKLIST_FILE):
-            with open(POLITICAL_MANUAL_BLOCKLIST_FILE, 'r') as f:
-                raw = json.load(f)
-            if isinstance(raw, list):
-                return [e for e in raw if isinstance(e, dict) and e.get('title')]
-    except Exception:
-        pass
-    return []
-
-@app.route('/api/political-blocklist', methods=['GET'])
-@require_auth
-def get_political_blocklist():
-    return jsonify(_load_political_manual_blocklist())
-
-@app.route('/api/political-blocklist', methods=['POST'])
-@require_auth
-def add_political_blocklist():
-    data = request.get_json()
-    title = data.get('title') if data else None
-    if not isinstance(title, str) or not title.strip():
-        return jsonify({'error': 'Missing title'}), 400
-    if len(title) > _MAX_TITLE_LEN or '\x00' in title:
-        return jsonify({'error': 'Invalid title'}), 400
-    blocklist = _load_political_manual_blocklist()
-    title = title.strip()
-    if not any(entry['title'] == title for entry in blocklist):
-        blocklist.append({
-            'title': title,
-            'blocked_at': datetime.now(pytz.utc).isoformat()
-        })
-        atomic_write_json(POLITICAL_MANUAL_BLOCKLIST_FILE, blocklist)
-    pulse_logger.log(f"🚫 Political manual blocklist — added: {title[:60]}")
-    try:
-        _run_partial_refresh(f"political-blocklist | {title[:40]}")
-    except Exception as refresh_err:
-        pulse_logger.log(f"⚠️ political-blocklist partial refresh failed: {refresh_err}", level="WARNING")
-    return jsonify({'status': 'added', 'title': title, 'blocklist': blocklist})
-
-@app.route('/api/political-blocklist', methods=['DELETE'])
-@require_auth
-def remove_political_blocklist():
-    data = request.get_json()
-    title = data.get('title') if data else None
-    if not isinstance(title, str) or not title.strip():
-        return jsonify({'error': 'Missing title'}), 400
-    blocklist = _load_political_manual_blocklist()
-    title = title.strip()
-    new_blocklist = [entry for entry in blocklist if entry['title'] != title]
-    if len(new_blocklist) == len(blocklist):
-        return jsonify({'error': 'Title not found in blocklist'}), 404
-    atomic_write_json(POLITICAL_MANUAL_BLOCKLIST_FILE, new_blocklist)
-    pulse_logger.log(f"🚫 Political manual blocklist — removed: {title[:60]}")
-    try:
-        _run_partial_refresh(f"political-unblock | {title[:40]}")
-    except Exception as refresh_err:
-        pulse_logger.log(f"⚠️ political-unblock partial refresh failed: {refresh_err}", level="WARNING")
-    return jsonify({'status': 'removed', 'title': title, 'blocklist': new_blocklist})
-
 @app.route('/api/geo-tier-override', methods=['PATCH'])
 @require_auth
 def geo_tier_override():
