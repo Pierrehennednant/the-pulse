@@ -173,7 +173,7 @@ class MacroSentimentPipeline:
                 'score': score,
                 'rating': rating,
                 'signal': (
-                    'strongly_bearish' if score < 35 else
+                    'strongly_bearish' if score < 25 else
                     'mildly_bearish'   if score < 45 else
                     'neutral'          if score < 55 else
                     'mildly_bullish'   if score < 75 else

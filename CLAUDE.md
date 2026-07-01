@@ -120,8 +120,8 @@ Five-level granular classification for each indicator:
 | Strongly Bullish | ≥ 75 |
 | Mildly Bullish | 55–74 |
 | Neutral | 45–54 |
-| Mildly Bearish | 35–44 |
-| Strongly Bearish | < 35 |
+| Mildly Bearish | 25–44 |
+| Strongly Bearish | < 25 |
 
 Score is rounded (not truncated) to match CNN's own display rounding.
 
