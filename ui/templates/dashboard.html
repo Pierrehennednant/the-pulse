@@ -360,6 +360,12 @@
             const isPending = e.result === 'pending';
             const isSpeech = e.is_speech;
             const evtScore = (typeof e.evt_score === 'number') ? e.evt_score : null;
+            // impliedImpact drives ALL color and label rendering — derived from evt_score
+            // so inverted-polarity events (e.g. Unemployment Rate) show the correct
+            // economic implication rather than the raw actual-vs-forecast comparison.
+            const impliedImpact = evtScore !== null ?
+                (evtScore > 0 ? 'bullish' : evtScore < 0 ? 'bearish' : 'neutral') :
+                (e.market_impact || 'neutral');
             const statusClass = isPending ? 'status-awaiting' :
                 evtScore !== null ?
                     (evtScore > 0 ? 'status-resolved' : evtScore < 0 ? 'status-developing' : 'status-awaiting') :
@@ -372,7 +378,7 @@
                 evtScore !== null ?
                     (evtScore > 0 ? 'Beat' : evtScore < 0 ? 'Miss' : 'Inline') :
                 (e.result || '').toUpperCase();
-            const impactClass = valClass(e.market_impact);
+            const impactClass = valClass(impliedImpact);
             const eventId = e.title.replace(/[^a-zA-Z0-9]/g, '_');
 
             html += `<div class="flag-item">
@@ -388,7 +394,7 @@
                     <span class="data-label">Actual</span>
                     <span class="data-value ${impactClass}">${e.actual}</span>
                 </div>
-                ${!isPending ? `<div class="data-row"><span class="data-label">Impact</span><span class="data-value ${impactClass}">${(e.market_impact || '').toUpperCase()}</span></div>` : ''}
+                ${!isPending ? `<div class="data-row"><span class="data-label">Impact</span><span class="data-value ${impactClass}">${impliedImpact.toUpperCase()}</span></div>` : ''}
                 ${e.reason ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${e.reason}</div>` : ''}
                 ${e.story_context ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4;border-top:1px solid #1e2d4a;padding-top:6px"><strong style="color:#4a9eff">Context:</strong> ${e.story_context}</div>` : ''}
 
