@@ -359,17 +359,26 @@
         events.forEach(e => {
             const isPending = e.result === 'pending';
             const isSpeech = e.is_speech;
-            const statusClass = isPending ? 'status-awaiting' : isSpeech ? 
-                (e.actual === 'bearish' ? 'status-developing' : 
-                 e.actual === 'bullish' ? 'status-resolved' : 
-                 'status-awaiting') : 'status-resolved';
+            const evtScore = (typeof e.evt_score === 'number') ? e.evt_score : null;
+            const statusClass = isPending ? 'status-awaiting' :
+                evtScore !== null ?
+                    (evtScore > 0 ? 'status-resolved' : evtScore < 0 ? 'status-developing' : 'status-awaiting') :
+                isSpeech ?
+                    (e.actual === 'bearish' ? 'status-developing' :
+                     e.actual === 'bullish' ? 'status-resolved' :
+                     'status-awaiting') :
+                'status-awaiting';
+            const scoreLabel = isPending ? 'Pending' :
+                evtScore !== null ?
+                    (evtScore > 0 ? 'Beat' : evtScore < 0 ? 'Miss' : 'Inline') :
+                (e.result || '').toUpperCase();
             const impactClass = valClass(e.market_impact);
             const eventId = e.title.replace(/[^a-zA-Z0-9]/g, '_');
 
             html += `<div class="flag-item">
                 <div class="flag-title">${e.title}</div>
                 <div class="flag-meta">
-                    <span class="flag-status ${statusClass}">${isPending ? 'Pending' : e.result.toUpperCase()}</span>
+                    <span class="flag-status ${statusClass}">${scoreLabel}</span>
                     <span class="flag-source">${e.time_est}</span>
                     ${(isPending || isSpeech) ? `<button onclick="deleteEcEvent('${e.title}', this)" style="margin-left:auto;background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Remove from today's calendar">✕</button>` : ''}
                 </div>

@@ -297,7 +297,7 @@ class EconomicCalendarPipeline:
                     confidence = event.get('confidence', 0.75)
                     evt_score = cap * direction * confidence
                 elif speaker_type == 'Presidential':
-                    cap = 0.35
+                    cap = 0.25
                     confidence = event.get('confidence', 0.75)
                     evt_score = cap * direction * confidence
                 else:
@@ -306,6 +306,7 @@ class EconomicCalendarPipeline:
                 evt_score = direction
             score += evt_score
             count += 1
+            event['evt_score'] = round(evt_score, 4)
         return round(score / max(count, 1), 2) if count > 0 else 0.0
 
     def apply_manual_inputs(self, events):
