@@ -272,6 +272,7 @@ Key rules:
 - When uncertain between tiers, default to the lower tier.
 - De-escalation and peace developments are generally Bullish for US equities. Escalation and conflict are generally Bearish.
 - Oil/Energy Rule: Falling oil prices caused by geopolitical de-escalation or peace deals are Bullish for equities. Only classify oil price moves as Bearish when driven by demand destruction, recession fears, or oversupply.
+- Major Economic Data Exception — NFP / CPI / GDP only: If the article reports actual data for Non-Farm Payrolls (NFP), CPI (any variant: Core CPI, CPI m/m, CPI y/y), or GDP (any variant: GDP q/q, Final GDP), AND the deviation of actual from consensus forecast is 50% or greater in absolute relative terms (e.g. NFP 57K actual vs 114K expected = 50% miss; CPI 0.6% actual vs 0.3% expected = 100% beat), classify as Tier 1 regardless of other factors. Cite the specific actual vs. forecast figures and the % deviation as the reasoning. This exception does NOT apply to ISM, PMI, Retail Sales, ADP, or any other economic data — those continue to use standard Tier 2/3 judgment.
 
 Articles to classify:
 {article_list}"""
@@ -506,6 +507,7 @@ Key rules:
 - When uncertain between tiers, default to the lower tier.
 - De-escalation and peace developments are generally Bullish for US equities. Escalation and conflict are generally Bearish.
 - Oil/Energy Rule: Falling oil prices caused by geopolitical de-escalation or peace deals are Bullish for equities. Only classify oil price moves as Bearish when driven by demand destruction, recession fears, or oversupply.
+- Major Economic Data Exception — NFP / CPI / GDP only: If the article reports actual data for Non-Farm Payrolls (NFP), CPI (any variant: Core CPI, CPI m/m, CPI y/y), or GDP (any variant: GDP q/q, Final GDP), AND the deviation of actual from consensus forecast is 50% or greater in absolute relative terms (e.g. NFP 57K actual vs 114K expected = 50% miss; CPI 0.6% actual vs 0.3% expected = 100% beat), classify as Tier 1 regardless of other factors. Cite the specific actual vs. forecast figures and the % deviation as the reasoning. This exception does NOT apply to ISM, PMI, Retail Sales, ADP, or any other economic data — those continue to use standard Tier 2/3 judgment.
 
 Return ONLY a JSON object with no markdown, no explanation, no preamble. Exactly this format:
 {{"tier": 1, "direction": "bullish", "reasoning": "One short sentence explaining the tier and direction choice", "confidence": 0.85}}
