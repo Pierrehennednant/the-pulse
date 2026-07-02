@@ -215,12 +215,13 @@ def manual_input():
         actual_value = data.get('actual_value')
         story_url = data.get('story_url', None)
         event_date = data.get('event_date', '')
+        confidence = data.get('confidence', 0.75)
 
         ok, err = _validate_manual_input(event_title, actual_value)
         if not ok:
             return jsonify({'error': err}), 400
 
-        success = manual_input_pipeline.save_actual(event_title, actual_value, story_url, event_date=event_date)
+        success = manual_input_pipeline.save_actual(event_title, actual_value, story_url, event_date=event_date, confidence=confidence)
 
         if success:
             # Update the EC cache in place — no live Forex Factory fetch needed.

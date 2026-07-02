@@ -177,17 +177,25 @@ class EconomicCalendarPipeline:
         ]
         return any(keyword in title.lower() for keyword in speech_keywords)
 
+    def _classify_speaker(self, title):
+        t = title.lower()
+        if 'fed chairman' in t or 'fed chair' in t:
+            return 'Fed Chair'
+        if 'president' in t:
+            return 'Presidential'
+        return 'Other'
+
     def auto_detect_speech_sentiment(self, event_title):
-        """Query TheNewsAPI after speech starts, return bearish/bullish/neutral."""
+        """Query TheNewsAPI after speech starts, return (label, confidence) tuple.
+        confidence = max(bearish, bullish) / total, defaulting to 0.5 if no articles."""
         api_key = os.environ.get('THENEWS_API_KEY', '')
         if not api_key:
-            return None
+            return None, 0.5
         try:
-            search_query = event_title
             url = "https://api.thenewsapi.com/v1/news/all"
             params = {
                 'api_token': api_key,
-                'search': search_query,
+                'search': event_title,
                 'language': 'en',
                 'limit': 10,
                 'published_after': (datetime.now(pytz.utc) - timedelta(hours=3)).strftime('%Y-%m-%dT%H:%M:%S')
@@ -195,7 +203,7 @@ class EconomicCalendarPipeline:
             response = fetch_with_retry(url, params=params, timeout=10)
             articles = response.json().get('data', [])
             if not articles:
-                return 'neutral'
+                return 'neutral', 0.5
 
             bearish_keywords = ['hawkish', 'hike', 'tighten', 'inflation concern', 'higher for longer', 'no cuts', 'tariff', 'restrictive']
             bullish_keywords = ['dovish', 'cut', 'ease', 'pivot', 'supportive', 'pause', 'accommodative', 'rate cut']
@@ -209,15 +217,18 @@ class EconomicCalendarPipeline:
                 if any(kw in text for kw in bullish_keywords):
                     bullish_count += 1
 
+            total = bearish_count + bullish_count
+            confidence = max(bearish_count, bullish_count) / total if total > 0 else 0.5
+
             if bearish_count > bullish_count:
-                return 'bearish'
+                return 'bearish', confidence
             elif bullish_count > bearish_count:
-                return 'bullish'
+                return 'bullish', confidence
             else:
-                return 'neutral'
+                return 'neutral', confidence
         except Exception as e:
             pulse_logger.log(f"⚠️ Speech auto-detect failed for {event_title}: {e}", level="WARNING")
-            return 'neutral'
+            return 'neutral', 0.5
 
     def _magnitude_score(self, event, direction):
         """Return magnitude-weighted score for a numerical beat/miss event.
@@ -276,9 +287,21 @@ class EconomicCalendarPipeline:
             direction = flat_map[market_impact]
             # Magnitude-weighted scoring for numerical events with actual vs forecast.
             # 'improved'/'declined'/'unchanged' compare against previous (no forecast) — flat.
-            # Speech/manual tags ('bearish'/'bullish') are non-numerical — flat.
+            # Speech events: cap × direction × confidence (Other: flat cap, no confidence scaling).
             if result in ('beat', 'miss', 'inline'):
                 evt_score = self._magnitude_score(event, direction)
+            elif event.get('is_speech'):
+                speaker_type = event.get('speaker_type', 'Other')
+                if speaker_type == 'Fed Chair':
+                    cap = 0.55
+                    confidence = event.get('confidence', 0.75)
+                    evt_score = cap * direction * confidence
+                elif speaker_type == 'Presidential':
+                    cap = 0.35
+                    confidence = event.get('confidence', 0.75)
+                    evt_score = cap * direction * confidence
+                else:
+                    evt_score = 0.25 * direction
             else:
                 evt_score = direction
             score += evt_score
@@ -300,6 +323,7 @@ class EconomicCalendarPipeline:
                 event['actual'] = manual['actual']
                 event['story_url'] = manual.get('story_url')
                 event['story_context'] = manual.get('story_context')
+                event['confidence'] = manual.get('confidence', 0.75)
                 result, market_impact, reason = self.get_market_implication(
                     event['title'], manual['actual'], event['forecast'], event['previous']
                 )
@@ -365,6 +389,7 @@ class EconomicCalendarPipeline:
                 }
                 if self.is_speech_event(event_row['title']):
                     event_row['is_speech'] = True
+                    event_row['speaker_type'] = self._classify_speaker(title)
                     event_row['result'] = 'speech'
                     event_row['market_impact'] = 'unknown'
                     event_row['reason'] = f"{event_row['title']} — No data to parse. Market will reprice on tone. No trade 30 minutes before."
@@ -409,10 +434,10 @@ class EconomicCalendarPipeline:
                                              if k == t or k.startswith(t + '::')), None)
                             if not existing:
                                 pulse_logger.log(f"🎙️ Auto-detecting speech sentiment for: {event_row['title']}")
-                                sentiment = self.auto_detect_speech_sentiment(event_row['title'])
+                                sentiment, conf = self.auto_detect_speech_sentiment(event_row['title'])
                                 if sentiment:
-                                    manual_input_pipeline.save_actual(event_row['title'], sentiment, None, event_date=event_row.get('event_date', ''))
-                                    pulse_logger.log(f"✅ Auto-tagged {event_row['title']} as {sentiment}")
+                                    manual_input_pipeline.save_actual(event_row['title'], sentiment, None, event_date=event_row.get('event_date', ''), confidence=conf)
+                                    pulse_logger.log(f"✅ Auto-tagged {event_row['title']} as {sentiment} (confidence: {conf:.2f})")
                     except Exception as e:
                         pulse_logger.log(f"⚠️ Speech trigger check failed: {e}", level="WARNING")
 
