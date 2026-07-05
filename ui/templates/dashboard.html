@@ -588,7 +588,7 @@
         const liveLabel = document.getElementById('live-rec-label');
         const liveReason = document.getElementById('live-rec-reason');
         if (rec && rec.label) {
-            const liveColor = rec.mode === 'normal' ? '#2ecc71' : '#f39c12';
+            const liveColor = (rec.mode === 'full' || rec.mode === 'half') ? '#2ecc71' : '#f39c12';
             liveLabel.style.color = liveColor;
             liveLabel.textContent = '💡 ' + rec.label;
             liveReason.textContent = rec.reason;
@@ -599,7 +599,7 @@
         const propLabel = document.getElementById('prop-rec-label');
         const propReason = document.getElementById('prop-rec-reason');
         if (propRec && propRec.label) {
-            const propColor = propRec.mode === 'normal' ? '#2ecc71' : '#e67e22';
+            const propColor = (propRec.mode === 'full' || propRec.mode === 'half') ? '#2ecc71' : '#e67e22';
             propLabel.style.color = propColor;
             propLabel.textContent = '💡 ' + propRec.label;
             propReason.textContent = propRec.reason;
