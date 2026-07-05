@@ -154,13 +154,37 @@ class GeopoliticalPipeline:
             pulse_logger.log("⚠️ Haiku unavailable — keyword-only scoring in effect for unclassified articles", level="WARNING")
             return []
 
-        # Build batch input with full article text
+        # Fetch article URLs in parallel — sequential fetching at up to 24 s/URL
+        # (fetch_with_retry default retries × 8 s timeout) accumulates to 240+ s
+        # for a 10-article batch, stalling or killing the Haiku call entirely.
+        # 15-second wall-clock cap; timed-out URLs fall back to their description.
+        def _fetch_one(art):
+            return self.fetch_full_article(art.get('link', ''), art.get('description', ''))
+
+        results_map = {i: articles[i].get('description', '') for i in range(len(articles))}
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=min(len(articles), 6))
+        future_to_idx = {executor.submit(_fetch_one, art): i for i, art in enumerate(articles)}
+        try:
+            for future in concurrent.futures.as_completed(future_to_idx, timeout=15):
+                idx = future_to_idx[future]
+                try:
+                    results_map[idx] = future.result()
+                except Exception:
+                    pass  # keep description fallback for this URL
+        except concurrent.futures.TimeoutError:
+            timed_out = sum(1 for f in future_to_idx if not f.done())
+            if timed_out:
+                pulse_logger.log(
+                    f"⚠️ Article URL fetch — {timed_out} URL(s) timed out, falling back to description",
+                    level="WARNING"
+                )
+        finally:
+            executor.shutdown(wait=False)  # don't block on threads still running after timeout
+
+        # Build batch input
         article_list = ""
         for i, article in enumerate(articles):
-            full_text = self.fetch_full_article(
-                article.get('link', ''),
-                article.get('description', '')
-            )
+            full_text = results_map[i]
             article_list += f"{i+1}. TITLE: {article['headline']}\n   FULL TEXT: {full_text}\n\n"
 
         prompt = f"""You are assisting a professional NQ and ES futures day trader with pre-market preparation.
