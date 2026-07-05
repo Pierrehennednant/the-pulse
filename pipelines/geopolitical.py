@@ -162,15 +162,21 @@ class GeopoliticalPipeline:
             return self.fetch_full_article(art.get('link', ''), art.get('description', ''))
 
         results_map = {i: articles[i].get('description', '') for i in range(len(articles))}
+        text_source_map = {i: 'description_fallback' for i in range(len(articles))}
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=min(len(articles), 6))
         future_to_idx = {executor.submit(_fetch_one, art): i for i, art in enumerate(articles)}
         try:
             for future in concurrent.futures.as_completed(future_to_idx, timeout=15):
                 idx = future_to_idx[future]
                 try:
-                    results_map[idx] = future.result()
+                    fetched = future.result()
+                    results_map[idx] = fetched
+                    # Mark as full_text only when fetch_full_article() returned something
+                    # substantively different from the description fallback.
+                    if fetched and fetched != articles[idx].get('description', ''):
+                        text_source_map[idx] = 'full_text'
                 except Exception:
-                    pass  # keep description fallback for this URL
+                    pass  # keep description_fallback for this URL
         except concurrent.futures.TimeoutError:
             timed_out = sum(1 for f in future_to_idx if not f.done())
             if timed_out:
@@ -180,6 +186,10 @@ class GeopoliticalPipeline:
                 )
         finally:
             executor.shutdown(wait=False)  # don't block on threads still running after timeout
+
+        # Stamp each article so callers can write text_source into gemini_cache
+        for i, article in enumerate(articles):
+            article['_text_source'] = text_source_map[i]
 
         # Build batch input
         article_list = ""
@@ -1167,6 +1177,7 @@ CONTEXT: {context}"""
                                     if tier is not None:
                                         pulse_logger.log(f"⚠️ Haiku returned malformed tier '{tier}' for '{headline[:60]}' — falling back to keyword tiering", level="WARNING")
                                     tier = None
+                                text_source = new_items[idx].get('_text_source', 'unknown')
                                 gemini_cache[headline] = {
                                     'relevant': r.get('relevant', False),
                                     'confidence': r.get('confidence', 0),
@@ -1177,11 +1188,12 @@ CONTEXT: {context}"""
                                     'uncertainty_score': r.get('uncertainty_score', 0),
                                     'tier': tier,
                                     'tier_reasoning': r.get('reasoning', ''),
+                                    'text_source': text_source,
                                     'classified_at': datetime.now(timezone.utc).isoformat()
                                 }
                                 pulse_logger.log(
                                     f"🧭 Haiku tier | {headline[:60]} | Tier {tier if tier is not None else 'N/A (fallback)'} | "
-                                    f"{r.get('direction', 'unknown')} | conf={r.get('confidence', 0)} | {r.get('reasoning', '')}"
+                                    f"{r.get('direction', 'unknown')} | conf={r.get('confidence', 0)} | src={text_source} | {r.get('reasoning', '')}"
                                 )
                         atomic_write_json(gemini_cache_file, gemini_cache)
                         self.update_pinned_store(new_items, classifications)
@@ -1421,6 +1433,7 @@ CONTEXT: {context}"""
                         tier = r.get('tier')
                         if tier not in (1, 2, 3):
                             tier = None
+                        text_source = pending[idx].get('_text_source', 'unknown')
                         gc[headline] = {
                             'relevant': r.get('relevant', False),
                             'confidence': r.get('confidence', 0),
@@ -1431,12 +1444,13 @@ CONTEXT: {context}"""
                             'uncertainty_score': r.get('uncertainty_score', 0),
                             'tier': tier,
                             'tier_reasoning': r.get('reasoning', ''),
+                            'text_source': text_source,
                             'classified_at': datetime.now(timezone.utc).isoformat()
                         }
                         pulse_logger.log(
                             f"🔄 Fallback-reclassified: '{headline[:60]}' → "
                             f"{'relevant' if r.get('relevant') else 'irrelevant'} | "
-                            f"Tier {tier or 'N/A'} | {r.get('direction', 'unknown')}"
+                            f"Tier {tier or 'N/A'} | {r.get('direction', 'unknown')} | src={text_source}"
                         )
                 atomic_write_json(gemini_cache_file, gc)
                 pulse_logger.log(f"✅ Fallback reclassification done — {len(classifications)} article(s) classified")
