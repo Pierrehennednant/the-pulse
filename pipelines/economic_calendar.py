@@ -470,7 +470,6 @@ class EconomicCalendarPipeline:
             weak_ec_week = red_folder_days <= 1
             if weak_ec_week:
                 score = round(score * 0.5, 2)
-                pulse_logger.log(f"🔇 Weak EC Mode active — {red_folder_days} red folder day(s) this week — pillar score dampened to {score}")
 
             result_data = {
                 'pillar': 'economic_calendar',

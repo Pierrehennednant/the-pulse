@@ -108,23 +108,15 @@ def run_pulse():
         except Exception:
             size_mode = 'quarter'
 
-        try:
-            with open('/data/prop_firm_weekly_threshold.json', 'r') as f:
-                pf_week = json.load(f)
-            if pf_week.get('is_quiet_week'):
-                bias_threshold = 0.30
-            else:
-                bias_threshold = 0.33
-        except Exception:
-            pf_week = {}
+        # Derive bias_threshold from EC pipeline's weak_ec_week flag — same canonical source
+        # as _get_weekly_threshold(), eliminates stale cache read before compute_prop_firm()
+        _ec_weak = formatted_data.get('economic', {}).get('weak_ec_week')
+        if _ec_weak is True:
+            bias_threshold = 0.30
+        elif _ec_weak is False:
+            bias_threshold = 0.33
+        else:
             bias_threshold = 0.50
-
-        red_folder_days = pf_week.get('red_folder_days', 0)
-        day_s = 'day' if red_folder_days == 1 else 'days'
-        if pf_week.get('is_quiet_week'):
-            pulse_logger.log(f"🔇 Quiet week active — {red_folder_days} red folder {day_s} — EC {pf_week.get('ec_weight', 30)}%, bias ±{bias_threshold}")
-        elif pf_week:
-            pulse_logger.log(f"📅 Standard week — {red_folder_days} red folder {day_s} — EC {pf_week.get('ec_weight', 30)}%, bias ±{bias_threshold}")
 
         bias_score = bias_calculator.compute(formatted_data, size_mode=size_mode, bias_threshold=bias_threshold)
 
@@ -142,6 +134,18 @@ def run_pulse():
             formatted_data.get('economic', {}),
         )
         bias_score['recommendation_prop'] = prop_recommendation
+
+        # Quiet/standard week log — derived from compute_prop_firm() result, not cache file
+        if isinstance(prop_recommendation, dict):
+            _is_quiet = prop_recommendation.get('quiet_week', False)
+            _ec_weight = prop_recommendation.get('ec_weight', 30)
+            _bias_thr = prop_recommendation.get('bias_threshold', bias_threshold)
+            _red_days = formatted_data.get('economic', {}).get('red_folder_days', 0)
+            _day_s = 'day' if _red_days == 1 else 'days'
+            if _is_quiet:
+                pulse_logger.log(f"🔇 Quiet week active — {_red_days} red folder {_day_s} — EC {_ec_weight}%, bias ±{_bias_thr}")
+            else:
+                pulse_logger.log(f"📅 Standard week — {_red_days} red folder {_day_s} — EC {_ec_weight}%, bias ±{_bias_thr}")
 
         weekly_summary_pipeline.fetch(formatted_data=formatted_data, bias=bias_score)
         snapshot_id = snapshot_generator.save(bias_score, formatted_data)
