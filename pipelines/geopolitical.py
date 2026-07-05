@@ -1352,6 +1352,75 @@ CONTEXT: {context}"""
             return 0.0
         return round(max(-2.0, min(2.0, weighted_sum / total_weight)), 2)
 
+    def _reclassify_cached_pending(self, cached_items):
+        """Re-trigger Haiku classification for cached articles that were never classified.
+
+        Called when fetch_news() returns empty (API timeout / rate-limit) and the pipeline
+        falls back to stale cached data.  Without this, any article that is stuck in
+        keyword-fallback state at the moment of an outage stays unclassified for the
+        entire duration of that outage — the normal background thread only fires when
+        fetch_news() returns live articles.
+        """
+        if not self.anthropic_client or not cached_items:
+            return
+        gemini_cache_file = "/data/gemini_classifications.json"
+        try:
+            if os.path.exists(gemini_cache_file):
+                with open(gemini_cache_file, 'r') as f:
+                    gc = json.load(f)
+            else:
+                gc = {}
+        except Exception:
+            gc = {}
+
+        pending = [
+            i for i in cached_items
+            if not i.get('pinned')
+            and not i.get('haiku_tier')
+            and not i.get('gemini_direction')
+            and i.get('headline', '') not in gc
+        ]
+        if not pending:
+            return
+
+        pulse_logger.log(f"🔄 Cache fallback — re-queuing {len(pending)} unclassified article(s) for Haiku")
+
+        def _classify():
+            try:
+                classifications = self.classify_relevance_batch(pending)
+                if not classifications:
+                    return
+                for r in classifications:
+                    idx = r['id'] - 1
+                    if 0 <= idx < len(pending):
+                        headline = pending[idx]['headline']
+                        tier = r.get('tier')
+                        if tier not in (1, 2, 3):
+                            tier = None
+                        gc[headline] = {
+                            'relevant': r.get('relevant', False),
+                            'confidence': r.get('confidence', 0),
+                            'category': r.get('category', ''),
+                            'direction': r.get('direction', None),
+                            'reason': r.get('reason', ''),
+                            'summary': r.get('summary', ''),
+                            'uncertainty_score': r.get('uncertainty_score', 0),
+                            'tier': tier,
+                            'tier_reasoning': r.get('reasoning', ''),
+                            'classified_at': datetime.now(timezone.utc).isoformat()
+                        }
+                        pulse_logger.log(
+                            f"🔄 Fallback-reclassified: '{headline[:60]}' → "
+                            f"{'relevant' if r.get('relevant') else 'irrelevant'} | "
+                            f"Tier {tier or 'N/A'} | {r.get('direction', 'unknown')}"
+                        )
+                atomic_write_json(gemini_cache_file, gc)
+                pulse_logger.log(f"✅ Fallback reclassification done — {len(classifications)} article(s) classified")
+            except Exception as e:
+                pulse_logger.log(f"⚠️ Fallback reclassification failed: {e}", level="WARNING")
+
+        threading.Thread(target=_classify, daemon=True).start()
+
     def fetch(self):
         try:
             existing = cache.load(self.cache_key)
@@ -1365,6 +1434,7 @@ CONTEXT: {context}"""
             if not items:
                 pulse_logger.log("↺ Geopolitical — fetch empty, using last cache")
                 if existing:
+                    self._reclassify_cached_pending(existing['data'].get('news_items', []))
                     existing['data']['status'] = 'cached'
                     return existing['data']
                 pinned = self.load_pinned_stories()
