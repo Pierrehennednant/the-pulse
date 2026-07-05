@@ -351,6 +351,11 @@ class PropFirmRecommendationEngine(RecommendationEngine):
     def _get_weekly_threshold(self, econ_data):
         """Return week mode dict. Reads cache for current ISO week; recomputes on new week.
 
+        Uses EC pipeline's pre-computed weak_ec_week flag as the canonical source of truth.
+        If the cached value disagrees with the live EC flag, the cache is corrected and
+        re-written — this handles mid-week exclusion changes (e.g. blocklist additions)
+        without requiring a manual cache delete.
+
         Returns dict with keys:
           bias_threshold, red_folder_days, is_new_week, is_quiet_week,
           ec_weight, total_weight, alignment_threshold
@@ -367,24 +372,44 @@ class PropFirmRecommendationEngine(RecommendationEngine):
         except Exception as e:
             pulse_logger.log(f"⚠️ Prop Firm threshold cache read failed: {e}", level="WARNING")
 
-        # Cache hit — same week, return stored values
+        # EC pipeline's pre-computed flag — canonical source of truth
+        ec_weak_week = econ_data.get('weak_ec_week') if econ_data else None
+        ec_red_folder_days = econ_data.get('red_folder_days', 0) if econ_data else 0
+
+        # Cache hit — same week. Re-validate against EC pipeline's live count.
         if cached and tuple(cached.get('week', [])) == current_week and 'is_quiet_week' in cached:
-            return {
-                'bias_threshold': cached['threshold'],
-                'red_folder_days': cached['red_folder_days'],
-                'is_new_week': False,
-                'is_quiet_week': cached['is_quiet_week'],
-                'ec_weight': cached['ec_weight'],
-                'total_weight': cached['total_weight'],
-                'alignment_threshold': cached['alignment_threshold'],
-            }
+            cached_is_quiet = cached['is_quiet_week']
+            if ec_weak_week is not None and cached_is_quiet != ec_weak_week:
+                # Cached value disagrees with EC live count — recompute and re-cache
+                pulse_logger.log(
+                    f"⚠️ Prop Firm week mode corrected — cached: "
+                    f"{'quiet' if cached_is_quiet else 'standard'} → "
+                    f"EC live: {'quiet' if ec_weak_week else 'standard'} "
+                    f"({ec_red_folder_days} red folder day(s))"
+                )
+                # Fall through to recompute
+            else:
+                return {
+                    'bias_threshold': cached['threshold'],
+                    'red_folder_days': cached['red_folder_days'],
+                    'is_new_week': False,
+                    'is_quiet_week': cached_is_quiet,
+                    'ec_weight': cached['ec_weight'],
+                    'total_weight': cached['total_weight'],
+                    'alignment_threshold': cached['alignment_threshold'],
+                }
 
         # Only a genuine week change triggers is_new_week — missing/unreadable cache does not
         stored_week = tuple(cached.get('week', [])) if cached else None
         is_new_week = stored_week is not None and stored_week != current_week
 
-        red_folder_days = self._count_red_folder_days(econ_data)
-        is_quiet = red_folder_days <= 1
+        # Use EC pipeline's flag when available; fall back to independent count
+        if ec_weak_week is not None:
+            red_folder_days = ec_red_folder_days
+            is_quiet = ec_weak_week
+        else:
+            red_folder_days = self._count_red_folder_days(econ_data)
+            is_quiet = red_folder_days <= 1
         threshold = 0.30 if is_quiet else 0.33
         ec_weight = 15 if is_quiet else 30
         total_weight = 85 if is_quiet else 100

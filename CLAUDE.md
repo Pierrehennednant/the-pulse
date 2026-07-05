@@ -148,7 +148,7 @@ Score is rounded (not truncated) to match CNN's own display rounding.
 | VIX hard limit | ≤ 26 |
 | High uncertainty block | 3+ articles ≥ 70 |
 
-**Quiet week mode (Prop Firm only):** Evaluated once at the start of each ISO week. Counts red folder **days** (not individual events — a day with multiple red folder events counts as 1 red folder day). Persisted to `/data/prop_firm_weekly_threshold.json` for the entire week — does not change mid-week.
+**Quiet week mode (Prop Firm only):** Evaluated once at the start of each ISO week. Counts red folder **days** (not individual events — a day with multiple red folder events counts as 1 red folder day). Persisted to `/data/prop_firm_weekly_threshold.json`. Re-validated on every run against the EC pipeline's pre-computed `weak_ec_week` flag — if they disagree, the cache is corrected and re-written immediately (handles mid-week blocklist changes or exclusion additions without requiring a manual cache delete).
 
 - 0 or 1 red folder days → quiet week: bias threshold ± 0.30, EC weight drops from 30% to 15%, total weight 85%, pillar alignment threshold 45% of 85% = 38.25%
 - 2+ red folder days → standard week: bias threshold ± 0.33, EC weight 30%, total weight 100%, pillar alignment threshold 45%
