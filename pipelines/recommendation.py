@@ -182,120 +182,29 @@ class RecommendationEngine:
         }
 
     def compute(self, bias_data, geo_data, macro_data):
-        """Generate size recommendation based on 3 sources.
-
-        Sizes: quarter → half → full
-        Confidence gates:
+        """Generate size recommendation. Simple binary split on confidence:
           < 20%  → no card
-          < 55%  → quarter (conviction too low)
-          55–69% → quarter as default; half only on clean streak + calm conditions
-          70%+   → half as base; full only on clean streak + calm conditions
-        All existing uncertainty/VIX hard blocks remain regardless of confidence.
+          20–69% → Quarter Size (Low conviction)
+          70%+   → Half Size (Strong alignment)
         """
         try:
-            uncertainty = self.get_uncertainty_signal(geo_data)
-            vix = macro_data.get('vix', {}) if macro_data else {}
-            vix_value = vix.get('value', 0) or 0
-            vix_elevated = vix_value >= 22
-            consistency = self.get_regime_consistency()
-
             bias = bias_data.get('bias', 'Neutral') if bias_data else 'Neutral'
             confidence = bias_data.get('confidence', 0) if bias_data else 0
-            high_conf = confidence >= 70
 
             if bias == 'Neutral' or confidence < 20:
                 return None
 
-            if confidence < 55:
-                return {
-                    'mode': 'quarter',
-                    'label': f'Quarter Size — {confidence}% confidence',
-                    'reason': f'Confidence {confidence}% — conviction too low for larger size',
-                    'strength': 'weak'
-                }
-
-            # High uncertainty — hard Quarter block regardless of confidence
-            if uncertainty['signal'] == 'high':
-                if uncertainty['high_count'] >= 2:
-                    return {
-                        'mode': 'quarter',
-                        'label': f'Quarter Size — {confidence}% confidence',
-                        'reason': f'Multiple high-uncertainty events active — {confidence}% confidence insufficient to size up',
-                        'strength': 'strong'
-                    }
-                if vix_elevated:
-                    return {
-                        'mode': 'quarter',
-                        'label': f'Quarter Size — {confidence}% confidence',
-                        'reason': f'High-uncertainty event + VIX elevated — wait for clarity ({confidence}% confidence)',
-                        'strength': 'strong'
-                    }
-                return {
-                    'mode': 'quarter',
-                    'label': f'Quarter Size — {confidence}% confidence',
-                    'reason': f'High-uncertainty event active — monitor before sizing up ({confidence}% confidence)',
-                    'strength': 'moderate'
-                }
-
-            # Medium uncertainty
-            if uncertainty['signal'] == 'medium':
-                if vix_elevated:
-                    return {
-                        'mode': 'quarter',
-                        'label': f'Quarter Size — {confidence}% confidence',
-                        'reason': f'Developing event + elevated VIX — Quarter Size ({confidence}% confidence)',
-                        'strength': 'moderate'
-                    }
-                if consistency['consistent'] and consistency['direction'] == bias and high_conf:
-                    return {
-                        'mode': 'half',
-                        'label': f'Half Size — {confidence}% confidence',
-                        'reason': f'Regime consistent {consistency["days"]} days · {confidence}% confidence · Developing event manageable',
-                        'strength': 'moderate'
-                    }
-                return {
-                    'mode': 'quarter',
-                    'label': f'Quarter Size — {confidence}% confidence',
-                    'reason': f'Developing event active · {confidence}% confidence — Half Size requires 70%+ and streak',
-                    'strength': 'weak'
-                }
-
-            # Calm conditions (no uncertainty or low)
-            if vix_elevated:
-                return {
-                    'mode': 'quarter',
-                    'label': f'Quarter Size — {confidence}% confidence',
-                    'reason': f'VIX elevated — Quarter Size ({confidence}% confidence)',
-                    'strength': 'weak'
-                }
-
-            if consistency['consistent'] and consistency['direction'] == bias:
-                if high_conf:
-                    return {
-                        'mode': 'full',
-                        'label': f'Full Size — {confidence}% confidence',
-                        'reason': f'Regime consistent {consistency["days"]} days · {int(consistency["avg_confidence"])}% avg confidence · {confidence}% confidence · Conditions clear',
-                        'strength': 'strong'
-                    }
+            if confidence >= 70:
                 return {
                     'mode': 'half',
-                    'label': f'Half Size — {confidence}% confidence',
-                    'reason': f'Regime consistent {consistency["days"]} days · {confidence}% confidence · Conditions calm — Full Size requires 70%+',
-                    'strength': 'moderate'
-                }
-
-            # No streak
-            if high_conf:
-                return {
-                    'mode': 'half',
-                    'label': f'Half Size — {confidence}% confidence',
-                    'reason': f'{confidence}% confidence · Conditions calm — Full Size requires consistency streak',
-                    'strength': 'moderate'
+                    'label': 'Half Size recommended',
+                    'reason': 'Strong alignment',
+                    'strength': 'strong'
                 }
             return {
                 'mode': 'quarter',
-                'label': f'Quarter Size — {confidence}% confidence',
-                'reason': f'{confidence}% confidence · Regime not yet consistent — Half Size requires streak or 70%+',
+                'label': 'Quarter Size recommended',
+                'reason': 'Low conviction',
                 'strength': 'weak'
             }
 
@@ -459,11 +368,6 @@ class PropFirmRecommendationEngine(RecommendationEngine):
 
     def compute_prop_firm(self, bias_data, geo_data, macro_data, econ_data=None):
         try:
-            uncertainty = self.get_uncertainty_signal(geo_data)
-            vix = macro_data.get('vix', {}) if macro_data else {}
-            vix_value = vix.get('value', 0) or 0
-            vix_elevated = vix_value >= 26
-
             # Bias threshold and pillar weights set once per ISO week
             week_info = self._get_weekly_threshold(econ_data)
             is_quiet = week_info['is_quiet_week']
@@ -505,64 +409,19 @@ class PropFirmRecommendationEngine(RecommendationEngine):
             if confidence < 30:
                 return self._no_rec(week_info)
 
-            # Hard blocks
-            if uncertainty['signal'] == 'high' and uncertainty['high_count'] >= 3:
+            if confidence >= 70:
                 return self._rec(week_info,
-                    mode='quarter',
-                    label=f'Prop Firm — {bias}, Quarter entry',
-                    reason='Multiple high-uncertainty events active — execution conditions fragmented',
+                    mode='half',
+                    label='Half Size recommended',
+                    reason='Strong alignment',
                     strength='strong',
                     bias=bias,
                 )
-
-            if vix_elevated:
-                return self._rec(week_info,
-                    mode='quarter',
-                    label=f'Prop Firm — {bias}, Quarter entry',
-                    reason='VIX ≥ 26 — stay at quarter',
-                    strength='moderate',
-                    bias=bias,
-                )
-
-            if confidence < 35:
-                return self._rec(week_info,
-                    mode='quarter',
-                    label=f'Prop Firm — {bias}, Quarter entry',
-                    reason=f'Confidence {confidence}% — building toward Normal',
-                    strength='weak',
-                    bias=bias,
-                )
-
-            if uncertainty['signal'] == 'high':
-                return self._rec(week_info,
-                    mode='quarter',
-                    label=f'Prop Firm — {bias}, Quarter entry',
-                    reason='High-uncertainty event active — stay at quarter',
-                    strength='moderate',
-                    bias=bias,
-                )
-
-            high_conf = confidence >= 70
-
-            if uncertainty['signal'] == 'medium':
-                size = 'half' if not high_conf else 'full'
-                size_label = 'Half Size' if size == 'half' else 'Full Size'
-                return self._rec(week_info,
-                    mode=size,
-                    label=f'Prop Firm — {bias}, {size_label} — {confidence}% confidence',
-                    reason=f'Developing event manageable · {confidence}% confidence · Conditions met',
-                    strength='moderate',
-                    bias=bias,
-                )
-
-            total_w = week_info['total_weight']
-            size = 'full' if high_conf else 'half'
-            size_label = 'Full Size' if size == 'full' else 'Half Size'
             return self._rec(week_info,
-                mode=size,
-                label=f'Prop Firm — {bias}, {size_label} — {confidence}% confidence',
-                reason=f'{aligned_weight}% of {total_w}% weight aligned · {confidence}% confidence · Conditions clear',
-                strength='strong',
+                mode='quarter',
+                label='Quarter Size recommended',
+                reason='Low conviction',
+                strength='weak',
                 bias=bias,
             )
 

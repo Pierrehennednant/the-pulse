@@ -131,10 +131,7 @@ Score is rounded (not truncated) to match CNN's own display rounding.
 |---|---|
 | Bias threshold | ± 0.50 |
 | Confidence to show card | 20% |
-| Confidence for quarter entry | 55% |
-| Consistency streak | 2 consecutive days |
-| Neutral days | Pause the streak (do not break it) |
-| Opposite direction | Breaks the streak |
+| Confidence for half size | 70% (below → quarter) |
 
 ## Prop Firm Mode Thresholds (`pipelines/recommendation.py`)
 
@@ -142,11 +139,8 @@ Score is rounded (not truncated) to match CNN's own display rounding.
 |---|---|
 | Bias threshold | ± 0.33 standard / ± 0.30 quiet week |
 | Confidence to show card | 30% |
-| Confidence for quarter entry | 35% |
-| Consistency streak | 0 days |
+| Confidence for half size | 70% (below → quarter) |
 | Pillar alignment | ≥ 45% of total week weight must agree with bias |
-| VIX hard limit | ≤ 26 |
-| High uncertainty block | 3+ articles ≥ 70 |
 
 **Quiet week mode (Prop Firm only):** Evaluated once at the start of each ISO week. Counts red folder **days** (not individual events — a day with multiple red folder events counts as 1 red folder day). Persisted to `/data/prop_firm_weekly_threshold.json`. Re-validated on every run against the EC pipeline's pre-computed `weak_ec_week` flag — if they disagree, the cache is corrected and re-written immediately (handles mid-week blocklist changes or exclusion additions without requiring a manual cache delete).
 
