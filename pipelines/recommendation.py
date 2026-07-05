@@ -330,12 +330,17 @@ class PropFirmRecommendationEngine(RecommendationEngine):
         'quiet':    {'economic_calendar': 15, 'geopolitical': 25, 'institutional': 25, 'macro_sentiment': 20},
     }
 
+    _EC_SCORING_EXCLUSIONS = {'FOMC Meeting Minutes'}
+
     def _count_red_folder_days(self, econ_data):
-        """Count calendar days with at least one red folder (high-impact) event this week."""
+        """Count calendar days with at least one red folder (high-impact) event this week.
+        Mirrors EconomicCalendarPipeline.SCORING_EXCLUSIONS — excluded events don't count."""
         if not econ_data:
             return 0
         red_days = set()
         for e in econ_data.get('events', []):
+            if e.get('title') in self._EC_SCORING_EXCLUSIONS:
+                continue
             if e.get('impact', '').lower() == 'high':
                 time_est = e.get('time_est', '')
                 day = time_est.split(',')[0] if ',' in time_est else time_est[:10]

@@ -91,6 +91,9 @@ class EconomicCalendarPipeline:
             pulse_logger.log(f"⚠️ Failed to parse event date '{date_str}': {e}", level="WARNING")
             return date_str
 
+    # Events that are shown in the dashboard as watch events but excluded from EC scoring.
+    SCORING_EXCLUSIONS = {'FOMC Meeting Minutes'}
+
     # Explicit polarity per event — +1 means beating forecast is bullish for equities,
     # -1 means beating forecast is bearish (inflation / unemployment events).
     # Formula: final_score = magnitude × POLARITY[event] × sign(surprise)
@@ -265,6 +268,19 @@ class EconomicCalendarPipeline:
         pulse_logger.log(f"⚠️ EC scoring: '{title}' not in POLARITY map — using market_impact direction", level="WARNING")
         return magnitude if direction > 0 else -magnitude
 
+    def _count_red_folder_days(self, events):
+        """Count calendar days with at least one high-impact event (excluding SCORING_EXCLUSIONS)."""
+        red_days = set()
+        for e in events:
+            if e.get('title') in self.SCORING_EXCLUSIONS:
+                continue
+            if e.get('impact', '').lower() == 'high':
+                time_est = e.get('time_est', '')
+                day = time_est.split(',')[0] if ',' in time_est else time_est[:10]
+                if day:
+                    red_days.add(day)
+        return len(red_days)
+
     def calculate_score(self, events):
         if not events:
             return 0.0
@@ -272,6 +288,9 @@ class EconomicCalendarPipeline:
         count = 0
         flat_map = {'bullish': 1.0, 'bearish': -1.0, 'neutral': 0.0}
         for event in events:
+            # Watch-only events — show in dashboard but do not score
+            if event.get('title') in self.SCORING_EXCLUSIONS:
+                continue
             # Skip pending and unknown
             if event.get('result') in ['pending', 'unknown', 'speech']:
                 continue
@@ -446,11 +465,20 @@ class EconomicCalendarPipeline:
             score = self.calculate_score(events)
             warnings = []
 
+            # Weak EC Mode — dampen score when the week has ≤1 meaningful red folder day
+            red_folder_days = self._count_red_folder_days(events)
+            weak_ec_week = red_folder_days <= 1
+            if weak_ec_week:
+                score = round(score * 0.5, 2)
+                pulse_logger.log(f"🔇 Weak EC Mode active — {red_folder_days} red folder day(s) this week — pillar score dampened to {score}")
+
             result_data = {
                 'pillar': 'economic_calendar',
                 'timestamp': datetime.now(self.timezone).isoformat(),
                 'events': events,
                 'pillar_score': score,
+                'weak_ec_week': weak_ec_week,
+                'red_folder_days': red_folder_days,
                 'warnings': warnings,
                 'status': 'live'
             }
