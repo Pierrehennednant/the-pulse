@@ -1362,9 +1362,11 @@ CONTEXT: {context}"""
                 # Fallback — keyword-based tier classification (used when Haiku tier
                 # is missing/malformed, e.g. unclassified article or failed batch)
                 kw_priority = self._get_article_priority(item)
-                if (kw_priority >= 80) or (haiku_conf is not None and haiku_conf >= 0.85):
-                    tier_score, tier_weight = 1.7, 4.0
-                elif (65 <= kw_priority <= 79) or (haiku_conf is not None and 0.65 <= haiku_conf < 0.85):
+                # Keyword fallback is capped at Tier 2 — only Haiku (which reads context)
+                # can assign Tier 1. Binary: signal present → Tier 2; no signal → Tier 3.
+                # haiku_conf >= 0.65 without a valid haiku_tier means Haiku ran but returned
+                # a malformed tier — confidence is still a signal, so treat as Tier 2.
+                if kw_priority >= 65 or (haiku_conf is not None and haiku_conf >= 0.65):
                     tier_score, tier_weight = 0.75, 2.0
                 else:
                     tier_score, tier_weight = 0.35, 1.0
