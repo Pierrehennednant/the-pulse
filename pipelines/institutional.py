@@ -152,13 +152,32 @@ class InstitutionalPipeline:
         except Exception:
             return False
 
+    def _cache_from_friday(self, existing):
+        """True if the cached COT data was written on a Friday.
+        On Mondays, a Friday-stamped cache always triggers a re-fetch — the normal
+        Friday release (3:30 PM EST) is only ~2.7 days old by Monday 9 AM, which
+        would fail the >=3 day stale check even though new data may be available."""
+        ts = existing.get('timestamp', '')
+        if not ts:
+            return False
+        try:
+            cached_dt = datetime.fromisoformat(ts)
+            if cached_dt.tzinfo is None:
+                cached_dt = cached_dt.replace(tzinfo=pytz.timezone(TIMEZONE))
+            return cached_dt.weekday() == 4  # Friday
+        except Exception:
+            return False
+
     def fetch(self):
         try:
             existing = self._load()
             now = datetime.now(pytz.timezone(TIMEZONE))
-            is_monday_stale = now.weekday() == 0 and existing and self._cache_is_stale(existing)
+            _from_friday = existing and self._cache_from_friday(existing)
+            _stale = existing and self._cache_is_stale(existing)
+            is_monday_stale = now.weekday() == 0 and (_from_friday or _stale)
             if is_monday_stale:
-                pulse_logger.log("🔄 Institutional — Monday with stale cache (>3 days), checking CFTC for holiday-delayed release")
+                reason = "cache from Friday" if _from_friday else "cache >3 days old"
+                pulse_logger.log(f"🔄 Institutional — Monday fetch triggered ({reason}), checking CFTC for latest release")
 
             if not self.is_friday() and not is_monday_stale and existing:
                 if not existing.get('pillar_score'):
