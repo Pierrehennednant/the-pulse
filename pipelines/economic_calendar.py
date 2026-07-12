@@ -74,7 +74,7 @@ class EconomicCalendarPipeline:
             # Only keep medium impact if it's a speech event
             title = event.get('title', '').lower()
             speech_keywords = [
-                'speaks', 'speech', 'press conference', 'testimony',
+                'speaks', 'speech', 'press conference', 'testimony', 'testifies',
                 'statement', 'remarks', 'interview', 'appearance'
             ]
             return any(keyword in title for keyword in speech_keywords)
@@ -175,7 +175,7 @@ class EconomicCalendarPipeline:
 
     def is_speech_event(self, title):
         speech_keywords = [
-            'speaks', 'speech', 'press conference', 'testimony',
+            'speaks', 'speech', 'press conference', 'testimony', 'testifies',
             'statement', 'remarks', 'interview', 'appearance'
         ]
         return any(keyword in title.lower() for keyword in speech_keywords)
