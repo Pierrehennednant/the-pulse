@@ -319,6 +319,8 @@ def reset_manual_input():
                             event['reason'] = f'{event_title} not yet released'
                         event.pop('story_url', None)
                         event.pop('story_context', None)
+                        event.pop('evt_score', None)
+                        event.pop('confidence', None)
                         break
                 ec_data['pillar_score'] = economic_calendar_pipeline.calculate_score(ec_data['events'])
                 _cache.save('economic_calendar', ec_data)
