@@ -350,6 +350,18 @@ class EconomicCalendarPipeline:
                 event['result'] = result
                 event['market_impact'] = market_impact
                 event['reason'] = reason
+            elif event.get('is_speech') and event.get('actual') not in ('Pending', '', None):
+                # No current manual input — reset stale speech event to default state.
+                # Handles the case where a manual input was deleted but the EC pipeline
+                # cache still holds the old result/market_impact/evt_score.
+                event['actual'] = 'Pending'
+                event['result'] = 'speech'
+                event['market_impact'] = 'unknown'
+                event['reason'] = f"{title} — No data to parse. Market will reprice on tone. No trade 30 minutes before."
+                event.pop('evt_score', None)
+                event.pop('confidence', None)
+                event.pop('story_url', None)
+                event.pop('story_context', None)
         return events
 
     def fetch(self):
