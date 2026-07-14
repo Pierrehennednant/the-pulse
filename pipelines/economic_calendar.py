@@ -333,12 +333,10 @@ class EconomicCalendarPipeline:
         for event in events:
             title = event['title']
             key = manual_input_pipeline.make_key(title, event.get('event_date', ''))
-            # Lookup order: 1) exact compound key, 2) bare title, 3) any key whose
-            # title portion (before "::") matches — catches all legacy key formats
+            # Lookup order: 1) exact compound key, 2) bare title legacy fallback.
+            # Tier-3 title-prefix wildcard removed — caused cross-date contamination
+            # when the same event title appeared on multiple days in the same week.
             manual = manual_inputs.get(key) or manual_inputs.get(title)
-            if not manual:
-                manual = next((v for k, v in manual_inputs.items()
-                               if '::' in k and k.split('::', 1)[0] == title), None)
             if manual:
                 event['actual'] = manual['actual']
                 event['story_url'] = manual.get('story_url')
