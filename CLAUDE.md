@@ -125,21 +125,31 @@ Five-level granular classification for each indicator:
 
 Score is rounded (not truncated) to match CNN's own display rounding.
 
+## Confidence Floor and Sizing (`processors/bias_calculator.py`, `pipelines/recommendation.py`)
+
+65% is a hard floor applied to both Live and Prop Firm modes. Below 65%, the system forces Neutral bias display, shows no directional output, and shows no size recommendation. This is enforced in `bias_calculator.py` (display override + directive) and in both recommendation engines (show-card gate).
+
+| Confidence | Bias displayed | Directive | Recommendation card |
+|---|---|---|---|
+| < 65% | Neutral (forced) | ⚫ No Trade – Low Conviction | None |
+| 65–69% | As computed | Quarter Size only | Quarter Size |
+| ≥ 70% | As computed | Half Size. Scale up on confirmation | Half Size |
+
 ## Live Mode Thresholds (`pipelines/recommendation.py`)
 
 | Setting | Value |
 |---|---|
 | Bias threshold | ± 0.50 |
-| Confidence to show card | 20% |
-| Confidence for half size | 70% (below → quarter) |
+| Confidence to show card | 65% |
+| Confidence for half size | 70% (65–69% → quarter) |
 
 ## Prop Firm Mode Thresholds (`pipelines/recommendation.py`)
 
 | Setting | Value |
 |---|---|
 | Bias threshold | ± 0.33 standard / ± 0.30 quiet week |
-| Confidence to show card | 30% |
-| Confidence for half size | 70% (below → quarter) |
+| Confidence to show card | 65% |
+| Confidence for half size | 70% (65–69% → quarter) |
 | Pillar alignment | ≥ 45% of total week weight must agree with bias |
 
 **Quiet week mode (Prop Firm only):** Evaluated once at the start of each ISO week. Counts red folder **days** (not individual events — a day with multiple red folder events counts as 1 red folder day). Persisted to `/data/prop_firm_weekly_threshold.json`. Re-validated on every run against the EC pipeline's pre-computed `weak_ec_week` flag — if they disagree, the cache is corrected and re-written immediately (handles mid-week blocklist changes or exclusion additions without requiring a manual cache delete).

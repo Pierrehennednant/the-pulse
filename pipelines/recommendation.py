@@ -182,16 +182,16 @@ class RecommendationEngine:
         }
 
     def compute(self, bias_data, geo_data, macro_data):
-        """Generate size recommendation. Simple binary split on confidence:
-          < 20%  → no card
-          20–69% → Quarter Size (Low conviction)
-          70%+   → Half Size (Strong alignment)
+        """Generate size recommendation. Hard floor at 65% confidence:
+          < 65%  → no card (No Trade – Low Conviction)
+          65–69% → Quarter Size
+          70%+   → Half Size
         """
         try:
             bias = bias_data.get('bias', 'Neutral') if bias_data else 'Neutral'
             confidence = bias_data.get('confidence', 0) if bias_data else 0
 
-            if bias == 'Neutral' or confidence < 20:
+            if bias == 'Neutral' or confidence < 65:
                 return None
 
             if confidence >= 70:
@@ -406,7 +406,7 @@ class PropFirmRecommendationEngine(RecommendationEngine):
                 return self._no_rec(week_info)
 
             confidence = bias_data.get('confidence', 0) if bias_data else 0
-            if confidence < 30:
+            if confidence < 65:
                 return self._no_rec(week_info)
 
             if confidence >= 70:

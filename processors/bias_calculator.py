@@ -83,7 +83,6 @@ class BiasCalculator:
             confidence = 0
             confidence_label = 'No Data'
             confidence_color = 'gray'
-            threshold_warning = None
         else:
             if bias == 'Bullish':
                 agreeing = pillar_signals.count('bullish')
@@ -99,73 +98,35 @@ class BiasCalculator:
             if confidence >= 70:
                 confidence_label = 'High Confidence'
                 confidence_color = 'green'
-                threshold_warning = None
-            elif confidence >= 40:
+            elif confidence >= 65:
                 confidence_label = 'Moderate Confidence'
                 confidence_color = 'yellow'
-                threshold_warning = None
-            elif confidence >= 20:
-                confidence_label = 'Low Confidence'
-                confidence_color = 'orange'
-                threshold_warning = f"⚠️ Low confidence ({confidence}%) — regime is unclear. Consider sitting out today."
             else:
-                confidence_label = 'Very Low Confidence'
+                confidence_label = 'Low Conviction'
                 confidence_color = 'red'
-                threshold_warning = f"🚫 Very low confidence ({confidence}%) — pillars conflicting. Sit out."
 
-        # Trading Directive — two size modes: quarter and normal (half)
-        if bias == 'Neutral':
+        # Hard floor: below 65% confidence, suppress directional bias display entirely
+        if confidence < 65 and bias != 'Neutral':
+            bias = 'Neutral'
+            bias_emoji = '🟡'
+
+        # Trading directive — confidence-based, no size_mode branching
+        if confidence < 65:
+            directive = "⚫ No Trade – Low Conviction"
+            directive_color = "#7a8fa8"
+        elif bias == 'Neutral':
             directive = "🟡 Neutral — Sit out."
             directive_color = "#f39c12"
-        elif confidence < 20:
-            directive = "⚫ Conflicted — Sit out."
-            directive_color = "#7a8fa8"
-        elif size_mode == 'quarter':
-            # Quarter size mode
-            if bias == 'Bearish' and confidence >= 70:
-                directive = "🔴 Bearish — Quarter first. Scale to half, then full on confirmation."
-                directive_color = "#e74c3c"
-            elif bias == 'Bearish' and confidence >= 50:
-                directive = "🔴 Bearish — Quarter first. Scale to half on confirmation only."
-                directive_color = "#e74c3c"
-            elif bias == 'Bearish' and confidence >= 20:
-                directive = "🟠 Bearish lean — Quarter only. No scaling."
-                directive_color = "#ff8c00"
-            elif bias == 'Bullish' and confidence >= 70:
-                directive = "🟢 Bullish — Quarter first. Scale to half, then full on confirmation."
-                directive_color = "#2ecc71"
-            elif bias == 'Bullish' and confidence >= 50:
-                directive = "🟢 Bullish — Quarter first. Scale to half on confirmation only."
-                directive_color = "#2ecc71"
-            elif bias == 'Bullish' and confidence >= 20:
-                directive = "🟠 Bullish lean — Quarter only. No scaling."
-                directive_color = "#ff8c00"
-            else:
-                directive = "⚫ Conflicted — Sit out."
-                directive_color = "#7a8fa8"
-        else:
-            # Normal mode (half size)
-            if bias == 'Bearish' and confidence >= 70:
-                directive = "🔴 Bearish — Half first. Scale to full on confirmation."
-                directive_color = "#e74c3c"
-            elif bias == 'Bearish' and confidence >= 50:
-                directive = "🔴 Bearish — Half first. Scale to full on confirmation only."
-                directive_color = "#e74c3c"
-            elif bias == 'Bearish' and confidence >= 20:
-                directive = "🟠 Bearish lean — Half only. No scaling."
-                directive_color = "#ff8c00"
-            elif bias == 'Bullish' and confidence >= 70:
-                directive = "🟢 Bullish — Half first. Scale to full on confirmation."
-                directive_color = "#2ecc71"
-            elif bias == 'Bullish' and confidence >= 50:
-                directive = "🟢 Bullish — Half first. Scale to full on confirmation only."
-                directive_color = "#2ecc71"
-            elif bias == 'Bullish' and confidence >= 20:
-                directive = "🟠 Bullish lean — Half only. No scaling."
-                directive_color = "#ff8c00"
-            else:
-                directive = "⚫ Conflicted — Sit out."
-                directive_color = "#7a8fa8"
+        elif confidence >= 70:
+            emoji = '🔴' if bias == 'Bearish' else '🟢'
+            color = "#e74c3c" if bias == 'Bearish' else "#2ecc71"
+            directive = f"{emoji} {bias} — Half Size. Scale up on confirmation if structure is clean."
+            directive_color = color
+        else:  # 65–69%
+            emoji = '🔴' if bias == 'Bearish' else '🟢'
+            color = "#e74c3c" if bias == 'Bearish' else "#2ecc71"
+            directive = f"{emoji} {bias} — Quarter Size only."
+            directive_color = color
 
         result = {
             'final_score': final_score,
@@ -174,7 +135,7 @@ class BiasCalculator:
             'confidence': confidence,
             'confidence_label': confidence_label,
             'confidence_color': confidence_color,
-            'threshold_warning': threshold_warning if confidence < 40 else None,
+            'threshold_warning': None,
             'active_pillars': active_pillars,
             'pillar_signals': pillar_signals,
             'pillar_contributions': pillar_contributions,
