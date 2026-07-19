@@ -130,23 +130,20 @@ Score is rounded (not truncated) to match CNN's own display rounding.
 | Setting | Value |
 |---|---|
 | Bias threshold | ± 0.50 |
-| Confidence to show card | 20% |
-| Confidence for quarter entry | 55% |
-| Consistency streak | 2 consecutive days |
-| Neutral days | Pause the streak (do not break it) |
-| Opposite direction | Breaks the streak |
+| Confidence to show card | 60% |
+| Confidence for quarter entry | 60%–69% |
+| Confidence for half entry | ≥ 70% |
+| Below 60% | Neutral forced — "No Trade – Low Conviction" directive |
 
 ## Prop Firm Mode Thresholds (`pipelines/recommendation.py`)
 
 | Setting | Value |
 |---|---|
 | Bias threshold | ± 0.33 standard / ± 0.30 quiet week |
-| Confidence to show card | 30% |
-| Confidence for quarter entry | 35% |
-| Consistency streak | 0 days |
+| Confidence to show card | 60% |
+| Confidence for quarter entry | 60%–69% |
+| Confidence for half entry | ≥ 70% |
 | Pillar alignment | ≥ 45% of total week weight must agree with bias |
-| VIX hard limit | ≤ 26 |
-| High uncertainty block | 3+ articles ≥ 70 |
 
 **Quiet week mode (Prop Firm only):** Evaluated once at the start of each ISO week. Counts red folder **days** (not individual events — a day with multiple red folder events counts as 1 red folder day). Persisted to `/data/prop_firm_weekly_threshold.json` for the entire week — does not change mid-week.
 
@@ -163,7 +160,6 @@ Logged once per week in Railway logs:
 
 - **Live snapshots:** every 5 minutes → `/data/snapshots/` — keep last 50
 - **Daily closing snapshots:** 4:00–4:05 PM EST → `/data/snapshots/daily/` — keep last 10
-- Consistency check reads daily snapshots only
 - `os.path.isfile()` filter applied everywhere to exclude the `daily/` subdirectory from live snapshot listing/pruning
 
 ## Pinned Stories — Three-Layer Cleanup
