@@ -246,21 +246,21 @@
         <div class="gauge-label" id="bias-label">Loading...</div>
         <div class="confidence" id="confidence-text"></div>
         <div id="trading-directive" style="margin-top:10px;padding:10px 16px;border-radius:8px;background:#0d1224;border:1px solid #1e2d4a;font-size:14px;font-weight:600;text-align:center"></div>
-        <div style="margin-top:8px;display:flex;align-items:center;justify-content:center;gap:10px">
-            <span style="font-size:11px;color:#4a5a70;text-transform:uppercase;letter-spacing:0.5px">Size Mode:</span>
-            <button id="mode-quarter" onclick="setSizeMode('quarter',this)" style="padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #2a4a7a;background:#1a2d4a;color:#4a9eff">Quarter</button>
-            <button id="mode-normal" onclick="setSizeMode('normal',this)" style="padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #1e2d4a;background:#0d1224;color:#4a5a70">Normal</button>
-        </div>
+
         <div style="text-align:center;margin-top:7px;font-size:11px;color:#4a5a70"><span class="live-dot"></span><span id="last-updated-text">Fetching data...</span></div>
         <div id="rec-container" style="display:none;margin-top:12px;background:#0d1224;border-radius:10px;border:1px solid #1a2438;padding:14px 16px 12px">
             <div id="rec-panel-live" style="text-align:center">
-                <div id="live-rec-label" style="font-size:13px;font-weight:600;margin-bottom:4px"></div>
-                <div id="live-rec-reason" style="font-size:11px;color:#7a8fa8;line-height:1.5"></div>
+                <div id="live-rec-main" style="font-size:13px;font-weight:600;margin-bottom:6px;line-height:1.5"></div>
+                <div id="live-rec-size" style="font-size:12px;color:#4a9eff;margin-bottom:4px"></div>
+                <div id="live-rec-scaling" style="font-size:11px;color:#7a8fa8;line-height:1.5"></div>
+                <div id="live-tier1-badge" style="display:none;margin-top:8px;font-size:10px;background:#1a0d00;border:1px solid #8B4513;border-radius:4px;padding:3px 9px;color:#e67e22;letter-spacing:0.2px">⚠️ Tier 1 Geopolitical Risk Active</div>
             </div>
             <div id="rec-panel-prop" style="display:none;text-align:center">
                 <div id="prop-quiet-info" style="display:none;margin-bottom:8px;font-size:10px;color:#e67e22;background:#1a0d00;border:1px solid #3a2000;border-radius:6px;padding:4px 10px;letter-spacing:0.2px"></div>
-                <div id="prop-rec-label" style="font-size:13px;font-weight:600;margin-bottom:4px"></div>
-                <div id="prop-rec-reason" style="font-size:11px;color:#7a8fa8;line-height:1.5"></div>
+                <div id="prop-rec-main" style="font-size:13px;font-weight:600;margin-bottom:6px;line-height:1.5"></div>
+                <div id="prop-rec-size" style="font-size:12px;color:#4a9eff;margin-bottom:4px"></div>
+                <div id="prop-rec-scaling" style="font-size:11px;color:#7a8fa8;line-height:1.5"></div>
+                <div id="prop-tier1-badge" style="display:none;margin-top:8px;font-size:10px;background:#1a0d00;border:1px solid #8B4513;border-radius:4px;padding:3px 9px;color:#e67e22;letter-spacing:0.2px">⚠️ Tier 1 Geopolitical Risk Active</div>
             </div>
         </div>
     </div>
@@ -565,13 +565,13 @@
     function _lockToggles(btn) {
         if (_toggleLocked) return false;
         _toggleLocked = true;
-        ['tab-btn-live', 'tab-btn-prop', 'mode-quarter', 'mode-normal'].forEach(id => {
+        ['tab-btn-live', 'tab-btn-prop'].forEach(id => {
             const el = document.getElementById(id);
             if (el) { el.disabled = true; el.style.opacity = el === btn ? '0.65' : '0.35'; }
         });
         setTimeout(() => {
             _toggleLocked = false;
-            ['tab-btn-live', 'tab-btn-prop', 'mode-quarter', 'mode-normal'].forEach(id => {
+            ['tab-btn-live', 'tab-btn-prop'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) { el.disabled = false; el.style.opacity = ''; }
             });
@@ -579,48 +579,116 @@
         return true;
     }
 
+    // Tier 1 active definition:
+    // Any article in pillars.geopolitical.news_items where haiku_tier === 1.
+    // news_items contains the current active article set (up to 10, filtered for
+    // relevance by the geo pipeline). haiku_tier is assigned by Claude Haiku during
+    // classification and is 1 only for: active war/escalation between major powers,
+    // nuclear threats, confirmed peace deals/ceasefires, or credible Hormuz-level
+    // supply disruptions. Articles remain in news_items until the 48-hour
+    // classification cache expires or the geo pipeline evicts them.
+    function _hasTier1Active(snapshot) {
+        const items = ((snapshot.pillars || {}).geopolitical || {}).news_items || [];
+        return items.some(function(item) { return item.haiku_tier === 1; });
+    }
+
+    function _buildRecGuidance(confidence, biasDir, tier1Active) {
+        if (!biasDir || biasDir === 'Neutral' || confidence < 60) return null;
+        if (confidence < 65) {
+            return tier1Active ? {
+                main: 'Low conviction + Tier 1 geopolitical risk — Quarter size.',
+                size: 'Initial size: Quarter',
+                scaling: 'Scaling is restricted while Tier 1 risk is active.',
+                tier1: true
+            } : {
+                main: 'Low conviction — Quarter size.',
+                size: 'Initial size: Quarter',
+                scaling: null,
+                tier1: false
+            };
+        }
+        if (confidence < 80) {
+            return tier1Active ? {
+                main: 'Moderate to Good conviction but Tier 1 geopolitical risk — Half size first entry.',
+                size: 'Initial size: Half',
+                scaling: 'Scaling to full size is restricted while Tier 1 risk is active. Only scale on very clean confirmation.',
+                tier1: true
+            } : {
+                main: 'Moderate to Good conviction — Half size first entry.',
+                size: 'Initial size: Half',
+                scaling: 'Look to scale to full size on clean structure confirmation.',
+                tier1: false
+            };
+        }
+        return tier1Active ? {
+            main: 'High conviction but Tier 1 geopolitical risk — Half size.',
+            size: 'Initial size: Half',
+            scaling: 'Scaling to full size is still allowed but should be more cautious while Tier 1 risk is active.',
+            tier1: true
+        } : {
+            main: 'High conviction — Half size.',
+            size: 'Initial size: Half',
+            scaling: 'Aggressive scaling to full size allowed if structure stays clean.',
+            tier1: false
+        };
+    }
+
     function _renderRecFromSnapshot() {
         if (!_snapshot) return;
         const bias = _snapshot.bias || {};
-        const rec = bias.recommendation;
         const propRec = bias.recommendation_prop;
+        const confidence = bias.confidence || 0;
+        const biasDir = bias.bias || 'Neutral';
+        const tier1Active = _hasTier1Active(_snapshot);
         const container = document.getElementById('rec-container');
-        const liveLabel = document.getElementById('live-rec-label');
-        const liveReason = document.getElementById('live-rec-reason');
-        if (rec && rec.label) {
-            const liveColor = (rec.mode === 'full' || rec.mode === 'half') ? '#2ecc71' : '#f39c12';
-            liveLabel.style.color = liveColor;
-            liveLabel.textContent = '💡 ' + rec.label;
-            liveReason.textContent = rec.reason;
+
+        // Live panel
+        const liveGuidance = _buildRecGuidance(confidence, biasDir, tier1Active);
+        const liveMain = document.getElementById('live-rec-main');
+        const liveSize = document.getElementById('live-rec-size');
+        const liveScaling = document.getElementById('live-rec-scaling');
+        const liveTier1 = document.getElementById('live-tier1-badge');
+        if (liveGuidance) {
+            const liveColor = confidence >= 80 ? '#2ecc71' : confidence >= 65 ? '#4a9eff' : '#f39c12';
+            liveMain.style.color = liveColor;
+            liveMain.textContent = '💡 ' + liveGuidance.main;
+            liveSize.textContent = liveGuidance.size;
+            liveScaling.textContent = liveGuidance.scaling || '';
+            liveTier1.style.display = liveGuidance.tier1 ? 'inline-block' : 'none';
         } else {
-            liveLabel.textContent = '';
-            liveReason.textContent = '';
+            liveMain.textContent = ''; liveSize.textContent = '';
+            liveScaling.textContent = ''; liveTier1.style.display = 'none';
         }
-        const propLabel = document.getElementById('prop-rec-label');
-        const propReason = document.getElementById('prop-rec-reason');
-        if (propRec && propRec.label) {
-            const propColor = (propRec.mode === 'full' || propRec.mode === 'half') ? '#2ecc71' : '#e67e22';
-            propLabel.style.color = propColor;
-            propLabel.textContent = '💡 ' + propRec.label;
-            propReason.textContent = propRec.reason;
-        } else {
-            propLabel.textContent = '';
-            propReason.textContent = '';
-        }
+
+        // Prop Firm panel — same guidance text, gated by server-side alignment check
         const quietBadge = document.getElementById('quiet-week-badge');
         const propQuietInfo = document.getElementById('prop-quiet-info');
         const isQuiet = propRec && propRec.quiet_week;
         if (quietBadge) quietBadge.style.display = isQuiet ? 'inline' : 'none';
         if (propQuietInfo) {
-            if (isQuiet) {
-                propQuietInfo.style.display = 'block';
-                propQuietInfo.textContent = `🔇 Quiet Week Mode · EC ${propRec.ec_weight}% · Threshold ±${propRec.bias_threshold}`;
-            } else {
-                propQuietInfo.style.display = 'none';
-            }
+            propQuietInfo.style.display = isQuiet ? 'block' : 'none';
+            if (isQuiet) propQuietInfo.textContent = `🔇 Quiet Week Mode · EC ${propRec.ec_weight}% · Threshold ±${propRec.bias_threshold}`;
         }
-        const activeRec = _activeRecTab === 'live' ? rec : propRec;
-        container.style.display = (activeRec && activeRec.label) ? 'block' : 'none';
+        const propHasRec = propRec && propRec.label;
+        const propGuidance = propHasRec ? _buildRecGuidance(confidence, biasDir, tier1Active) : null;
+        const propMain = document.getElementById('prop-rec-main');
+        const propSize = document.getElementById('prop-rec-size');
+        const propScaling = document.getElementById('prop-rec-scaling');
+        const propTier1 = document.getElementById('prop-tier1-badge');
+        if (propGuidance) {
+            const propColor = confidence >= 80 ? '#2ecc71' : confidence >= 65 ? '#4a9eff' : '#e67e22';
+            propMain.style.color = propColor;
+            propMain.textContent = '💡 ' + propGuidance.main;
+            propSize.textContent = propGuidance.size;
+            propScaling.textContent = propGuidance.scaling || '';
+            propTier1.style.display = propGuidance.tier1 ? 'inline-block' : 'none';
+        } else {
+            propMain.textContent = ''; propSize.textContent = '';
+            propScaling.textContent = ''; propTier1.style.display = 'none';
+        }
+
+        const activeGuidance = _activeRecTab === 'live' ? liveGuidance : propGuidance;
+        container.style.display = activeGuidance ? 'block' : 'none';
     }
 
     let _activeRecTab = 'live';
@@ -667,10 +735,6 @@
             directive.style.color = bias.directive_color;
             directive.style.borderColor = bias.directive_color + '40';
             directive.style.background = bias.directive_color + '15';
-        }
-
-        if (bias.size_mode) {
-            updateSizeModeButtons(bias.size_mode);
         }
 
         _renderRecFromSnapshot();
@@ -1114,36 +1178,6 @@
         }
     }
 
-    async function setSizeMode(mode, btn) {
-        if (btn && !_lockToggles(btn)) return;
-        try {
-            localStorage.setItem('pulseSizeMode', mode);
-            await fetch('/api/size_mode', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({mode: mode})
-            });
-            document.getElementById('mode-quarter').style.background = mode === 'quarter' ? '#1a2d4a' : '#0d1224';
-            document.getElementById('mode-quarter').style.color = mode === 'quarter' ? '#4a9eff' : '#4a5a70';
-            document.getElementById('mode-quarter').style.borderColor = mode === 'quarter' ? '#2a4a7a' : '#1e2d4a';
-            document.getElementById('mode-normal').style.background = mode === 'normal' ? '#1a2d4a' : '#0d1224';
-            document.getElementById('mode-normal').style.color = mode === 'normal' ? '#4a9eff' : '#4a5a70';
-            document.getElementById('mode-normal').style.borderColor = mode === 'normal' ? '#2a4a7a' : '#1e2d4a';
-            setTimeout(() => fetchData(), 1000);
-        } catch(e) {
-            alert('Failed to update size mode');
-        }
-    }
-
-    function updateSizeModeButtons(mode) {
-        document.getElementById('mode-quarter').style.background = mode === 'quarter' ? '#1a2d4a' : '#0d1224';
-        document.getElementById('mode-quarter').style.color = mode === 'quarter' ? '#4a9eff' : '#4a5a70';
-        document.getElementById('mode-quarter').style.borderColor = mode === 'quarter' ? '#2a4a7a' : '#1e2d4a';
-        document.getElementById('mode-normal').style.background = mode === 'normal' ? '#1a2d4a' : '#0d1224';
-        document.getElementById('mode-normal').style.color = mode === 'normal' ? '#4a9eff' : '#4a5a70';
-        document.getElementById('mode-normal').style.borderColor = mode === 'normal' ? '#2a4a7a' : '#1e2d4a';
-    }
-
     async function fetchData() {
         try {
             const response = await fetch('/api/latest');
@@ -1161,8 +1195,6 @@
 
     const _savedTab = localStorage.getItem('pulseRecTab');
     if (_savedTab) switchRecTab(_savedTab);
-    const _savedSize = localStorage.getItem('pulseSizeMode');
-    if (_savedSize) updateSizeModeButtons(_savedSize);
     fetchData();
     loadAILens();
     scheduleRefresh();
