@@ -118,10 +118,10 @@ class BiasCalculator:
             directive_color = "#f39c12"
         elif confidence >= 70:
             if bias == 'Bearish':
-                directive = "🔴 Bearish — Half size."
+                directive = "🔴 Bearish — Half size — look for confirmation before scaling to Full."
                 directive_color = "#e74c3c"
             else:
-                directive = "🟢 Bullish — Half size."
+                directive = "🟢 Bullish — Half size — look for confirmation before scaling to Full."
                 directive_color = "#2ecc71"
         else:
             if bias == 'Bearish':
