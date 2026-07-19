@@ -120,39 +120,32 @@ Five-level granular classification for each indicator:
 | Strongly Bullish | ≥ 75 |
 | Mildly Bullish | 55–74 |
 | Neutral | 45–54 |
-| Mildly Bearish | 25–44 |
-| Strongly Bearish | < 25 |
+| Mildly Bearish | 35–44 |
+| Strongly Bearish | < 35 |
 
 Score is rounded (not truncated) to match CNN's own display rounding.
-
-## Confidence Floor and Sizing (`processors/bias_calculator.py`, `pipelines/recommendation.py`)
-
-65% is a hard floor applied to both Live and Prop Firm modes. Below 65%, the system forces Neutral bias display, shows no directional output, and shows no size recommendation. This is enforced in `bias_calculator.py` (display override + directive) and in both recommendation engines (show-card gate).
-
-| Confidence | Bias displayed | Directive | Recommendation card |
-|---|---|---|---|
-| < 65% | Neutral (forced) | ⚫ No Trade – Low Conviction | None |
-| 65–69% | As computed | Quarter Size only | Quarter Size |
-| ≥ 70% | As computed | Half Size. Scale up on confirmation | Half Size |
 
 ## Live Mode Thresholds (`pipelines/recommendation.py`)
 
 | Setting | Value |
 |---|---|
 | Bias threshold | ± 0.50 |
-| Confidence to show card | 65% |
-| Confidence for half size | 70% (65–69% → quarter) |
+| Confidence to show card | 60% |
+| Confidence for quarter entry | 60%–69% |
+| Confidence for half entry | ≥ 70% |
+| Below 60% | Neutral forced — "No Trade – Low Conviction" directive |
 
 ## Prop Firm Mode Thresholds (`pipelines/recommendation.py`)
 
 | Setting | Value |
 |---|---|
 | Bias threshold | ± 0.33 standard / ± 0.30 quiet week |
-| Confidence to show card | 65% |
-| Confidence for half size | 70% (65–69% → quarter) |
+| Confidence to show card | 60% |
+| Confidence for quarter entry | 60%–69% |
+| Confidence for half entry | ≥ 70% |
 | Pillar alignment | ≥ 45% of total week weight must agree with bias |
 
-**Quiet week mode (Prop Firm only):** Evaluated once at the start of each ISO week. Counts red folder **days** (not individual events — a day with multiple red folder events counts as 1 red folder day). Persisted to `/data/prop_firm_weekly_threshold.json`. Re-validated on every run against the EC pipeline's pre-computed `weak_ec_week` flag — if they disagree, the cache is corrected and re-written immediately (handles mid-week blocklist changes or exclusion additions without requiring a manual cache delete).
+**Quiet week mode (Prop Firm only):** Evaluated once at the start of each ISO week. Counts red folder **days** (not individual events — a day with multiple red folder events counts as 1 red folder day). Persisted to `/data/prop_firm_weekly_threshold.json` for the entire week — does not change mid-week.
 
 - 0 or 1 red folder days → quiet week: bias threshold ± 0.30, EC weight drops from 30% to 15%, total weight 85%, pillar alignment threshold 45% of 85% = 38.25%
 - 2+ red folder days → standard week: bias threshold ± 0.33, EC weight 30%, total weight 100%, pillar alignment threshold 45%
@@ -167,7 +160,6 @@ Logged once per week in Railway logs:
 
 - **Live snapshots:** every 5 minutes → `/data/snapshots/` — keep last 50
 - **Daily closing snapshots:** 4:00–4:05 PM EST → `/data/snapshots/daily/` — keep last 10
-- Consistency check reads daily snapshots only
 - `os.path.isfile()` filter applied everywhere to exclude the `daily/` subdirectory from live snapshot listing/pruning
 
 ## Pinned Stories — Three-Layer Cleanup

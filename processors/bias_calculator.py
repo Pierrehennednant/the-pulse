@@ -9,8 +9,6 @@ class BiasCalculator:
         pillar_contributions = {}
         active_pillars = 0
         pillar_signals = []
-        threshold_warning = None
-
         weights = PILLAR_WEIGHTS
 
         weight_map = {
@@ -98,35 +96,40 @@ class BiasCalculator:
             if confidence >= 70:
                 confidence_label = 'High Confidence'
                 confidence_color = 'green'
-            elif confidence >= 65:
+            elif confidence >= 60:
                 confidence_label = 'Moderate Confidence'
                 confidence_color = 'yellow'
             else:
                 confidence_label = 'Low Conviction'
-                confidence_color = 'red'
+                confidence_color = 'orange'
 
-        # Hard floor: below 65% confidence, suppress directional bias display entirely
-        if confidence < 65 and bias != 'Neutral':
+        # Hard Neutral override — below 60% confidence forces Neutral regardless of score
+        low_conviction_override = confidence < 60 and bias != 'Neutral'
+        if low_conviction_override:
             bias = 'Neutral'
             bias_emoji = '🟡'
 
-        # Trading directive — confidence-based, no size_mode branching
-        if confidence < 65:
-            directive = "⚫ No Trade – Low Conviction"
+        # Trading Directive — confidence-based only
+        if low_conviction_override:
+            directive = "⚫ No Trade – Low Conviction."
             directive_color = "#7a8fa8"
         elif bias == 'Neutral':
             directive = "🟡 Neutral — Sit out."
             directive_color = "#f39c12"
         elif confidence >= 70:
-            emoji = '🔴' if bias == 'Bearish' else '🟢'
-            color = "#e74c3c" if bias == 'Bearish' else "#2ecc71"
-            directive = f"{emoji} {bias} — Half Size. Scale up on confirmation if structure is clean."
-            directive_color = color
-        else:  # 65–69%
-            emoji = '🔴' if bias == 'Bearish' else '🟢'
-            color = "#e74c3c" if bias == 'Bearish' else "#2ecc71"
-            directive = f"{emoji} {bias} — Quarter Size only."
-            directive_color = color
+            if bias == 'Bearish':
+                directive = "🔴 Bearish — Half size."
+                directive_color = "#e74c3c"
+            else:
+                directive = "🟢 Bullish — Half size."
+                directive_color = "#2ecc71"
+        else:
+            if bias == 'Bearish':
+                directive = "🔴 Bearish — Quarter size."
+                directive_color = "#e74c3c"
+            else:
+                directive = "🟢 Bullish — Quarter size."
+                directive_color = "#2ecc71"
 
         result = {
             'final_score': final_score,
