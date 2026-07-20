@@ -46,12 +46,6 @@ Institutional weight is reduced progressively Mon–Thu based on staleness since
 
 **Cache hit fix:** The Mon–Thu cache path now recomputes `pillar_score` from `nq_futures.score` and `es_futures.score` if the field is missing or zero, preventing institutional from being silently excluded from bias calculation. Score is logged on every cache hit.
 
-Each Friday after a successful COT fetch, `_append_history()` appends to `/data/cot_history.json`:
-```json
-{ "timestamp": "...", "nq_net_pct": 0.0, "nq_direction": "bullish", "es_net_pct": 0.0, "es_direction": "bearish" }
-```
-Last 6 weekly entries kept. Dashboard displays a 3-week trend indicator (↑ Building / ↓ Unwinding / → Stable) for NQ and ES.
-
 ## Confidence Formula (`processors/bias_calculator.py`)
 
 ```
@@ -237,7 +231,6 @@ Haiku assigns tier, direction, confidence, and reasoning for every geo article a
 |---|---|---|
 | `/data/permanent_manual_inputs.json` | Manual actual values for economic events | 7 days |
 | `/data/permanent_cot.json` | Current COT reading (NQ + ES positions) | Until next Friday |
-| `/data/cot_history.json` | Weekly COT snapshots for trend indicator | Last 6 weeks |
 | `/data/gemini_classifications.json` | Haiku story classification cache | 48-hour expiry |
 | `/data/pinned_stories.json` | Pinned geopolitical articles | 48-hour expiry |
 | `/data/ec_blocklist.json` | EC event blocklist | Clears Sunday |
@@ -268,7 +261,7 @@ pipelines/
   weekly_summary.py            Weekly narrative summary
 processors/
   bias_calculator.py           Weighted bias + confidence + directives
-  data_formatter.py            Standardizes pillar outputs, injects cot_history
+  data_formatter.py            Standardizes pillar outputs
   snapshot_generator.py        Save/load/prune live and daily snapshots
 ui/
   dashboard.py                 Flask routes (API + HTML)

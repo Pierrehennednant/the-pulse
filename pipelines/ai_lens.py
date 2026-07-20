@@ -77,18 +77,6 @@ class AILensPipeline:
         except Exception:
             return False
 
-    def _cot_trend(self, history, field):
-        """Return 'building', 'unwinding', or 'stable' from last 3 weeks of COT history."""
-        values = [h.get(field) for h in history[:3] if h.get(field) is not None]
-        if len(values) < 2:
-            return 'unknown'
-        delta = values[0] - values[-1]
-        if delta > 2.0:
-            return 'building'
-        elif delta < -2.0:
-            return 'unwinding'
-        return 'stable'
-
     def _load_daily_history(self):
         """Load up to 10 daily snapshots sorted newest-first. Returns list of dicts."""
         daily_dir = '/data/snapshots/daily'
@@ -218,18 +206,15 @@ class AILensPipeline:
         # Institutional COT
         nq_fut = inst.get('nq_futures', {})
         es_fut = inst.get('es_futures', {})
-        cot_history = inst.get('cot_history', [])
         if inst.get('status') != 'unavailable' and (nq_fut or es_fut):
             nq_pct = nq_fut.get('net_pct', 0)
             nq_dir = nq_fut.get('direction', 'unknown')
-            nq_trend = self._cot_trend(cot_history, 'nq_net_pct')
             es_pct = es_fut.get('net_pct', 0)
             es_dir = es_fut.get('direction', 'unknown')
-            es_trend = self._cot_trend(cot_history, 'es_net_pct')
             lines += [
                 "INSTITUTIONAL POSITIONING (COT):",
-                f"  NQ: institutions net {nq_dir} ({nq_pct:.1f}% net) — {nq_trend} 3-week trend",
-                f"  ES: institutions net {es_dir} ({es_pct:.1f}% net) — {es_trend} 3-week trend",
+                f"  NQ: institutions net {nq_dir} ({nq_pct:.1f}% net)",
+                f"  ES: institutions net {es_dir} ({es_pct:.1f}% net)",
                 "",
             ]
         else:
