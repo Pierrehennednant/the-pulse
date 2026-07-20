@@ -132,12 +132,6 @@ def _run_partial_refresh(label):
     })
 
     try:
-        with open('/data/size_mode.json', 'r') as f:
-            size_mode = json.load(f).get('mode', 'quarter')
-    except Exception:
-        size_mode = 'quarter'
-
-    try:
         with open('/data/prop_firm_weekly_threshold.json', 'r') as f:
             pf_week = json.load(f)
         if pf_week.get('is_quiet_week'):
@@ -147,7 +141,7 @@ def _run_partial_refresh(label):
     except Exception:
         bias_threshold = 0.50
 
-    bias_score = bias_calculator.compute(formatted_data, size_mode=size_mode, bias_threshold=bias_threshold)
+    bias_score = bias_calculator.compute(formatted_data, bias_threshold=bias_threshold)
 
     recommendation = recommendation_engine.compute(
         bias_score,
@@ -404,30 +398,6 @@ def remove_ec_blocklist():
     economic_calendar_pipeline._save_blocklist(blocklist)
     pulse_logger.log(f"🚫 EC blocklist — removed: {matched}")
     return jsonify({'status': 'removed', 'keys_removed': matched, 'blocklist': {k: v for k, v in blocklist.items() if not k.startswith('__')}})
-
-@app.route('/api/size_mode', methods=['POST'])
-@require_auth
-def set_size_mode():
-    data = request.get_json()
-    if not data:
-        return jsonify({'status': 'error', 'message': 'Missing request body'}), 400
-    mode = data.get('mode', 'quarter')
-    if mode not in ['quarter', 'normal']:
-        return jsonify({'status': 'error', 'message': 'Invalid mode'}), 400
-    size_mode_file = '/data/size_mode.json'
-    try:
-        atomic_write_json(size_mode_file, {'mode': mode})
-        try:
-            # Recompute immediately so the next /api/latest fetch (triggered by
-            # setSizeMode() 1 second after toggle) returns a snapshot with the
-            # updated size_mode and directive — preventing the button from
-            # reverting to the previous value on auto-refresh.
-            _run_partial_refresh('size_mode toggle')
-        except Exception as refresh_err:
-            pulse_logger.log(f"⚠️ size_mode refresh failed: {refresh_err}", level="WARNING")
-        return jsonify({'status': 'saved', 'mode': mode})
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 GEO_MANUAL_BLOCKLIST_FILE = '/data/geo_manual_blocklist.json'
 

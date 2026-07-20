@@ -234,7 +234,6 @@ Haiku assigns tier, direction, confidence, and reasoning for every geo article a
 | `/data/gemini_classifications.json` | Haiku story classification cache | 48-hour expiry |
 | `/data/pinned_stories.json` | Pinned geopolitical articles | 48-hour expiry |
 | `/data/ec_blocklist.json` | EC event blocklist | Clears Sunday |
-| `/data/size_mode.json` | Quarter / Normal size mode toggle | Persisted |
 | `/data/prop_firm_weekly_threshold.json` | Prop Firm bias threshold for current ISO week | Weekly |
 | `/data/ai_lens_cache.json` | AI Lens daily narrative cache | Daily |
 | `/data/snapshots/` | Live 5-minute bias snapshots | Last 50 |

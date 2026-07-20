@@ -102,12 +102,6 @@ def run_pulse():
             'geopolitical': geo_data
         })
 
-        try:
-            with open('/data/size_mode.json', 'r') as f:
-                size_mode = json.load(f).get('mode', 'quarter')
-        except Exception:
-            size_mode = 'quarter'
-
         # Derive bias_threshold from EC pipeline's weak_ec_week flag — same canonical source
         # as _get_weekly_threshold(), eliminates stale cache read before compute_prop_firm()
         _ec_weak = formatted_data.get('economic', {}).get('weak_ec_week')
@@ -118,7 +112,7 @@ def run_pulse():
         else:
             bias_threshold = 0.50
 
-        bias_score = bias_calculator.compute(formatted_data, size_mode=size_mode, bias_threshold=bias_threshold)
+        bias_score = bias_calculator.compute(formatted_data, bias_threshold=bias_threshold)
 
         recommendation = recommendation_engine.compute(
             bias_score,

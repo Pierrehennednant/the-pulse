@@ -4,7 +4,7 @@ from config import PILLAR_WEIGHTS, TIMEZONE
 from utils.logger import pulse_logger
 
 class BiasCalculator:
-    def compute(self, formatted_data, size_mode='quarter', bias_threshold=0.5):
+    def compute(self, formatted_data, bias_threshold=0.5):
         total_score = 0.0
         pillar_contributions = {}
         active_pillars = 0
@@ -145,10 +145,9 @@ class BiasCalculator:
             'gauge_value': int((final_score + 2) / 4 * 100),
             'directive': directive,
             'directive_color': directive_color,
-            'size_mode': size_mode
         }
 
-        pulse_logger.log(f"📊 Bias: {bias_emoji} {bias} | Confidence: {confidence}% ({confidence_label}) | Active Pillars: {active_pillars}/4 | Mode: {size_mode}")
+        pulse_logger.log(f"📊 Bias: {bias_emoji} {bias} | Confidence: {confidence}% ({confidence_label}) | Active Pillars: {active_pillars}/4")
         return result
 
 bias_calculator = BiasCalculator()
