@@ -9,6 +9,8 @@ class BiasCalculator:
         pillar_contributions = {}
         active_pillars = 0
         pillar_signals = []
+        pillar_signal_map = {}    # config_key → signal, for weight-aware agreement
+        active_pillar_weights = {}  # config_key → effective weight, for active pillars only
         weights = PILLAR_WEIGHTS
 
         weight_map = {
@@ -50,12 +52,15 @@ class BiasCalculator:
 
             if status not in ['unavailable'] and score != 0:
                 active_pillars += 1
+                active_pillar_weights[config_key] = weight
                 if score > 0.15:
-                    pillar_signals.append('bullish')
+                    sig = 'bullish'
                 elif score < -0.15:
-                    pillar_signals.append('bearish')
+                    sig = 'bearish'
                 else:
-                    pillar_signals.append('neutral')
+                    sig = 'neutral'
+                pillar_signals.append(sig)
+                pillar_signal_map[config_key] = sig
 
             pillar_contributions[config_key] = {
                 'raw_score': score,
@@ -82,15 +87,20 @@ class BiasCalculator:
             confidence_label = 'No Data'
             confidence_color = 'gray'
         else:
-            if bias == 'Bullish':
-                agreeing = pillar_signals.count('bullish')
-            elif bias == 'Bearish':
-                agreeing = pillar_signals.count('bearish')
+            total_active_weight = sum(active_pillar_weights.values())
+            if total_active_weight > 0:
+                agreeing_weight = sum(
+                    w for key, w in active_pillar_weights.items()
+                    if (bias == 'Bullish' and pillar_signal_map[key] == 'bullish')
+                    or (bias == 'Bearish' and pillar_signal_map[key] == 'bearish')
+                    or (bias == 'Neutral' and pillar_signal_map[key] == 'neutral')
+                )
+                agreement_pct = agreeing_weight / total_active_weight
             else:
-                agreeing = pillar_signals.count('neutral')
+                agreement_pct = 0.0
 
-            agreement_pct = agreeing / active_pillars
-            score_strength = min(abs(final_score) / 2.0, 1.0)
+            excess = max(0.0, abs(final_score) - bias_threshold)
+            score_strength = min(excess / max(2.0 - bias_threshold, 0.01), 1.0)
             confidence = int((agreement_pct * 0.6 + score_strength * 0.4) * 100)
 
             if confidence >= 70:
