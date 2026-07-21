@@ -49,8 +49,16 @@ Institutional weight is reduced progressively Mon–Thu based on staleness since
 ## Confidence Formula (`processors/bias_calculator.py`)
 
 ```
-confidence = int((agreement_pct * 0.6 + score_strength * 0.4) * 100)
+raw_conf = agreement_pct * 0.6 + score_strength * 0.4
+ceiling  = 0.6 + 0.4 * (1.0 - bias_threshold) / (2.0 - bias_threshold)
+confidence = min(int(raw_conf / ceiling * 100), 100)
 ```
+
+**Ceiling normalization:** `raw_conf` has a mathematical cap below 100% because `score_strength` maxes at `(1.0 - threshold) / (2.0 - threshold)` (assuming pillar scores sum to 1.0 at full agreement). The ceiling for live mode (0.50) is ~73%; for prop firm (0.33) it is ~76%. Dividing by the ceiling maps the achievable range to 0–100 so all existing bands operate on a full scale.
+
+**Ceiling derivation:** `max_score_strength = (1.0 - bias_threshold) / (2.0 - bias_threshold)` → `ceiling = 0.6 + 0.4 × max_score_strength`.
+
+Both raw and normalized values are logged on every refresh for sanity-checking: `Confidence: 83% (raw 61%)`.
 
 No persistence bonuses, no uncertainty dampening, no stability micro-adjustments. Simple formula only.
 
@@ -125,8 +133,9 @@ Score is rounded (not truncated) to match CNN's own display rounding.
 |---|---|
 | Bias threshold | ± 0.50 |
 | Confidence to show card | 60% |
-| Confidence for quarter entry | 60%–69% |
-| Confidence for half entry | ≥ 70% |
+| Confidence for quarter entry | 60%–64% |
+| Confidence for half entry (cautious) | 65%–79% — "look for confirmation before scaling to Full" |
+| Confidence for half entry (aggressive) | ≥ 80% — "scale to Full on confirmation" |
 | Below 60% | Neutral forced — "No Trade – Low Conviction" directive |
 
 ## Prop Firm Mode Thresholds (`pipelines/recommendation.py`)
@@ -135,8 +144,9 @@ Score is rounded (not truncated) to match CNN's own display rounding.
 |---|---|
 | Bias threshold | ± 0.33 standard / ± 0.30 quiet week |
 | Confidence to show card | 60% |
-| Confidence for quarter entry | 60%–69% |
-| Confidence for half entry | ≥ 70% |
+| Confidence for quarter entry | 60%–64% |
+| Confidence for half entry (cautious) | 65%–79% |
+| Confidence for half entry (aggressive) | ≥ 80% |
 | Pillar alignment | ≥ 45% of total week weight must agree with bias |
 
 **Quiet week mode (Prop Firm only):** Evaluated once at the start of each ISO week. Counts red folder **days** (not individual events — a day with multiple red folder events counts as 1 red folder day). Persisted to `/data/prop_firm_weekly_threshold.json` for the entire week — does not change mid-week.
