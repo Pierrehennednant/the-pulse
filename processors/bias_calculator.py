@@ -101,12 +101,19 @@ class BiasCalculator:
 
             excess = max(0.0, abs(final_score) - bias_threshold)
             score_strength = min(excess / max(2.0 - bias_threshold, 0.01), 1.0)
-            confidence = int((agreement_pct * 0.6 + score_strength * 0.4) * 100)
+            raw_conf = agreement_pct * 0.6 + score_strength * 0.4
 
-            if confidence >= 70:
+            # Ceiling: max raw_conf achievable when agreement_pct=1.0 and final_score=1.0
+            # max_score_strength = (1.0 - threshold) / (2.0 - threshold)
+            max_ss = (1.0 - bias_threshold) / max(2.0 - bias_threshold, 0.01)
+            ceiling = 0.6 + 0.4 * max_ss
+            raw_confidence_pct = int(raw_conf * 100)
+            confidence = min(int(raw_conf / ceiling * 100), 100)
+
+            if confidence >= 80:
                 confidence_label = 'High Confidence'
                 confidence_color = 'green'
-            elif confidence >= 60:
+            elif confidence >= 65:
                 confidence_label = 'Moderate Confidence'
                 confidence_color = 'yellow'
             else:
@@ -126,7 +133,14 @@ class BiasCalculator:
         elif bias == 'Neutral':
             directive = "🟡 Neutral — Sit out."
             directive_color = "#f39c12"
-        elif confidence >= 70:
+        elif confidence >= 80:
+            if bias == 'Bearish':
+                directive = "🔴 Bearish — Half size — scale to Full on confirmation."
+                directive_color = "#e74c3c"
+            else:
+                directive = "🟢 Bullish — Half size — scale to Full on confirmation."
+                directive_color = "#2ecc71"
+        elif confidence >= 65:
             if bias == 'Bearish':
                 directive = "🔴 Bearish — Half size — look for confirmation before scaling to Full."
                 directive_color = "#e74c3c"
@@ -157,7 +171,8 @@ class BiasCalculator:
             'directive_color': directive_color,
         }
 
-        pulse_logger.log(f"📊 Bias: {bias_emoji} {bias} | Confidence: {confidence}% ({confidence_label}) | Active Pillars: {active_pillars}/4")
+        _raw_log = f" (raw {raw_confidence_pct}%)" if active_pillars > 0 else ""
+        pulse_logger.log(f"📊 Bias: {bias_emoji} {bias} | Confidence: {confidence}%{_raw_log} ({confidence_label}) | Active Pillars: {active_pillars}/4")
         return result
 
 bias_calculator = BiasCalculator()
