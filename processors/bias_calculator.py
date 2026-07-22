@@ -41,6 +41,27 @@ class BiasCalculator:
                     else:
                         # Mon=0: 100%, Tue=1: 85%, Wed=2: 70%, Thu=3: 55%
                         decay_factor = {0: 1.0, 1: 0.85, 2: 0.70, 3: 0.55}[today]
+
+                    # Monday freshness guard — full weight only if this cycle's data has landed.
+                    # If the Monday re-fetch hasn't succeeded (status=stale or timestamp still
+                    # from last Friday), hold the 55% floor rather than granting 100% to data
+                    # the decay schedule already discounted last week.
+                    if today == 0 and decay_factor == 1.0:
+                        cot_status = pillar_data.get('status', '')
+                        cot_ts = pillar_data.get('timestamp', '')
+                        is_stale_on_monday = cot_status == 'stale'
+                        if not is_stale_on_monday and cot_ts:
+                            try:
+                                cached_dt = datetime.fromisoformat(cot_ts)
+                                if cached_dt.tzinfo is None:
+                                    cached_dt = cached_dt.replace(tzinfo=pytz.timezone(TIMEZONE))
+                                is_stale_on_monday = cached_dt.weekday() == 4  # Friday-stamped = last week
+                            except Exception:
+                                pass
+                        if is_stale_on_monday:
+                            decay_factor = 0.55
+                            pulse_logger.log(f"📉 COT freshness guard — Monday but data is last week's ({cot_status or 'Friday timestamp'}), holding 55% floor")
+
                     weight = weight * decay_factor
                     if decay_factor < 1.0:
                         pulse_logger.log(f"📉 COT decay applied — {int(decay_factor * 100)}% of {base_weight}% base = {weight:.1f}% effective")

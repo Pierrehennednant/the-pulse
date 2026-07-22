@@ -38,11 +38,14 @@ Institutional weight is reduced progressively Mon–Thu based on staleness since
 |---|---|---|
 | Friday before 3:30 PM EST | 55% (floor — awaiting new release) | `📉 COT decay applied` |
 | Friday after 3:30 PM EST | 100% (new data posted) | — |
-| Monday | 100% | `✅ COT weight — Monday, full 25% effective` |
+| Monday (fresh — fetch succeeded) | 100% | `✅ COT weight — Monday, full 25% effective` |
+| Monday (stale — fetch failed) | 55% (freshness guard) | `📉 COT freshness guard — Monday but data is last week's` |
 | Tuesday | 85% | `📉 COT decay applied` |
 | Wednesday | 70% | `📉 COT decay applied` |
 | Thursday | 55% | `📉 COT decay applied` |
 | Weekend | 0% | `📉 COT decay — weekend` |
+
+**Monday freshness guard:** Full 100% weight on Monday is conditional on the Monday re-fetch having succeeded. If `institutional.py` returns `status='stale'` or the cached timestamp is from Friday (last week's data), `bias_calculator.py` demotes to the 55% floor — the same level as Friday pre-3:30 PM. A successful Monday fetch (`status='live'`, Monday timestamp) restores full weight immediately.
 
 **Cache hit fix:** The Mon–Thu cache path now recomputes `pillar_score` from `nq_futures.score` and `es_futures.score` if the field is missing or zero, preventing institutional from being silently excluded from bias calculation. Score is logged on every cache hit.
 
