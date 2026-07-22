@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import datetime, timedelta
+import anthropic
 import pytz
 from config import TIMEZONE, STALE_THRESHOLDS
 from utils.retry import fetch_with_retry
@@ -188,12 +189,12 @@ class EconomicCalendarPipeline:
             return 'Presidential'
         return 'Other'
 
-    def auto_detect_speech_sentiment(self, event_title):
-        """Query TheNewsAPI after speech starts, return (label, confidence) tuple.
-        confidence = max(bearish, bullish) / total, defaulting to 0.5 if no articles."""
+    def auto_detect_speech_sentiment(self, event_title, speaker_type='Other'):
+        """Query TheNewsAPI after speech starts, return (label, confidence, tier) tuple.
+        tier is only meaningful for Presidential speeches; defaults to 'T2' for others."""
         api_key = os.environ.get('THENEWS_API_KEY', '')
         if not api_key:
-            return None, 0.5
+            return None, 0.5, 'T2'
         try:
             url = "https://api.thenewsapi.com/v1/news/all"
             params = {
@@ -206,7 +207,7 @@ class EconomicCalendarPipeline:
             response = fetch_with_retry(url, params=params, timeout=10)
             articles = response.json().get('data', [])
             if not articles:
-                return 'neutral', 0.5
+                return 'neutral', 0.5, 'T2'
 
             bearish_keywords = ['hawkish', 'hike', 'tighten', 'inflation concern', 'higher for longer', 'no cuts', 'tariff', 'restrictive']
             bullish_keywords = ['dovish', 'cut', 'ease', 'pivot', 'supportive', 'pause', 'accommodative', 'rate cut']
@@ -224,14 +225,60 @@ class EconomicCalendarPipeline:
             confidence = max(bearish_count, bullish_count) / total if total > 0 else 0.5
 
             if bearish_count > bullish_count:
-                return 'bearish', confidence
+                sentiment = 'bearish'
             elif bullish_count > bearish_count:
-                return 'bullish', confidence
+                sentiment = 'bullish'
             else:
-                return 'neutral', confidence
+                sentiment = 'neutral'
+
+            tier = 'T2'
+            if speaker_type == 'Presidential':
+                tier = self._haiku_presidential_tier(event_title, articles)
+
+            return sentiment, confidence, tier
         except Exception as e:
             pulse_logger.log(f"⚠️ Speech auto-detect failed for {event_title}: {e}", level="WARNING")
-            return 'neutral', 0.5
+            return 'neutral', 0.5, 'T2'
+
+    def _haiku_presidential_tier(self, event_title, articles):
+        """Classify a Presidential speech by market-impact tier via Haiku.
+        Returns 'T1', 'T2', or 'T3'. Defaults to 'T2' on any failure."""
+        if not articles:
+            return 'T2'
+        try:
+            article_texts = '\n'.join(
+                f"- {a.get('title', '')} {a.get('description', '')}"
+                for a in articles[:8]
+            ).strip()
+            prompt = (
+                f"A US Presidential speech titled '{event_title}' just occurred. "
+                f"Here are recent news article headlines and descriptions about it:\n\n"
+                f"{article_texts}\n\n"
+                "Classify the speech's market impact as exactly one of:\n"
+                "T1 — Major impact: new tariffs, trade war escalation, significant sanctions, "
+                "Fed policy commentary, declarations of economic emergency, or any announcement "
+                "that directly and materially moves equity markets.\n"
+                "T2 — Notable: policy updates without major new measures, diplomatic developments, "
+                "general economic commentary, or statements that may influence but do not shock markets.\n"
+                "T3 — Routine: ceremonial appearances, non-economic topics, congratulatory remarks, "
+                "or any speech with negligible direct market relevance.\n\n"
+                "Respond with ONLY the label: T1, T2, or T3"
+            )
+            client = anthropic.Anthropic()
+            response = client.messages.create(
+                model='claude-haiku-4-5-20251001',
+                max_tokens=8,
+                messages=[{'role': 'user', 'content': prompt}]
+            )
+            tier = response.content[0].text.strip().upper()
+            if tier not in ('T1', 'T2', 'T3'):
+                pulse_logger.log(f"⚠️ Haiku returned unexpected presidential tier '{tier}' — defaulting to T2", level="WARNING")
+                return 'T2'
+            pulse_logger.log(f"🎙️ Presidential speech tier (Haiku): {tier} — {event_title}")
+            return tier
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Presidential tier classification failed: {e} — defaulting to T2", level="WARNING")
+            return 'T2'
 
     def _magnitude_score(self, event, direction):
         """Return magnitude-weighted score for a numerical beat/miss event.
@@ -316,7 +363,8 @@ class EconomicCalendarPipeline:
                     confidence = event.get('confidence', 0.75)
                     evt_score = cap * direction * confidence
                 elif speaker_type == 'Presidential':
-                    cap = 0.25
+                    _tier = event.get('speech_tier', 'T2')
+                    cap = 0.55 if _tier == 'T1' else 0.10 if _tier == 'T3' else 0.25
                     confidence = event.get('confidence', 0.75)
                     evt_score = cap * direction * confidence
                 else:
@@ -464,10 +512,15 @@ class EconomicCalendarPipeline:
                                              if k == t or k.startswith(t + '::')), None)
                             if not existing:
                                 pulse_logger.log(f"🎙️ Auto-detecting speech sentiment for: {event_row['title']}")
-                                sentiment, conf = self.auto_detect_speech_sentiment(event_row['title'])
+                                speaker_type_local = event_row.get('speaker_type', 'Other')
+                                sentiment, conf, tier = self.auto_detect_speech_sentiment(
+                                    event_row['title'], speaker_type=speaker_type_local
+                                )
                                 if sentiment:
                                     manual_input_pipeline.save_actual(event_row['title'], sentiment, None, event_date=event_row.get('event_date', ''), confidence=conf)
                                     pulse_logger.log(f"✅ Auto-tagged {event_row['title']} as {sentiment} (confidence: {conf:.2f})")
+                                if speaker_type_local == 'Presidential' and tier:
+                                    event_row['speech_tier'] = tier
                     except Exception as e:
                         pulse_logger.log(f"⚠️ Speech trigger check failed: {e}", level="WARNING")
 

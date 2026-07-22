@@ -32,7 +32,7 @@ class MacroSentimentPipeline:
         try:
             if os.path.exists(VIX_CACHE_FILE):
                 with open(VIX_CACHE_FILE, 'r') as f:
-                    return json.load(f).get('vix')
+                    return json.load(f)  # returns {'timestamp': ..., 'vix': {...}}
         except Exception:
             pass
         return None
@@ -50,7 +50,7 @@ class MacroSentimentPipeline:
         try:
             if os.path.exists(VXN_CACHE_FILE):
                 with open(VXN_CACHE_FILE, 'r') as f:
-                    return json.load(f).get('vxn')
+                    return json.load(f)  # returns {'timestamp': ..., 'vxn': {...}}
         except Exception:
             pass
         return None
@@ -97,9 +97,20 @@ class MacroSentimentPipeline:
             return result
         except Exception as e:
             pulse_logger.log(f"⚠️ VIX — FRED fetch failed: {e}", level="WARNING")
-            cached = self._load_vix_cache()
-            if cached:
-                pulse_logger.log(f"⚠️ VIX — using file cache: {cached.get('value')}", level="WARNING")
+            cached_file = self._load_vix_cache()
+            if cached_file:
+                cached = cached_file.get('vix', {})
+                ts = cached_file.get('timestamp', '')
+                is_stale = True
+                if ts:
+                    try:
+                        cached_dt = datetime.fromisoformat(ts)
+                        if cached_dt.tzinfo is None:
+                            cached_dt = cached_dt.replace(tzinfo=self.timezone)
+                        age_days = (datetime.now(self.timezone) - cached_dt).total_seconds() / 86400
+                        is_stale = age_days >= 3
+                    except Exception:
+                        pass
                 v = cached.get('value', 20.0)
                 cached['signal'] = (
                     'strongly_bullish' if v < 15.0 else
@@ -109,9 +120,14 @@ class MacroSentimentPipeline:
                     'strongly_bearish'
                 )
                 cached['source'] = 'cache'
+                cached['stale'] = is_stale
+                if is_stale:
+                    pulse_logger.log(f"⚠️ VIX — cache is stale ({ts}), will be excluded from macro score", level="WARNING")
+                else:
+                    pulse_logger.log(f"⚠️ VIX — using recent file cache: {v} (stale=False)", level="WARNING")
                 return cached
             pulse_logger.log("⚠️ VIX — no cache available, defaulting to 20.0", level="WARNING")
-            return {'value': 20.0, 'previous': 20.0, 'change': 0, 'change_pct': 0, 'signal': 'mildly_bearish', 'source': 'default'}
+            return {'value': 20.0, 'previous': 20.0, 'change': 0, 'change_pct': 0, 'signal': 'mildly_bearish', 'source': 'default', 'stale': False}
 
     def fetch_vxn(self):
         try:
@@ -137,13 +153,29 @@ class MacroSentimentPipeline:
             return result
         except Exception as e:
             pulse_logger.log(f"⚠️ VXN — FRED fetch failed: {e}", level="WARNING")
-            cached = self._load_vxn_cache()
-            if cached:
-                pulse_logger.log(f"⚠️ VXN — using file cache: {cached.get('value')}", level="WARNING")
+            cached_file = self._load_vxn_cache()
+            if cached_file:
+                cached = cached_file.get('vxn', {})
+                ts = cached_file.get('timestamp', '')
+                is_stale = True
+                if ts:
+                    try:
+                        cached_dt = datetime.fromisoformat(ts)
+                        if cached_dt.tzinfo is None:
+                            cached_dt = cached_dt.replace(tzinfo=self.timezone)
+                        age_days = (datetime.now(self.timezone) - cached_dt).total_seconds() / 86400
+                        is_stale = age_days >= 3
+                    except Exception:
+                        pass
                 cached['source'] = 'cache'
+                cached['stale'] = is_stale
+                if is_stale:
+                    pulse_logger.log(f"⚠️ VXN — cache is stale ({ts}), will be excluded from macro score", level="WARNING")
+                else:
+                    pulse_logger.log(f"⚠️ VXN — using recent file cache: {cached.get('value')} (stale=False)", level="WARNING")
                 return cached
             pulse_logger.log("⚠️ VXN — no cache available, defaulting to 20.0", level="WARNING")
-            return {'value': 20.0, 'previous': 20.0, 'change': 0, 'change_pct': 0, 'signal': 'neutral', 'source': 'default'}
+            return {'value': 20.0, 'previous': 20.0, 'change': 0, 'change_pct': 0, 'signal': 'neutral', 'source': 'default', 'stale': False}
 
     def _save_fg_cache(self, fg_data):
         try:
@@ -205,11 +237,17 @@ class MacroSentimentPipeline:
             'strongly_bearish': -1.0,
         }
         if vix:
-            score += signal_map.get(vix['signal'], 0)
-            count += 1
+            if vix.get('stale'):
+                pulse_logger.log("📉 VIX excluded from macro score — stale data (≥3 days old)")
+            else:
+                score += signal_map.get(vix['signal'], 0)
+                count += 1
         if vxn:
-            score += signal_map.get(vxn['signal'], 0)
-            count += 1
+            if vxn.get('stale'):
+                pulse_logger.log("📉 VXN excluded from macro score — stale data (≥3 days old)")
+            else:
+                score += signal_map.get(vxn['signal'], 0)
+                count += 1
         if fear_greed:
             score += signal_map.get(fear_greed['signal'], 0)
             count += 1
