@@ -251,14 +251,12 @@
         <div id="rec-container" style="display:none;margin-top:12px;background:#0d1224;border-radius:10px;border:1px solid #1a2438;padding:14px 16px 12px">
             <div id="rec-panel-live" style="text-align:center">
                 <div id="live-rec-main" style="font-size:13px;font-weight:600;margin-bottom:6px;line-height:1.5"></div>
-                <div id="live-rec-size" style="font-size:12px;color:#4a9eff;margin-bottom:4px"></div>
                 <div id="live-rec-scaling" style="font-size:11px;color:#7a8fa8;line-height:1.5"></div>
                 <div id="live-tier1-badge" style="display:none;margin-top:8px;font-size:10px;background:#1a0d00;border:1px solid #8B4513;border-radius:4px;padding:3px 9px;color:#e67e22;letter-spacing:0.2px">⚠️ Tier 1 Geopolitical Risk Active</div>
             </div>
             <div id="rec-panel-prop" style="display:none;text-align:center">
                 <div id="prop-quiet-info" style="display:none;margin-bottom:8px;font-size:10px;color:#e67e22;background:#1a0d00;border:1px solid #3a2000;border-radius:6px;padding:4px 10px;letter-spacing:0.2px"></div>
                 <div id="prop-rec-main" style="font-size:13px;font-weight:600;margin-bottom:6px;line-height:1.5"></div>
-                <div id="prop-rec-size" style="font-size:12px;color:#4a9eff;margin-bottom:4px"></div>
                 <div id="prop-rec-scaling" style="font-size:11px;color:#7a8fa8;line-height:1.5"></div>
                 <div id="prop-tier1-badge" style="display:none;margin-top:8px;font-size:10px;background:#1a0d00;border:1px solid #8B4513;border-radius:4px;padding:3px 9px;color:#e67e22;letter-spacing:0.2px">⚠️ Tier 1 Geopolitical Risk Active</div>
             </div>
@@ -582,41 +580,27 @@
     function _buildRecGuidance(confidence, biasDir, tier1Active) {
         if (!biasDir || biasDir === 'Neutral' || confidence < 60) return null;
         if (confidence < 65) {
-            return tier1Active ? {
-                main: 'Low conviction + Tier 1 geopolitical risk — Quarter size.',
-                size: 'Initial size: Quarter',
-                scaling: 'Scaling is restricted while Tier 1 risk is active.',
-                tier1: true
-            } : {
+            return {
                 main: 'Low conviction — Quarter size.',
-                size: 'Initial size: Quarter',
                 scaling: null,
-                tier1: false
+                tier1: tier1Active
             };
         }
         if (confidence < 80) {
-            return tier1Active ? {
-                main: 'Moderate to Good conviction but Tier 1 geopolitical risk — Half size first entry.',
-                size: 'Initial size: Half',
-                scaling: 'Scaling to full size is restricted while Tier 1 risk is active. Only scale on very clean confirmation.',
-                tier1: true
-            } : {
-                main: 'Moderate to Good conviction — Half size first entry.',
-                size: 'Initial size: Half',
-                scaling: 'Look to scale to full size on clean structure confirmation.',
-                tier1: false
+            return {
+                main: 'Moderate conviction — Half size.',
+                scaling: tier1Active
+                    ? 'Scale to full only on very clean confirmation.'
+                    : 'Scale to full on clean structure confirmation.',
+                tier1: tier1Active
             };
         }
-        return tier1Active ? {
-            main: 'High conviction but Tier 1 geopolitical risk — Half size.',
-            size: 'Initial size: Half',
-            scaling: 'Scaling to full size is still allowed but should be more cautious while Tier 1 risk is active.',
-            tier1: true
-        } : {
+        return {
             main: 'High conviction — Half size.',
-            size: 'Initial size: Half',
-            scaling: 'Aggressive scaling to full size allowed if structure stays clean.',
-            tier1: false
+            scaling: tier1Active
+                ? 'More cautious scaling — confirm clean structure before adding size.'
+                : 'Aggressive scaling to full on clean structure.',
+            tier1: tier1Active
         };
     }
 
@@ -632,18 +616,16 @@
         // Live panel
         const liveGuidance = _buildRecGuidance(confidence, biasDir, tier1Active);
         const liveMain = document.getElementById('live-rec-main');
-        const liveSize = document.getElementById('live-rec-size');
         const liveScaling = document.getElementById('live-rec-scaling');
         const liveTier1 = document.getElementById('live-tier1-badge');
         if (liveGuidance) {
             const liveColor = confidence >= 80 ? '#2ecc71' : confidence >= 65 ? '#4a9eff' : '#f39c12';
             liveMain.style.color = liveColor;
             liveMain.textContent = '💡 ' + liveGuidance.main;
-            liveSize.textContent = liveGuidance.size;
             liveScaling.textContent = liveGuidance.scaling || '';
             liveTier1.style.display = liveGuidance.tier1 ? 'inline-block' : 'none';
         } else {
-            liveMain.textContent = ''; liveSize.textContent = '';
+            liveMain.textContent = '';
             liveScaling.textContent = ''; liveTier1.style.display = 'none';
         }
 
@@ -659,18 +641,16 @@
         const propHasRec = propRec && propRec.label;
         const propGuidance = propHasRec ? _buildRecGuidance(confidence, biasDir, tier1Active) : null;
         const propMain = document.getElementById('prop-rec-main');
-        const propSize = document.getElementById('prop-rec-size');
         const propScaling = document.getElementById('prop-rec-scaling');
         const propTier1 = document.getElementById('prop-tier1-badge');
         if (propGuidance) {
             const propColor = confidence >= 80 ? '#2ecc71' : confidence >= 65 ? '#4a9eff' : '#e67e22';
             propMain.style.color = propColor;
             propMain.textContent = '💡 ' + propGuidance.main;
-            propSize.textContent = propGuidance.size;
             propScaling.textContent = propGuidance.scaling || '';
             propTier1.style.display = propGuidance.tier1 ? 'inline-block' : 'none';
         } else {
-            propMain.textContent = ''; propSize.textContent = '';
+            propMain.textContent = '';
             propScaling.textContent = ''; propTier1.style.display = 'none';
         }
 
