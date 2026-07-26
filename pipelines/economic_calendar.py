@@ -115,6 +115,7 @@ class EconomicCalendarPipeline:
         "ISM Services PMI":               +1,
         "Retail Sales m/m":               +1,
         "Core Retail Sales m/m":          +1,
+        "FOMC Statement":                 -1,  # surprise cut (actual < forecast) = bullish; hike = bearish
     }
 
     # Inflation metrics — higher = more inflation = bearish for equities
@@ -148,6 +149,20 @@ class EconomicCalendarPipeline:
             pulse_logger.log(f"⚠️ Failed to parse values for '{title}': {e}", level="WARNING")
             return 'pending', 'unknown', f'{title} — cannot parse values'
 
+        # Rate decision — lower actual rate = bullish (cut = bullish, hike = bearish)
+        if title == 'FOMC Statement' and forecast_val is not None:
+            if actual_val < forecast_val:
+                return 'miss', 'bullish', (
+                    f'FOMC Statement — surprise cut ({actual}% vs {forecast}% consensus) '
+                    f'— dovish shock, bullish for equities'
+                )
+            elif actual_val > forecast_val:
+                return 'beat', 'bearish', (
+                    f'FOMC Statement — surprise hike ({actual}% vs {forecast}% consensus) '
+                    f'— hawkish shock, bearish for equities'
+                )
+            return 'inline', 'neutral', f'FOMC Statement — inline with consensus ({actual}%)'
+
         inverted = self.is_inflation_metric(title)
 
         if forecast_val is not None:
@@ -175,6 +190,8 @@ class EconomicCalendarPipeline:
         return 'pending', 'unknown', f'{title} — no comparison available'
 
     def is_speech_event(self, title):
+        if 'FOMC Statement' in title:
+            return False  # rate decision — numeric event, not a speech
         speech_keywords = [
             'speaks', 'speech', 'press conference', 'testimony', 'testifies',
             'statement', 'remarks', 'interview', 'appearance'
