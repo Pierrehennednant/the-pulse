@@ -525,8 +525,8 @@ class EconomicCalendarPipeline:
                         if now_utc >= trigger_time:
                             all_inputs = manual_input_pipeline.get_inputs()
                             t = event_row['title']
-                            existing = next((v for k, v in all_inputs.items()
-                                             if k == t or k.startswith(t + '::')), None)
+                            today_key = manual_input_pipeline.make_key(t, event_row.get('event_date', ''))
+                            existing = all_inputs.get(today_key) or all_inputs.get(t)
                             if not existing:
                                 pulse_logger.log(f"🎙️ Auto-detecting speech sentiment for: {event_row['title']}")
                                 speaker_type_local = event_row.get('speaker_type', 'Other')
