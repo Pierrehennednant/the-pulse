@@ -578,15 +578,15 @@
     }
 
     function _buildRecGuidance(confidence, biasDir, tier1Active) {
-        if (!biasDir || biasDir === 'Neutral' || confidence < 60) return null;
-        if (confidence < 65) {
+        if (!biasDir || biasDir === 'Neutral' || confidence < 55) return null;
+        if (confidence < 60) {
             return {
                 main: 'Low conviction — Quarter size.',
                 scaling: null,
                 tier1: tier1Active
             };
         }
-        if (confidence < 80) {
+        if (confidence < 75) {
             return {
                 main: 'Moderate conviction — Half size.',
                 scaling: tier1Active
@@ -619,7 +619,7 @@
         const liveScaling = document.getElementById('live-rec-scaling');
         const liveTier1 = document.getElementById('live-tier1-badge');
         if (liveGuidance) {
-            const liveColor = confidence >= 80 ? '#2ecc71' : confidence >= 65 ? '#4a9eff' : '#f39c12';
+            const liveColor = confidence >= 75 ? '#2ecc71' : confidence >= 60 ? '#4a9eff' : '#f39c12';
             liveMain.style.color = liveColor;
             liveMain.textContent = '💡 ' + liveGuidance.main;
             liveScaling.textContent = liveGuidance.scaling || '';
@@ -644,7 +644,7 @@
         const propScaling = document.getElementById('prop-rec-scaling');
         const propTier1 = document.getElementById('prop-tier1-badge');
         if (propGuidance) {
-            const propColor = confidence >= 80 ? '#2ecc71' : confidence >= 65 ? '#4a9eff' : '#e67e22';
+            const propColor = confidence >= 75 ? '#2ecc71' : confidence >= 60 ? '#4a9eff' : '#e67e22';
             propMain.style.color = propColor;
             propMain.textContent = '💡 ' + propGuidance.main;
             propScaling.textContent = propGuidance.scaling || '';

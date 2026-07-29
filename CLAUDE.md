@@ -135,21 +135,21 @@ Score is rounded (not truncated) to match CNN's own display rounding.
 | Setting | Value |
 |---|---|
 | Bias threshold | ± 0.50 |
-| Confidence to show card | 60% |
-| Confidence for quarter entry | 60%–64% |
-| Confidence for half entry (cautious) | 65%–79% — "look for confirmation before scaling to Full" |
-| Confidence for half entry (aggressive) | ≥ 80% — "scale to Full on confirmation" |
-| Below 60% | Neutral forced — "No Trade – Low Conviction" directive |
+| Confidence to show card | 55% |
+| Confidence for quarter entry | 55%–59% |
+| Confidence for half entry (cautious) | 60%–74% — "look for confirmation before scaling to Full" |
+| Confidence for half entry (aggressive) | ≥ 75% — "scale to Full on confirmation" |
+| Below 55% | Neutral forced — "No Trade – Low Conviction" directive |
 
 ## Prop Firm Mode Thresholds (`pipelines/recommendation.py`)
 
 | Setting | Value |
 |---|---|
 | Bias threshold | ± 0.33 standard / ± 0.30 quiet week |
-| Confidence to show card | 60% |
-| Confidence for quarter entry | 60%–64% |
-| Confidence for half entry (cautious) | 65%–79% |
-| Confidence for half entry (aggressive) | ≥ 80% |
+| Confidence to show card | 55% |
+| Confidence for quarter entry | 55%–59% |
+| Confidence for half entry (cautious) | 60%–74% |
+| Confidence for half entry (aggressive) | ≥ 75% |
 | Pillar alignment | ≥ 45% of total week weight must agree with bias |
 
 **Quiet week mode (Prop Firm only):** Evaluated once at the start of each ISO week. Counts red folder **days** (not individual events — a day with multiple red folder events counts as 1 red folder day). Persisted to `/data/prop_firm_weekly_threshold.json` for the entire week — does not change mid-week.

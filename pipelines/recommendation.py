@@ -17,10 +17,10 @@ class RecommendationEngine:
             bias = bias_data.get('bias', 'Neutral') if bias_data else 'Neutral'
             confidence = bias_data.get('confidence', 0) if bias_data else 0
 
-            if bias == 'Neutral' or confidence < 60:
+            if bias == 'Neutral' or confidence < 55:
                 return None
 
-            if confidence >= 70:
+            if confidence >= 65:
                 return {
                     'mode': 'normal',
                     'label': f'{bias} — Half size',
@@ -46,9 +46,9 @@ class PropFirmRecommendationEngine(RecommendationEngine):
 
     Differences from Live:
       Bias threshold         ±0.30 quiet week (≤1 red folder day) / ±0.33 standard week (≥2)  (Live ±0.50)
-      Show-card confidence     60%  (same as Live)
-      Quarter-entry confidence 60%–69%  (same as Live)
-      Half-entry confidence    ≥70%  (same as Live)
+      Show-card confidence     55%  (same as Live)
+      Quarter-entry confidence 55%–64%  (same as Live)
+      Half-entry confidence    ≥65%  (same as Live)
       Pillar alignment         ≥45% of total week weight must agree with bias
                                Quiet week: EC 15%, total 85%, threshold ≥38.25%
                                Standard week: EC 30%, total 100%, threshold ≥45%  (Live: none)
@@ -196,11 +196,11 @@ class PropFirmRecommendationEngine(RecommendationEngine):
                 return self._no_rec(week_info)
 
             confidence = bias_data.get('confidence', 0) if bias_data else 0
-            if confidence < 60:
+            if confidence < 55:
                 return self._no_rec(week_info)
 
             total_w = week_info['total_weight']
-            if confidence >= 70:
+            if confidence >= 65:
                 return self._rec(week_info,
                     mode='normal',
                     label=f'Prop Firm — {bias}, Normal entry',

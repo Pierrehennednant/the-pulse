@@ -131,18 +131,18 @@ class BiasCalculator:
             raw_confidence_pct = int(raw_conf * 100)
             confidence = min(int(raw_conf / ceiling * 100), 100)
 
-            if confidence >= 80:
+            if confidence >= 75:
                 confidence_label = 'High Confidence'
                 confidence_color = 'green'
-            elif confidence >= 65:
+            elif confidence >= 60:
                 confidence_label = 'Moderate Confidence'
                 confidence_color = 'yellow'
             else:
                 confidence_label = 'Low Conviction'
                 confidence_color = 'orange'
 
-        # Hard Neutral override — below 60% confidence forces Neutral regardless of score
-        low_conviction_override = confidence < 60 and bias != 'Neutral'
+        # Hard Neutral override — below 55% confidence forces Neutral regardless of score
+        low_conviction_override = confidence < 55 and bias != 'Neutral'
         if low_conviction_override:
             bias = 'Neutral'
             bias_emoji = '🟡'
@@ -154,14 +154,14 @@ class BiasCalculator:
         elif bias == 'Neutral':
             directive = "🟡 Neutral — Sit out."
             directive_color = "#f39c12"
-        elif confidence >= 80:
+        elif confidence >= 75:
             if bias == 'Bearish':
                 directive = "🔴 Bearish — Half size — scale to Full on confirmation."
                 directive_color = "#e74c3c"
             else:
                 directive = "🟢 Bullish — Half size — scale to Full on confirmation."
                 directive_color = "#2ecc71"
-        elif confidence >= 65:
+        elif confidence >= 60:
             if bias == 'Bearish':
                 directive = "🔴 Bearish — Half size — look for confirmation before scaling to Full."
                 directive_color = "#e74c3c"
