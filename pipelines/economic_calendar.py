@@ -106,16 +106,24 @@ class EconomicCalendarPipeline:
         "Core CPI m/m":                   -1,
         "CPI m/m":                        -1,
         "CPI y/y":                        -1,
+        "Core CPI y/y":                   -1,
         "Core PPI m/m":                   -1,
         "PPI m/m":                        -1,
+        "PPI y/y":                        -1,
+        "Core PPI y/y":                   -1,
         "Core PCE m/m":                   -1,
+        "PCE Price Index m/m":            -1,
+        "Core PCE Price Index m/m":       -1,
         "GDP q/q":                        +1,
+        "Advance GDP q/q":                +1,
+        "Preliminary GDP q/q":            +1,
         "Final GDP q/q":                  +1,
         "ISM Manufacturing PMI":          +1,
         "ISM Services PMI":               +1,
         "Retail Sales m/m":               +1,
         "Core Retail Sales m/m":          +1,
         "FOMC Statement":                 -1,  # surprise cut (actual < forecast) = bullish; hike = bearish
+        "Federal Funds Rate":             -1,  # surprise cut = bullish; hike = bearish
     }
 
     # Inflation metrics — higher = more inflation = bearish for equities
@@ -150,18 +158,18 @@ class EconomicCalendarPipeline:
             return 'pending', 'unknown', f'{title} — cannot parse values'
 
         # Rate decision — lower actual rate = bullish (cut = bullish, hike = bearish)
-        if title == 'FOMC Statement' and forecast_val is not None:
+        if title in ('FOMC Statement', 'Federal Funds Rate') and forecast_val is not None:
             if actual_val < forecast_val:
                 return 'miss', 'bullish', (
-                    f'FOMC Statement — surprise cut ({actual}% vs {forecast}% consensus) '
+                    f'{title} — surprise cut ({actual}% vs {forecast}% consensus) '
                     f'— dovish shock, bullish for equities'
                 )
             elif actual_val > forecast_val:
                 return 'beat', 'bearish', (
-                    f'FOMC Statement — surprise hike ({actual}% vs {forecast}% consensus) '
+                    f'{title} — surprise hike ({actual}% vs {forecast}% consensus) '
                     f'— hawkish shock, bearish for equities'
                 )
-            return 'inline', 'neutral', f'FOMC Statement — inline with consensus ({actual}%)'
+            return 'inline', 'neutral', f'{title} — inline with consensus ({actual}%)'
 
         inverted = self.is_inflation_metric(title)
 
