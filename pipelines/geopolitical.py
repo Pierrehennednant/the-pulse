@@ -400,6 +400,45 @@ Articles to classify:
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to save pinned stories: {e}", level="WARNING")
 
+    def is_same_story(self, new_headline, other_headline):
+        """Ask Haiku whether two headlines cover the same underlying story.
+
+        Used only for duplicate-event detection (re-titled coverage of one event),
+        never as a pin/scoring eviction gate — a SAME verdict here merges or skips
+        a redundant classification entry, it does not remove either article's
+        eligibility to score."""
+        if self.anthropic_client is None:
+            return False
+        try:
+            prompt = f"""You are evaluating whether two news headlines are about the same underlying geopolitical or market story.
+
+NEW ARTICLE: {new_headline}
+EXISTING ARTICLE: {other_headline}
+
+Are these two headlines covering the same underlying story or event — even if the outcome has changed or the angle is different?
+
+Examples of SAME story:
+- "Hormuz blockade tightens" and "Iran opens Hormuz to commercial vessels" — same story, outcome changed
+- "U.S.-Iran talks stall" and "Iran agrees to ceasefire terms" — same story, new development
+- "Fed signals rate hike" and "Fed raises rates by 25bps" — same story, event occurred
+
+Examples of DIFFERENT story:
+- "Iran blockade" and "China tariffs escalate" — different geopolitical events
+- "Fed rate decision" and "CPI data surprise" — different market events
+
+Respond with only one word: SAME or DIFFERENT"""
+
+            response = self.anthropic_client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=10,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            result = response.content[0].text.strip().upper()
+            return result == "SAME"
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Haiku story comparison failed: {e}", level="WARNING")
+            return False
+
     def update_pinned_store(self, new_items, classifications):
         """Update pinned store with newly Haiku-verified high-confidence articles."""
         pinned = self.load_pinned_stories()
@@ -1081,6 +1120,7 @@ CONTEXT: {context}"""
                 try:
                     pulse_logger.log(f"🤖 Haiku background classifying {len(new_items)} new articles with full text...")
                     classifications = self.classify_relevance_batch(new_items)
+                    duplicate_headlines = set()
                     if classifications:
                         for r in classifications:
                             idx = r['id'] - 1
@@ -1092,7 +1132,7 @@ CONTEXT: {context}"""
                                         pulse_logger.log(f"⚠️ Haiku returned malformed tier '{tier}' for '{headline[:60]}' — falling back to keyword tiering", level="WARNING")
                                     tier = None
                                 text_source = new_items[idx].get('_text_source', 'unknown')
-                                gemini_cache[headline] = {
+                                new_class = {
                                     'relevant': r.get('relevant', False),
                                     'confidence': r.get('confidence', 0),
                                     'category': r.get('category', ''),
@@ -1105,12 +1145,54 @@ CONTEXT: {context}"""
                                     'text_source': text_source,
                                     'classified_at': datetime.now(timezone.utc).isoformat()
                                 }
-                                pulse_logger.log(
-                                    f"🧭 Haiku tier | {headline[:60]} | Tier {tier if tier is not None else 'N/A (fallback)'} | "
-                                    f"{r.get('direction', 'unknown')} | conf={r.get('confidence', 0)} | src={text_source} | {r.get('reasoning', '')}"
-                                )
+
+                                # Duplicate-event check — same underlying story, just re-titled.
+                                # Compared against the 15 most recently classified active
+                                # (relevant, within-TTL) entries, not the full cache.
+                                duplicate_of = None
+                                if new_class['relevant']:
+                                    active_entries = [
+                                        (h, c) for h, c in gemini_cache.items()
+                                        if h != headline and c.get('relevant')
+                                        and not self.is_article_too_old(c.get('classified_at', ''))
+                                    ]
+                                    active_entries.sort(key=lambda hc: hc[1].get('classified_at', ''), reverse=True)
+                                    for existing_headline, _ in active_entries[:15]:
+                                        if self.is_same_story(headline, existing_headline):
+                                            duplicate_of = existing_headline
+                                            break
+
+                                if duplicate_of:
+                                    existing = gemini_cache[duplicate_of]
+                                    materially_changed = (
+                                        existing.get('tier') != new_class['tier']
+                                        or existing.get('direction') != new_class['direction']
+                                        or abs((existing.get('confidence') or 0) - (new_class.get('confidence') or 0)) >= 0.10
+                                    )
+                                    if materially_changed:
+                                        gemini_cache[duplicate_of] = new_class
+                                        pulse_logger.log(f"🔁 Duplicate event — updated existing entry in place: '{headline[:60]}' → merged into '{duplicate_of[:60]}'")
+                                    else:
+                                        pulse_logger.log(f"🔁 Duplicate event — no material change, skipped: '{headline[:60]}' (same as '{duplicate_of[:60]}')")
+                                    gemini_cache[headline] = {
+                                        'relevant': False,
+                                        'duplicate_of': duplicate_of,
+                                        'classified_at': datetime.now(timezone.utc).isoformat()
+                                    }
+                                    duplicate_headlines.add(headline)
+                                else:
+                                    gemini_cache[headline] = new_class
+                                    pulse_logger.log(
+                                        f"🧭 Haiku tier | {headline[:60]} | Tier {tier if tier is not None else 'N/A (fallback)'} | "
+                                        f"{r.get('direction', 'unknown')} | conf={r.get('confidence', 0)} | src={text_source} | {r.get('reasoning', '')}"
+                                    )
                         atomic_write_json(gemini_cache_file, gemini_cache)
-                        self.update_pinned_store(new_items, classifications)
+                        filtered_classifications = [
+                            r for r in classifications
+                            if r['id'] - 1 < len(new_items)
+                            and new_items[r['id'] - 1]['headline'] not in duplicate_headlines
+                        ]
+                        self.update_pinned_store(new_items, filtered_classifications)
                         pulse_logger.log(f"✅ Haiku background done — {len(classifications)} articles classified with summaries")
                 except Exception as e:
                     pulse_logger.log(f"⚠️ Background Haiku failed: {e}", level="WARNING")
