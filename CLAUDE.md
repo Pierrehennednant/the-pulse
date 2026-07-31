@@ -169,11 +169,15 @@ Logged once per week in Railway logs:
 - **Daily closing snapshots:** 4:00–4:05 PM EST → `/data/snapshots/daily/` — keep last 10
 - `os.path.isfile()` filter applied everywhere to exclude the `daily/` subdirectory from live snapshot listing/pruning
 
-## Pinned Stories — Three-Layer Cleanup
+## Pinned Stories — TTL-Only Eviction
 
-1. **Layer 1:** Live feed supersedes a pin on the same story (Haiku SAME/DIFFERENT classification)
-2. **Layer 2:** Pin vs pin dedup — newest wins
-3. **Layer 3:** 48-hour expiry — last resort
+Every article with a valid Haiku (or keyword-fallback) classification contributes to
+the Geo pillar score independently — there is no same-story dedup or eviction gate.
+The persisted pin store (`/data/pinned_stories.json`) exists purely to bridge scoring
+continuity for articles that fall out of the live TheNewsAPI feed; it is uncapped and
+uses exact-headline matching only (never a Haiku same-story judgment) to avoid
+re-injecting a literal duplicate. The sole eviction mechanism is the 48-hour TTL
+(`is_article_too_old`) applied in `load_pinned_stories()`.
 
 ## Geopolitical — Haiku Contextual Tiering
 

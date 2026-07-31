@@ -387,22 +387,6 @@ Articles to classify:
                 valid.append(story)
             if dirty:
                 self.save_pinned_stories(valid)
-            # Pin vs pin deduplication — keep newest when two pins cover the same story
-            if len(valid) > 1:
-                try:
-                    valid.sort(key=lambda s: s.get('pinned_at', ''), reverse=True)
-                    deduped = []
-                    for candidate in valid:
-                        c_headline = candidate.get('headline', '')
-                        if any(self.is_same_story(c_headline, kept.get('headline', '')) for kept in deduped):
-                            pulse_logger.log(f"📌 Pinned story deduplicated (older duplicate retired): {c_headline[:60]}")
-                            continue
-                        deduped.append(candidate)
-                    if len(deduped) < len(valid):
-                        valid = deduped
-                        self.save_pinned_stories(valid)
-                except Exception as e:
-                    pulse_logger.log(f"⚠️ Pin vs pin dedup failed: {e}", level="WARNING")
 
             return valid
         except Exception as e:
@@ -415,40 +399,6 @@ Articles to classify:
             atomic_write_json(self.pinned_store_file, pinned)
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to save pinned stories: {e}", level="WARNING")
-
-    def is_same_story(self, new_headline, pinned_headline):
-        """Ask Haiku whether a new article supersedes a pinned story."""
-        if self.anthropic_client is None:
-            return False
-        try:
-            prompt = f"""You are evaluating whether two news headlines are about the same underlying geopolitical or market story.
-
-NEW ARTICLE: {new_headline}
-PINNED STORY: {pinned_headline}
-
-Are these two headlines covering the same underlying story or event — even if the outcome has changed or the angle is different?
-
-Examples of SAME story:
-- "Hormuz blockade tightens" and "Iran opens Hormuz to commercial vessels" — same story, outcome changed
-- "U.S.-Iran talks stall" and "Iran agrees to ceasefire terms" — same story, new development
-- "Fed signals rate hike" and "Fed raises rates by 25bps" — same story, event occurred
-
-Examples of DIFFERENT story:
-- "Iran blockade" and "China tariffs escalate" — different geopolitical events
-- "Fed rate decision" and "CPI data surprise" — different market events
-
-Respond with only one word: SAME or DIFFERENT"""
-
-            response = self.anthropic_client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=10,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            result = response.content[0].text.strip().upper()
-            return result == "SAME"
-        except Exception as e:
-            pulse_logger.log(f"⚠️ Haiku story comparison failed: {e}", level="WARNING")
-            return False
 
     def update_pinned_store(self, new_items, classifications):
         """Update pinned store with newly Haiku-verified high-confidence articles."""
@@ -479,16 +429,11 @@ Respond with only one word: SAME or DIFFERENT"""
                 'pinned_at': datetime.now(timezone.utc).isoformat()
             }
 
-            # Ask Haiku whether this supersedes any existing pinned story
-            replaced = False
-            for i, pin in enumerate(pinned):
-                if self.is_same_story(headline, pin.get('headline', '')):
-                    pinned[i] = new_entry
-                    replaced = True
-                    pulse_logger.log(f"📌 Pinned story superseded: {headline[:60]}")
-                    break
-
-            if not replaced and len(pinned) < 5:
+            # Only skip if this exact headline is already pinned — never evict a
+            # distinct headline based on a same-story judgment. TTL (48h, in
+            # load_pinned_stories) is the sole eviction mechanism.
+            already_pinned = any(pin.get('headline', '') == headline for pin in pinned)
+            if not already_pinned:
                 pinned.append(new_entry)
                 pulse_logger.log(f"📌 New story pinned: {headline[:60]}")
 
@@ -1044,50 +989,22 @@ CONTEXT: {context}"""
                 continue
             keyword_passed.append(i)
 
-        # Return immediately — known relevant + keyword-passed new articles
+        # Return immediately — known relevant + keyword-passed new articles.
+        # No same-story dedup here: every classified article scores independently,
+        # regardless of whether Haiku judges it related to another live article.
         immediately_available = known_relevant + keyword_passed
 
-        # Deduplicate by story — sort newest first, then drop older articles covering the same story
-        def _live_sort_key(item):
-            for field in ('timestamp', 'published_at', 'date'):
-                val = item.get(field) or ''
-                if val:
-                    try:
-                        return dateutil_parser.parse(val, default=datetime.now(timezone.utc), tzinfos={"EST": -18000, "EDT": -14400}).isoformat()
-                    except Exception:
-                        pass
-            return datetime.min.replace(tzinfo=timezone.utc).isoformat()
-
-        immediately_available.sort(key=_live_sort_key, reverse=True)
-        deduped_live = []
-        for candidate in immediately_available:
-            c_headline = candidate.get('headline', '')
-            if any(self.is_same_story(c_headline, kept.get('headline', '')) for kept in deduped_live):
-                pulse_logger.log(f"📰 Live article deduplicated (older duplicate dropped): {c_headline[:60]}")
-                continue
-            deduped_live.append(candidate)
-        immediately_available = deduped_live
-
-        # Inject pinned stories not already covered by a live article
+        # Inject pinned stories not already covered by a live article.
+        # Only an exact headline match skips injection — a same-story judgment
+        # never retires a pin, so a distinct article keeps contributing to
+        # score until it ages out via TTL in load_pinned_stories().
         pinned_stories = self.load_pinned_stories()
         current_headlines = {i['headline'] for i in immediately_available}
         injected = 0
-        retired = 0
-        surviving_pins = []
         for pin in pinned_stories:
             pin_headline = pin.get('headline', '')
-            # Exact headline already present — skip without retiring
+            # Exact headline already present — skip re-injecting, but keep the pin alive
             if pin_headline in current_headlines:
-                surviving_pins.append(pin)
-                continue
-            # Check if any live article covers the same underlying story
-            superseded = any(
-                self.is_same_story(live['headline'], pin_headline)
-                for live in immediately_available
-            )
-            if superseded:
-                pulse_logger.log(f"📌 Pinned story retired — covered by live article: {pin_headline[:60]}")
-                retired += 1
                 continue
             # No live coverage — inject the pin
             immediately_available.append({
@@ -1104,10 +1021,7 @@ CONTEXT: {context}"""
                 'pinned': True
             })
             current_headlines.add(pin_headline)
-            surviving_pins.append(pin)
             injected += 1
-        if retired:
-            self.save_pinned_stories(surviving_pins)
 
         # Hard age cutoff — drop stale articles before scoring
         before_age = len(immediately_available)
