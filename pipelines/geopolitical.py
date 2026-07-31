@@ -400,6 +400,25 @@ Articles to classify:
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to save pinned stories: {e}", level="WARNING")
 
+    def _refresh_pin_classification(self, headline, new_class):
+        """If `headline` currently exists as an active pin, refresh its cached
+        direction/tier/confidence/summary in place. Called when a duplicate-event
+        merge updates gemini_cache, so the pin never scores off a stale copy
+        while gemini_cache holds the current classification."""
+        try:
+            pinned = self.load_pinned_stories()
+            for pin in pinned:
+                if pin.get('headline') == headline:
+                    pin['direction'] = new_class.get('direction')
+                    pin['tier'] = new_class.get('tier')
+                    pin['confidence'] = new_class.get('confidence', 0)
+                    pin['summary'] = new_class.get('summary', pin.get('summary', ''))
+                    self.save_pinned_stories(pinned)
+                    pulse_logger.log(f"📌 Pin refreshed with updated classification: '{headline[:60]}'")
+                    return
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Pin refresh failed: {e}", level="WARNING")
+
     def is_same_story(self, new_headline, other_headline):
         """Ask Haiku whether two headlines cover the same underlying story.
 
@@ -454,12 +473,16 @@ Respond with only one word: SAME or DIFFERENT"""
 
             article = new_items[idx]
             headline = article.get('headline', '')
+            tier = r.get('tier')
+            if tier not in (1, 2, 3):
+                tier = None
 
             new_entry = {
                 'headline': headline,
                 'summary': r.get('summary', article.get('description', '')),
                 'direction': r.get('direction'),
                 'confidence': r.get('confidence', 0),
+                'tier': tier,
                 'uncertainty_score': r.get('uncertainty_score', 0),
                 'source': article.get('source', ''),
                 'timestamp': article.get('timestamp', ''),
@@ -1055,6 +1078,7 @@ CONTEXT: {context}"""
                 'link': pin.get('link', ''),
                 'sentiment_score': 0.8 if pin.get('direction') == 'bullish' else -0.8 if pin.get('direction') == 'bearish' else 0.0,
                 'gemini_direction': pin.get('direction'),
+                'haiku_tier': pin.get('tier'),
                 'uncertainty_score': pin.get('uncertainty_score', 0),
                 'market_relevant': True,
                 'pinned': True
@@ -1172,6 +1196,7 @@ CONTEXT: {context}"""
                                     if materially_changed:
                                         gemini_cache[duplicate_of] = new_class
                                         pulse_logger.log(f"🔁 Duplicate event — updated existing entry in place: '{headline[:60]}' → merged into '{duplicate_of[:60]}'")
+                                        self._refresh_pin_classification(duplicate_of, new_class)
                                     else:
                                         pulse_logger.log(f"🔁 Duplicate event — no material change, skipped: '{headline[:60]}' (same as '{duplicate_of[:60]}')")
                                     gemini_cache[headline] = {
