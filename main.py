@@ -36,7 +36,7 @@ def wait_for_persistent_volume(max_wait_seconds: int = 120):
 
 wait_for_persistent_volume(max_wait_seconds=120)
 
-from pipelines.macro_sentiment import macro_sentiment_pipeline
+from pipelines.macro_sentiment import macro_sentiment_pipeline, INTRADAY_SLOTS
 from pipelines.economic_calendar import economic_calendar_pipeline
 from pipelines.institutional import institutional_pipeline
 from pipelines.geopolitical import geopolitical_pipeline
@@ -163,6 +163,15 @@ def run_pulse():
 def run_scheduler():
     schedule.every(REFRESH_INTERVAL_MINUTES).minutes.do(run_pulse)
     schedule.every(24).hours.do(manual_input_pipeline.clear_old_inputs)
+
+    # VIX/VXN intraday yfinance pulls — 9:15, 9:25, 9:45, 10:30 AM ET
+    for slot in INTRADAY_SLOTS:
+        schedule.every().day.at(slot, TIMEZONE).do(macro_sentiment_pipeline.run_scheduled_pull, slot)
+
+    # Daily FRED refresh — keeps the Level-3 prior-day-close fallback fresh,
+    # independent of whether the intraday yfinance pulls succeeded that day
+    schedule.every().day.at("16:35", TIMEZONE).do(macro_sentiment_pipeline.daily_fred_refresh)
+
     while True:
         try:
             schedule.run_pending()

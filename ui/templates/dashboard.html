@@ -475,6 +475,11 @@
     function renderMacro(data) {
         if (!data) return '<div class="stale-warning">⚠️ Data unavailable</div>';
         let html = data.status === 'stale' ? '<div class="stale-warning">⚠️ Stale data</div>' : '';
+        if (data.intraday_warning) {
+            const fallbackSrc = (data.vix || {}).source || (data.vxn || {}).source || 'cached data';
+            const fallbackLabel = fallbackSrc === 'fred-prior-day' ? 'FRED prior-day close' : fallbackSrc;
+            html += `<div class="stale-warning">⚠️ Live VIX/VXN data unavailable — using ${fallbackLabel}</div>`;
+        }
         const vix = data.vix || {};
         const vxn = data.vxn || {};
         const fg = data.fear_greed || {};

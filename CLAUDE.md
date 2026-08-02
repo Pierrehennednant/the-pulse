@@ -130,6 +130,51 @@ Five-level granular classification for each indicator:
 
 Score is rounded (not truncated) to match CNN's own display rounding.
 
+## VIX/VXN Intraday Pulls (`pipelines/macro_sentiment.py`)
+
+Live VIX/VXN values come from **yfinance** (`^VIX`, `^VXN`) via 4 scheduled pulls per
+day, not FRED — FRED is now a fallback-only source. Scheduled at **9:15, 9:25, 9:45,
+and 10:30 AM ET** (`INTRADAY_SLOTS`), registered in `main.py`'s `run_scheduler()` via
+`schedule.every().day.at(slot, TIMEZONE)`.
+
+**Per-pull retry:** 3 attempts total (1 initial + 2 retries), backoff 3s then 5s,
+before a slot is marked failed.
+
+**Validation ("sane" value):** not None, not NaN, and within **5.0–100.0**. Anything
+outside this range is treated as a failed pull, not a bad reading.
+
+**Fallback hierarchy, per pull:**
+1. yfinance succeeds + validates → used, written to today's session cache with slot,
+   timestamp, `source: 'yfinance'`.
+2. yfinance fails after retries → most recent successful **same-day** slot is reused
+   (`source: 'session-cache (<slot>)'`) — logged with which slot and its original
+   timestamp.
+3. No successful same-day slot exists yet → FRED's prior-day close is used as
+   today's baseline (`source: 'fred-prior-day'`) — logged explicitly as not live data.
+
+**Session cache:** `/data/vix_intraday_session.json`, `/data/vxn_intraday_session.json`
+— new files, separate from the existing `/data/vix_cache.json`/`vxn_cache.json` FRED
+cache. Resets automatically when the stored date rolls over. Tracks all 4 slots,
+`consecutive_failures`, and freeze state.
+
+**UI warning:** after the **2nd consecutive same-day failure** (9:15 and 9:25 both
+failed), `intraday_warning: true` is set and the dashboard shows "⚠️ Live VIX/VXN
+data unavailable — using [fallback source]" in the Macro Sentiment pillar. Not shown
+after only the first failure. Clears immediately on the next successful pull.
+
+**Freeze:** immediately after the 10:30 slot resolves (success or fallback), that
+value is frozen for the rest of the day (`frozen: true`, `frozen_value`, `frozen_at`).
+The regular 5-minute refresh cycle (`fetch_vix()`/`fetch_vxn()`) becomes a passive
+reader after this — no further yfinance or FRED calls until the session resets at
+the next 9:15 AM ET slot.
+
+**Daily FRED refresh:** a 5th scheduled job, once daily at **4:35 PM ET**
+(`daily_fred_refresh()`), independent of the intraday pulls — keeps `/data/vix_cache.json`
+/`vxn_cache.json` fresh so the Level-3 fallback never silently goes stale. The existing
+3-day staleness exclusion from the macro score (`stale: true` → excluded in
+`calculate_score()`) now only applies when the resolved value's source is
+`fred-prior-day` and that FRED cache itself is ≥3 days old.
+
 ## Live Mode Thresholds (`pipelines/recommendation.py`)
 
 | Setting | Value |
@@ -226,7 +271,8 @@ Haiku assigns tier, direction, confidence, and reasoning for every geo article a
 
 | Source | Data | Cache fallback |
 |---|---|---|
-| FRED API (`FRED_API_KEY`) | VIX, VXN (end-of-day closing) | `/data/vix_cache.json`, `/data/vxn_cache.json` (default 20.0) |
+| yfinance (`^VIX`, `^VXN`) | VIX, VXN — 4 scheduled intraday pulls/day | `/data/vix_intraday_session.json`, `/data/vxn_intraday_session.json` |
+| FRED API (`FRED_API_KEY`) | VIX, VXN prior-day close — Level-3 fallback only, refreshed daily 4:35 PM ET | `/data/vix_cache.json`, `/data/vxn_cache.json` (default 20.0) |
 | CNN via `fear_greed` library | Fear & Greed index | `/data/fear_greed_cache.json` |
 | Forex Factory JSON (`thisweek.json`) | Economic calendar — red folder events only | In-memory cache |
 | TheNewsAPI + Claude Haiku | Geopolitical news classification | `/data/gemini_classifications.json` (48h expiry) |
@@ -255,8 +301,10 @@ Haiku assigns tier, direction, confidence, and reasoning for every geo article a
 | `/data/ai_lens_cache.json` | AI Lens daily narrative cache | Daily |
 | `/data/snapshots/` | Live 5-minute bias snapshots | Last 50 |
 | `/data/snapshots/daily/` | Daily 4 PM closing snapshots | Last 10 |
-| `/data/vix_cache.json` | VIX fallback cache | Until next fetch |
-| `/data/vxn_cache.json` | VXN fallback cache | Until next fetch |
+| `/data/vix_cache.json` | VIX Level-3 fallback (FRED prior-day close) | Refreshed daily 4:35 PM ET |
+| `/data/vxn_cache.json` | VXN Level-3 fallback (FRED prior-day close) | Refreshed daily 4:35 PM ET |
+| `/data/vix_intraday_session.json` | VIX today's 4 scheduled yfinance pulls + freeze state | Resets at 9:15 AM ET |
+| `/data/vxn_intraday_session.json` | VXN today's 4 scheduled yfinance pulls + freeze state | Resets at 9:15 AM ET |
 | `/data/fear_greed_cache.json` | Fear & Greed fallback cache | Until next fetch |
 
 ## Project Layout

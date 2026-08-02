@@ -1,8 +1,10 @@
 import json
 import os
+import time
 from datetime import datetime, timezone
 import pytz
 import fear_greed
+import yfinance as yf
 from config import TIMEZONE, FRED_API_KEY
 from utils.file_lock import atomic_write_json
 from utils.retry import fetch_with_retry
@@ -13,11 +15,19 @@ from utils.error_handler import error_handler
 VIX_CACHE_FILE = '/data/vix_cache.json'
 VXN_CACHE_FILE = '/data/vxn_cache.json'
 FG_CACHE_FILE = '/data/fear_greed_cache.json'
+VIX_SESSION_FILE = '/data/vix_intraday_session.json'
+VXN_SESSION_FILE = '/data/vxn_intraday_session.json'
+
+# Scheduled intraday pull slots (ET) — main.py registers one scheduled job per slot.
+INTRADAY_SLOTS = ["09:15", "09:25", "09:45", "10:30"]
+VALID_RANGE = (5.0, 100.0)  # sane bounds for both VIX and VXN
 
 class MacroSentimentPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "macro_sentiment"
+
+    # -- FRED cache (Level-3 fallback: prior-day close) --------------------
 
     def _save_vix_cache(self, vix_data):
         try:
@@ -73,109 +83,257 @@ class MacroSentimentPipeline:
         previous = round(float(observations[1]['value']), 2) if len(observations) >= 2 else current
         return current, previous
 
-    def fetch_vix(self):
+    @staticmethod
+    def _vix_signal(value):
+        return (
+            'strongly_bullish' if value < 15.0 else
+            'mildly_bullish' if value < 17.0 else
+            'neutral' if value < 20.0 else
+            'mildly_bearish' if value < 25.0 else
+            'strongly_bearish'
+        )
+
+    @staticmethod
+    def _vxn_signal(value):
+        return (
+            'strongly_bullish' if value < 18.0 else
+            'mildly_bullish' if value < 20.0 else
+            'neutral' if value < 25.0 else
+            'mildly_bearish' if value < 28.0 else
+            'strongly_bearish'
+        )
+
+    def daily_fred_refresh(self):
+        """Runs once daily (4:35 PM ET, scheduled from main.py) purely to keep the
+        Level-3 FRED fallback cache fresh. Independent of the intraday yfinance
+        pulls — without this, vix_cache.json/vxn_cache.json would never update
+        again once yfinance became the primary source, and the prior-day-close
+        fallback would silently rot."""
+        for symbol, series_id, saver, signal_fn in (
+            ('VIX', 'VIXCLS', self._save_vix_cache, self._vix_signal),
+            ('VXN', 'VXNCLS', self._save_vxn_cache, self._vxn_signal),
+        ):
+            try:
+                current, previous = self._fetch_fred_index(series_id)
+                change = round(current - previous, 2)
+                change_pct = round((change / previous) * 100, 2) if previous else 0
+                result = {
+                    'value': current,
+                    'previous': previous,
+                    'change': change,
+                    'change_pct': change_pct,
+                    'signal': signal_fn(current),
+                    'source': 'fred'
+                }
+                saver(result)
+                pulse_logger.log(f"✓ {symbol} — daily FRED refresh: {current} (prev: {previous}, chg: {change:+.2f})")
+            except Exception as e:
+                pulse_logger.log(f"⚠️ {symbol} — daily FRED refresh failed: {e}", level="WARNING")
+
+    # -- Intraday session cache (Level-1/2: today's yfinance pulls) --------
+
+    def _today_str(self):
+        return datetime.now(self.timezone).strftime('%Y-%m-%d')
+
+    def _empty_session(self):
+        return {
+            'date': self._today_str(),
+            'slots': {s: None for s in INTRADAY_SLOTS},
+            'consecutive_failures': 0,
+            'intraday_warning': False,
+            'frozen': False,
+            'frozen_value': None,
+            'frozen_at': None,
+        }
+
+    def _load_session(self, path):
         try:
-            current, previous = self._fetch_fred_index('VIXCLS')
-            change = round(current - previous, 2)
-            change_pct = round((change / previous) * 100, 2) if previous else 0
-            result = {
-                'value': current,
-                'previous': previous,
-                'change': change,
-                'change_pct': change_pct,
-                'signal': (
-                    'strongly_bullish' if current < 15.0 else
-                    'mildly_bullish' if current < 17.0 else
-                    'neutral' if current < 20.0 else
-                    'mildly_bearish' if current < 25.0 else
-                    'strongly_bearish'
-                ),
-                'source': 'fred'
-            }
-            self._save_vix_cache(result)
-            pulse_logger.log(f"✓ VIX — FRED: {current} (prev: {previous}, chg: {change:+.2f})")
-            return result
+            if os.path.exists(path):
+                with open(path, 'r') as f:
+                    data = json.load(f)
+                if data.get('date') == self._today_str():
+                    return data
         except Exception as e:
-            pulse_logger.log(f"⚠️ VIX — FRED fetch failed: {e}", level="WARNING")
-            cached_file = self._load_vix_cache()
-            if cached_file:
-                cached = cached_file.get('vix', {})
-                ts = cached_file.get('timestamp', '')
-                is_stale = True
-                if ts:
-                    try:
-                        cached_dt = datetime.fromisoformat(ts)
-                        if cached_dt.tzinfo is None:
-                            cached_dt = cached_dt.replace(tzinfo=self.timezone)
-                        age_days = (datetime.now(self.timezone) - cached_dt).total_seconds() / 86400
-                        is_stale = age_days >= 3
-                    except Exception:
-                        pass
-                v = cached.get('value', 20.0)
-                cached['signal'] = (
-                    'strongly_bullish' if v < 15.0 else
-                    'mildly_bullish' if v < 17.0 else
-                    'neutral' if v < 20.0 else
-                    'mildly_bearish' if v < 25.0 else
-                    'strongly_bearish'
-                )
-                cached['source'] = 'cache'
-                cached['stale'] = is_stale
-                if is_stale:
-                    pulse_logger.log(f"⚠️ VIX — cache is stale ({ts}), will be excluded from macro score", level="WARNING")
+            pulse_logger.log(f"⚠️ Failed to load intraday session {path}: {e}", level="WARNING")
+        return self._empty_session()
+
+    def _save_session(self, path, data):
+        try:
+            atomic_write_json(path, data)
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Failed to save intraday session {path}: {e}", level="WARNING")
+
+    def _yfinance_pull(self, ticker_symbol, label):
+        """Attempt a yfinance pull with 2 retries (3s, then 5s backoff).
+        Returns a validated float in VALID_RANGE, or None if all 3 attempts fail."""
+        delays = [0, 3, 5]
+        for attempt, delay in enumerate(delays, start=1):
+            if delay:
+                time.sleep(delay)
+            try:
+                t = yf.Ticker(ticker_symbol)
+                value = t.fast_info['last_price']
+                if value is None:
+                    hist = t.history(period='1d')
+                    if not hist.empty:
+                        value = float(hist['Close'].iloc[-1])
+                if value is None:
+                    raise ValueError("no price returned")
+                value = float(value)
+                if value != value:  # NaN check
+                    raise ValueError("NaN value")
+                if not (VALID_RANGE[0] <= value <= VALID_RANGE[1]):
+                    raise ValueError(f"value {value} outside sane range {VALID_RANGE}")
+                return round(value, 2)
+            except Exception as e:
+                pulse_logger.log(f"⚠️ {label} — yfinance attempt {attempt}/3 failed: {e}", level="WARNING")
+        return None
+
+    def _resolve_slot_fallback(self, session, current_slot_idx):
+        """Most recent successful/fallback same-day slot before current_slot_idx."""
+        for i in range(current_slot_idx - 1, -1, -1):
+            slot = INTRADAY_SLOTS[i]
+            entry = session['slots'].get(slot)
+            if entry:
+                return slot, entry
+        return None, None
+
+    def run_scheduled_pull(self, slot):
+        """Called by the 4 scheduled jobs (9:15/9:25/9:45/10:30 ET, registered in
+        main.py). Pulls yfinance for VIX and VXN with retries, falls back per the
+        documented hierarchy (session-cache -> FRED prior-day close), tracks
+        consecutive failures for the UI warning, and freezes the day's reading
+        after the 10:30 slot."""
+        if slot not in INTRADAY_SLOTS:
+            pulse_logger.log(f"⚠️ Unknown intraday slot '{slot}' — skipping", level="WARNING")
+            return
+        slot_idx = INTRADAY_SLOTS.index(slot)
+
+        for symbol, ticker, session_file, fred_cache_loader in (
+            ('VIX', '^VIX', VIX_SESSION_FILE, self._load_vix_cache),
+            ('VXN', '^VXN', VXN_SESSION_FILE, self._load_vxn_cache),
+        ):
+            session = self._load_session(session_file)
+            value = self._yfinance_pull(ticker, f"{symbol} {slot}")
+
+            if value is not None:
+                session['slots'][slot] = {
+                    'value': value,
+                    'timestamp': datetime.now(self.timezone).isoformat(),
+                    'source': 'yfinance'
+                }
+                session['consecutive_failures'] = 0
+                pulse_logger.log(f"✓ {symbol} — yfinance {slot} pull: {value}")
+            else:
+                session['consecutive_failures'] = session.get('consecutive_failures', 0) + 1
+                fb_slot, fb_entry = self._resolve_slot_fallback(session, slot_idx)
+                if fb_entry:
+                    session['slots'][slot] = {
+                        'value': fb_entry['value'],
+                        'timestamp': fb_entry['timestamp'],
+                        'source': f'session-cache ({fb_slot})'
+                    }
+                    pulse_logger.log(
+                        f"⚠️ {symbol} — {slot} pull failed, using {fb_slot} cached data "
+                        f"({fb_entry['value']}, from {fb_entry['timestamp']})"
+                    )
                 else:
-                    pulse_logger.log(f"⚠️ VIX — using recent file cache: {v} (stale=False)", level="WARNING")
-                return cached
-            pulse_logger.log("⚠️ VIX — no cache available, defaulting to 20.0", level="WARNING")
-            return {'value': 20.0, 'previous': 20.0, 'change': 0, 'change_pct': 0, 'signal': 'mildly_bearish', 'source': 'default', 'stale': False}
+                    fred_file = fred_cache_loader()
+                    fred_key = 'vix' if symbol == 'VIX' else 'vxn'
+                    if fred_file and fred_file.get(fred_key, {}).get('value') is not None:
+                        fred_val = fred_file[fred_key]['value']
+                        fred_ts = fred_file.get('timestamp', '')
+                        session['slots'][slot] = {
+                            'value': fred_val,
+                            'timestamp': fred_ts,
+                            'source': 'fred-prior-day'
+                        }
+                        pulse_logger.log(
+                            f"⚠️ {symbol} — no live data today, using FRED prior-day close "
+                            f"({fred_val}, from {fred_ts})"
+                        )
+                    else:
+                        pulse_logger.log(f"⚠️ {symbol} — {slot} pull failed and no fallback available", level="WARNING")
+
+            session['intraday_warning'] = session.get('consecutive_failures', 0) >= 2
+
+            if slot == '10:30':
+                resolved = session['slots'].get('10:30')
+                if resolved:
+                    session['frozen'] = True
+                    session['frozen_value'] = resolved['value']
+                    session['frozen_at'] = datetime.now(self.timezone).isoformat()
+                    pulse_logger.log(
+                        f"🧊 {symbol} — frozen for the day at {resolved['value']} "
+                        f"(source: {resolved['source']})"
+                    )
+
+            self._save_session(session_file, session)
+
+    def _read_intraday_value(self, symbol, session_file, fred_cache_loader, signal_fn):
+        """Passive read for the normal 5-minute refresh cycle — never calls
+        yfinance or FRED live. Reports today's frozen value, or the most recent
+        successful/fallback slot so far, or (before any slot has run) FRED's
+        prior-day close."""
+        session = self._load_session(session_file)
+        fred_file = fred_cache_loader()
+        fred_key = 'vix' if symbol == 'VIX' else 'vxn'
+        previous = fred_file.get(fred_key, {}).get('value') if fred_file else None
+
+        if session.get('frozen'):
+            value = session['frozen_value']
+            source = 'frozen'
+        else:
+            value = None
+            source = None
+            for slot in reversed(INTRADAY_SLOTS):
+                entry = session['slots'].get(slot)
+                if entry:
+                    value = entry['value']
+                    source = entry['source']
+                    break
+            if value is None:
+                if previous is not None:
+                    value = previous
+                    source = 'fred-prior-day'
+                else:
+                    value = 20.0
+                    source = 'default'
+
+        is_stale = False
+        if source == 'fred-prior-day' and fred_file:
+            ts = fred_file.get('timestamp', '')
+            if ts:
+                try:
+                    cached_dt = datetime.fromisoformat(ts)
+                    if cached_dt.tzinfo is None:
+                        cached_dt = cached_dt.replace(tzinfo=self.timezone)
+                    age_days = (datetime.now(self.timezone) - cached_dt).total_seconds() / 86400
+                    is_stale = age_days >= 3
+                except Exception:
+                    pass
+
+        change = round(value - previous, 2) if previous is not None else 0
+        change_pct = round((change / previous) * 100, 2) if previous else 0
+
+        return {
+            'value': value,
+            'previous': previous if previous is not None else value,
+            'change': change,
+            'change_pct': change_pct,
+            'signal': signal_fn(value),
+            'source': source,
+            'stale': is_stale,
+            'intraday_warning': session.get('intraday_warning', False),
+        }
+
+    def fetch_vix(self):
+        return self._read_intraday_value('VIX', VIX_SESSION_FILE, self._load_vix_cache, self._vix_signal)
 
     def fetch_vxn(self):
-        try:
-            current, previous = self._fetch_fred_index('VXNCLS')
-            change = round(current - previous, 2)
-            change_pct = round((change / previous) * 100, 2) if previous else 0
-            result = {
-                'value': current,
-                'previous': previous,
-                'change': change,
-                'change_pct': change_pct,
-                'signal': (
-                    'strongly_bullish' if current < 18.0 else
-                    'mildly_bullish' if current < 20.0 else
-                    'neutral' if current < 25.0 else
-                    'mildly_bearish' if current < 28.0 else
-                    'strongly_bearish'
-                ),
-                'source': 'fred'
-            }
-            self._save_vxn_cache(result)
-            pulse_logger.log(f"✓ VXN — FRED: {current} (prev: {previous}, chg: {change:+.2f})")
-            return result
-        except Exception as e:
-            pulse_logger.log(f"⚠️ VXN — FRED fetch failed: {e}", level="WARNING")
-            cached_file = self._load_vxn_cache()
-            if cached_file:
-                cached = cached_file.get('vxn', {})
-                ts = cached_file.get('timestamp', '')
-                is_stale = True
-                if ts:
-                    try:
-                        cached_dt = datetime.fromisoformat(ts)
-                        if cached_dt.tzinfo is None:
-                            cached_dt = cached_dt.replace(tzinfo=self.timezone)
-                        age_days = (datetime.now(self.timezone) - cached_dt).total_seconds() / 86400
-                        is_stale = age_days >= 3
-                    except Exception:
-                        pass
-                cached['source'] = 'cache'
-                cached['stale'] = is_stale
-                if is_stale:
-                    pulse_logger.log(f"⚠️ VXN — cache is stale ({ts}), will be excluded from macro score", level="WARNING")
-                else:
-                    pulse_logger.log(f"⚠️ VXN — using recent file cache: {cached.get('value')} (stale=False)", level="WARNING")
-                return cached
-            pulse_logger.log("⚠️ VXN — no cache available, defaulting to 20.0", level="WARNING")
-            return {'value': 20.0, 'previous': 20.0, 'change': 0, 'change_pct': 0, 'signal': 'neutral', 'source': 'default', 'stale': False}
+        return self._read_intraday_value('VXN', VXN_SESSION_FILE, self._load_vxn_cache, self._vxn_signal)
+
+    # -- Fear & Greed --------------------------------------------------------
 
     def _save_fg_cache(self, fg_data):
         try:
@@ -266,6 +424,7 @@ class MacroSentimentPipeline:
                 'vxn': vxn,
                 'fear_greed': fear_greed,
                 'pillar_score': score,
+                'intraday_warning': bool(vix.get('intraday_warning') or vxn.get('intraday_warning')),
                 'status': 'live'
             }
             cache.save(self.cache_key, result)
