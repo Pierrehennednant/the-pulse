@@ -129,18 +129,6 @@ def run_pulse():
         )
         bias_score['recommendation_prop'] = prop_recommendation
 
-        # Quiet/standard week log — derived from compute_prop_firm() result, not cache file
-        if isinstance(prop_recommendation, dict):
-            _is_quiet = prop_recommendation.get('quiet_week', False)
-            _ec_weight = prop_recommendation.get('ec_weight', 30)
-            _bias_thr = prop_recommendation.get('bias_threshold', bias_threshold)
-            _red_days = formatted_data.get('economic', {}).get('red_folder_days', 0)
-            _day_s = 'day' if _red_days == 1 else 'days'
-            if _is_quiet:
-                pulse_logger.log(f"🔇 Quiet week active — {_red_days} red folder {_day_s} — EC {_ec_weight}%, bias ±{_bias_thr}")
-            else:
-                pulse_logger.log(f"📅 Standard week — {_red_days} red folder {_day_s} — EC {_ec_weight}%, bias ±{_bias_thr}")
-
         weekly_summary_pipeline.fetch(formatted_data=formatted_data, bias=bias_score)
         snapshot_id = snapshot_generator.save(bias_score, formatted_data)
         pulse_logger.log(f"✅ Pulse updated | {bias_score['bias_emoji']} {bias_score['bias']} | Confidence: {bias_score['confidence']}% | Snapshot: {snapshot_id}")
