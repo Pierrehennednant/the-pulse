@@ -39,15 +39,24 @@ class GeopoliticalPipeline:
         self._seed_classifications()
         self._purge_blocked_from_cache()
         self.market_keywords = [
-            'federal reserve', 'fomc', 'interest rate', 'rate hike', 'rate cut',
+            'federal reserve', 'fomc', 'interest rate', 'interest rates',
+            'rate hike', 'rate hikes', 'rate cut', 'rate cuts',
             'powell', 'inflation', 'cpi', 'ppi', 'gdp', 'jobs report', 'nonfarm',
-            'tariff', 'trade war', 'sanctions', 'debt ceiling', 'government shutdown',
+            'tariff', 'tariffs', 'trade war', 'trade wars',
+            'sanctions', 'sanction', 'sanctioned', 'sanctioning',
+            'debt ceiling', 'government shutdown',
             'treasury', 'federal budget', 'deficit',
-            'war', 'military', 'nuclear', 'attack', 'missile', 'troops', 'invasion',
-            'ceasefire', 'peace deal', 'escalation', 'strait of hormuz',
+            'war', 'wars', 'military', 'nuclear',
+            'attack', 'attacks', 'attacked', 'attacking',
+            'missile', 'missiles', 'troops',
+            'invasion', 'invade', 'invades', 'invaded', 'invading',
+            'ceasefire', 'peace deal', 'peace deals',
+            'escalation', 'escalate', 'escalates', 'escalated', 'escalating',
+            'strait of hormuz',
             'iran', 'russia', 'china', 'nato', 'israel', 'ukraine',
-            'recession', 'unemployment', 'oil price', 'energy crisis',
-            'supply chain', 'bank failure', 'default', 'currency crisis',
+            'recession', 'unemployment', 'oil price', 'oil prices', 'energy crisis',
+            'supply chain', 'bank failure', 'bank failures',
+            'default', 'defaulted', 'defaulting', 'currency crisis',
             'stock market', 'market crash', 'bear market', 'bull market'
         ]
         self.ignore_keywords = [
@@ -1376,13 +1385,25 @@ CONTEXT: {context}"""
     def identify_flags(self, items):
         flags = []
         high_impact_keywords = {
-            'nuclear': 95, 'war': 90, 'invasion': 92, 'missile': 88,
-            'attack': 85, 'bomb': 85, 'default': 85, 'fomc': 85,
-            'rate hike': 80, 'rate cut': 80, 'powell': 78,
-            'federal reserve': 78, 'tariff': 80, 'debt ceiling': 80,
-            'shutdown': 75, 'sanctions': 75, 'troops': 78,
-            'recession': 75, 'ceasefire': 70, 'deal': 65,
-            'agreement': 65, 'escalation': 72, 'inflation': 70,
+            'nuclear': 95,
+            'war': 90, 'wars': 90,
+            'invasion': 92, 'invade': 92, 'invades': 92, 'invaded': 92, 'invading': 92,
+            'missile': 88, 'missiles': 88,
+            'attack': 85, 'attacks': 85, 'attacked': 85, 'attacking': 85,
+            'bomb': 85, 'bombs': 85, 'bombing': 85, 'bombed': 85,
+            'default': 85, 'defaulted': 85, 'defaulting': 85,
+            'fomc': 85,
+            'rate hike': 80, 'rate hikes': 80, 'rate cut': 80, 'rate cuts': 80,
+            'powell': 78,
+            'federal reserve': 78, 'tariff': 80, 'tariffs': 80, 'debt ceiling': 80,
+            'shutdown': 75,
+            'sanctions': 75, 'sanction': 75, 'sanctioned': 75, 'sanctioning': 75,
+            'troops': 78,
+            'recession': 75, 'ceasefire': 70,
+            'deal': 65, 'deals': 65,
+            'agreement': 65, 'agreements': 65,
+            'escalation': 72, 'escalate': 72, 'escalates': 72, 'escalated': 72, 'escalating': 72,
+            'inflation': 70,
             'gdp': 68, 'jobs': 67
         }
         low_quality_sources = [
@@ -1443,13 +1464,25 @@ CONTEXT: {context}"""
     def _get_article_priority(self, item):
         """Return keyword-based flag priority for an article (0 = no qualifying keyword)."""
         _keywords = {
-            'nuclear': 95, 'war': 90, 'invasion': 92, 'missile': 88,
-            'attack': 85, 'bomb': 85, 'default': 85, 'fomc': 85,
-            'rate hike': 80, 'rate cut': 80, 'powell': 78,
-            'federal reserve': 78, 'tariff': 80, 'debt ceiling': 80,
-            'shutdown': 75, 'sanctions': 75, 'troops': 78,
-            'recession': 75, 'ceasefire': 70, 'deal': 65,
-            'agreement': 65, 'escalation': 72, 'inflation': 70,
+            'nuclear': 95,
+            'war': 90, 'wars': 90,
+            'invasion': 92, 'invade': 92, 'invades': 92, 'invaded': 92, 'invading': 92,
+            'missile': 88, 'missiles': 88,
+            'attack': 85, 'attacks': 85, 'attacked': 85, 'attacking': 85,
+            'bomb': 85, 'bombs': 85, 'bombing': 85, 'bombed': 85,
+            'default': 85, 'defaulted': 85, 'defaulting': 85,
+            'fomc': 85,
+            'rate hike': 80, 'rate hikes': 80, 'rate cut': 80, 'rate cuts': 80,
+            'powell': 78,
+            'federal reserve': 78, 'tariff': 80, 'tariffs': 80, 'debt ceiling': 80,
+            'shutdown': 75,
+            'sanctions': 75, 'sanction': 75, 'sanctioned': 75, 'sanctioning': 75,
+            'troops': 78,
+            'recession': 75, 'ceasefire': 70,
+            'deal': 65, 'deals': 65,
+            'agreement': 65, 'agreements': 65,
+            'escalation': 72, 'escalate': 72, 'escalates': 72, 'escalated': 72, 'escalating': 72,
+            'inflation': 70,
             'gdp': 68, 'jobs': 67
         }
         _low_quality = [
