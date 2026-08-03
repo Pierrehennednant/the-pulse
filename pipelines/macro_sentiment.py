@@ -203,12 +203,18 @@ class MacroSentimentPipeline:
                 return slot, entry
         return None, None
 
-    def _apply_fallback(self, session, slot_idx, symbol, fred_cache_loader, slot, reason):
+    def _apply_fallback(self, session, slot_idx, symbol, fred_cache_loader, slot, reason, is_skip=False):
         """Resolve this slot's value via Level-2 (same-day session-cache lookback)
         then Level-3 (FRED prior-day close) fallback, and log the outcome.
         Shared by both the real-failure path and the conditional-skip path in
         run_scheduled_pull() — the resolution logic is identical, only the
-        leading `reason` phrase in the log line differs."""
+        leading `reason` phrase and log symbol differ.
+
+        is_skip=True means this is the deliberate conditional-skip case (a prior
+        slot already captured a live value today) — a success-path outcome, not
+        a failure, so it logs with "↺" rather than "⚠️". is_skip=False means a
+        real yfinance attempt failed, which is a genuine fallback and keeps "⚠️"."""
+        symbol_emoji = "↺" if is_skip else "⚠️"
         fb_slot, fb_entry = self._resolve_slot_fallback(session, slot_idx)
         if fb_entry:
             session['slots'][slot] = {
@@ -217,7 +223,7 @@ class MacroSentimentPipeline:
                 'source': f'session-cache ({fb_slot})'
             }
             pulse_logger.log(
-                f"⚠️ {symbol} — {slot} {reason}, using {fb_slot} cached data "
+                f"{symbol_emoji} {symbol} — {slot} {reason}, using {fb_slot} cached data "
                 f"({fb_entry['value']}, from {fb_entry['timestamp']})"
             )
             return True
@@ -231,6 +237,9 @@ class MacroSentimentPipeline:
                 'timestamp': fred_ts,
                 'source': 'fred-prior-day'
             }
+            # Always ⚠️ here — reaching FRED means no live value exists today at
+            # all, a genuine fallback regardless of which path (skip or real
+            # failure) got us here.
             pulse_logger.log(
                 f"⚠️ {symbol} — {slot} {reason}, no live data today, using FRED prior-day close "
                 f"({fred_val}, from {fred_ts})"
@@ -275,7 +284,8 @@ class MacroSentimentPipeline:
                 # value today — skip the yfinance call, no effect on
                 # consecutive_failures (this is not a failure).
                 self._apply_fallback(session, slot_idx, symbol, fred_cache_loader, slot,
-                                      reason="skipped (live value already captured earlier today)")
+                                      reason="skipped (live value already captured earlier today)",
+                                      is_skip=True)
             else:
                 value = self._yfinance_pull(ticker, f"{symbol} {slot}")
                 if value is not None:
