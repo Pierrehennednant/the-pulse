@@ -1149,6 +1149,11 @@ CONTEXT: {context}"""
             if self.is_article_too_old(i.get('published_at', '')):
                 pulse_logger.log(f"🕐 Age cutoff (keyword fallback): {i['headline'][:80]}")
                 continue
+            # Explicit marker (not inferred from missing haiku_tier/gemini_direction,
+            # which a genuinely Haiku-confirmed item can also lack in rare malformed-
+            # response cases) — this is the sole signal calculate_score() and
+            # identify_flags() use to treat an item as not-yet-confirmed.
+            i['keyword_fallback_only'] = True
             keyword_passed.append(i)
 
         # Return immediately — known relevant + keyword-passed new articles.
@@ -1318,6 +1323,23 @@ CONTEXT: {context}"""
                             and new_items[r['id'] - 1]['headline'] not in duplicate_headlines
                         ]
                         self.update_pinned_store(new_items, filtered_classifications)
+
+                        # Re-merge into the pillar cache immediately rather than
+                        # waiting for the next full fetch_news() cycle. Without
+                        # this, a keyword-fallback article that Haiku just
+                        # confirmed or rejected (gemini_cache above is already
+                        # up to date) would sit unpromoted/undropped in the
+                        # already-served pillar cache for up to the 3-minute
+                        # freshness window plus however long until the next
+                        # scheduled cycle.
+                        try:
+                            pillar_cached = cache.load(self.cache_key)
+                            if pillar_cached:
+                                refreshed = self._refresh_cached_data(pillar_cached['data'])
+                                cache.save(self.cache_key, refreshed)
+                        except Exception as e:
+                            pulse_logger.log(f"⚠️ Background classify — failed to re-merge into pillar cache: {e}", level="WARNING")
+
                         pulse_logger.log(f"✅ Haiku background done — {len(classifications)} articles classified with summaries")
                 except Exception as e:
                     pulse_logger.log(f"⚠️ Background Haiku failed: {e}", level="WARNING")
@@ -1382,6 +1404,14 @@ CONTEXT: {context}"""
             if priority >= 65:
                 if any(ts in source for ts in trusted_sources):
                     priority = min(priority + 5, 99)
+                if item.get('keyword_fallback_only'):
+                    # Not yet Haiku-confirmed — show as pending rather than a
+                    # directional badge derived from the HF sentiment model,
+                    # which is exactly the guess that produced the false
+                    # "Bearish" read this display change is meant to prevent.
+                    predicted_impact = 'pending classification'
+                else:
+                    predicted_impact = item.get('gemini_direction') if item.get('gemini_direction') else ('bearish' if item['sentiment_score'] < -0.3 else 'bullish' if item['sentiment_score'] > 0.3 else 'neutral')
                 flags.append({
                     'title': item['headline'],
                     'priority': priority,
@@ -1392,7 +1422,7 @@ CONTEXT: {context}"""
                     'timestamp': item['timestamp'],
                     'link': item['link'],
                     'sentiment': item['sentiment_score'],
-                    'predicted_impact': item.get('gemini_direction') if item.get('gemini_direction') else ('bearish' if item['sentiment_score'] < -0.3 else 'bullish' if item['sentiment_score'] > 0.3 else 'neutral'),
+                    'predicted_impact': predicted_impact,
                     'context': item.get('description', '')
                 })
 
@@ -1453,8 +1483,17 @@ CONTEXT: {context}"""
         total_weight = 0.0
         haiku_tier_count = 0
         fallback_tier_count = 0
+        pending_count = 0
         tier_map = {1: (1.7, 4.0), 2: (0.75, 2.0), 3: (0.35, 1.0)}
         for item in items:
+            # Keyword-fallback-only articles (no Haiku confirmation yet) never
+            # contribute to the score — a pure keyword match is not a confirmed
+            # classification. They stay visible (identify_flags() shows them as
+            # "Pending Classification") and get promoted to normal scoring once
+            # Haiku confirms or dropped entirely if Haiku rejects them.
+            if item.get('keyword_fallback_only'):
+                pending_count += 1
+                continue
             # Direction
             direction = item.get('gemini_direction')
             if direction == 'bullish':
@@ -1507,6 +1546,8 @@ CONTEXT: {context}"""
                 f"📊 Geo tier source ratio — Haiku: {haiku_tier_count}/{tiered_count} "
                 f"({round(haiku_tier_count / tiered_count * 100)}%) | Keyword fallback: {fallback_tier_count}/{tiered_count}"
             )
+        if pending_count:
+            pulse_logger.log(f"⏳ Geo — {pending_count} article(s) excluded from score, pending Haiku classification")
         if total_weight == 0:
             return 0.0
         return round(max(-2.0, min(2.0, weighted_sum / total_weight)), 2)
@@ -1612,14 +1653,23 @@ CONTEXT: {context}"""
 
     def _merge_fresh_classifications(self, all_items):
         """Pick up Haiku classification results that landed in
-        gemini_classifications.json (via _reclassify_cached_pending()'s
-        background thread, or a live fetch_news() run) but never made it back
-        into this cached fetch() result. _classify()'s background thread only
-        writes the raw classification file — it does not touch the pillar
-        cache that stores news_items/all_items/pillar_score — so a
-        successfully-reclassified article stays stuck showing stale
-        keyword-fallback data for as long as fetch_news() keeps returning
-        empty and this cache-serving path is what's actually being hit."""
+        gemini_classifications.json (via background_classify(),
+        _reclassify_cached_pending(), or daily_relevance_revalidation()) but
+        never made it back into this cached fetch() result.
+
+        Only items explicitly marked keyword_fallback_only are candidates —
+        not "any item missing haiku_tier/gemini_direction", since a
+        genuinely Haiku-confirmed item can rarely lack both (e.g. a
+        malformed direction in an otherwise-relevant response) and would be
+        wrongly treated as still-pending by that inference.
+
+        Three outcomes per pending item:
+        - No cache entry yet → still pending, left untouched.
+        - Haiku rejected it (relevant: false) → dropped from the list
+          entirely, same as it would never have entered known_relevant.
+        - Haiku confirmed it (relevant: true, confidence >= 0.75) → fields
+          merged in and keyword_fallback_only cleared, promoting it to
+          normal scoring."""
         if not all_items:
             return all_items, 0
         gemini_cache_file = "/data/gemini_classifications.json"
@@ -1632,13 +1682,20 @@ CONTEXT: {context}"""
         except Exception:
             return all_items, 0
 
+        kept = []
         updated = 0
         for item in all_items:
-            if item.get('pinned') or item.get('haiku_tier') or item.get('gemini_direction'):
-                continue  # already has real classification, nothing to merge
-            cached = gc.get(item.get('headline', ''), {})
-            if not cached or not cached.get('relevant'):
+            if not item.get('keyword_fallback_only'):
+                kept.append(item)
                 continue
+            cached = gc.get(item.get('headline', ''), {})
+            if not cached:
+                kept.append(item)  # Haiku hasn't classified it yet — still pending
+                continue
+            if not cached.get('relevant') or cached.get('confidence', 0) < 0.75:
+                pulse_logger.log(f"🔄 Cache refresh — Haiku rejected as not relevant, dropping: '{item.get('headline', '')[:60]}'")
+                updated += 1
+                continue  # drop — matches how known_relevant would never have included it
             if cached.get('direction'):
                 direction = cached['direction']
                 item['sentiment_score'] = 0.8 if direction == 'bullish' else -0.8 if direction == 'bearish' else 0.0
@@ -1651,9 +1708,11 @@ CONTEXT: {context}"""
                 item['haiku_tier'] = cached['tier']
             if cached.get('tier_reasoning'):
                 item['haiku_tier_reasoning'] = cached['tier_reasoning']
-            pulse_logger.log(f"🔄 Cache refresh — picked up fresh classification: '{item.get('headline', '')[:60]}'")
+            item['keyword_fallback_only'] = False
+            pulse_logger.log(f"🔄 Cache refresh — picked up fresh classification, promoted to scoring: '{item.get('headline', '')[:60]}'")
             updated += 1
-        return all_items, updated
+            kept.append(item)
+        return kept, updated
 
     def _refresh_cached_data(self, data):
         """Bring a cached fetch() result up to date before serving it:
