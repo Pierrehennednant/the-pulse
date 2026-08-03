@@ -1510,22 +1510,64 @@ CONTEXT: {context}"""
             kept.append(item)
         return kept, removed
 
-    def _apply_blocklist_to_cached_data(self, data):
-        """Re-filter a cached fetch() result against the CURRENT blocklist
-        state before serving it, so a blocklist add takes effect immediately
-        on every cache-fallback path — not just on the next successful live
-        fetch_news() call. Recomputes active_flags/pillar_score from the
-        filtered list when anything was actually removed.
+    def _merge_fresh_classifications(self, all_items):
+        """Pick up Haiku classification results that landed in
+        gemini_classifications.json (via _reclassify_cached_pending()'s
+        background thread, or a live fetch_news() run) but never made it back
+        into this cached fetch() result. _classify()'s background thread only
+        writes the raw classification file — it does not touch the pillar
+        cache that stores news_items/all_items/pillar_score — so a
+        successfully-reclassified article stays stuck showing stale
+        keyword-fallback data for as long as fetch_news() keeps returning
+        empty and this cache-serving path is what's actually being hit."""
+        if not all_items:
+            return all_items, 0
+        gemini_cache_file = "/data/gemini_classifications.json"
+        try:
+            if os.path.exists(gemini_cache_file):
+                with open(gemini_cache_file, 'r') as f:
+                    gc = json.load(f)
+            else:
+                return all_items, 0
+        except Exception:
+            return all_items, 0
 
-        Operates on `all_items` (the full scoring set fetch() now persists),
-        not the top-10 `news_items` display slice — a blocklisted article
-        ranked below the top 10 is still caught and still moves the score,
-        which a top-10-only filter would silently miss. Falls back to
-        `news_items` for any cache entry saved before this field existed
-        (until the next successful live fetch_news() rewrites it)."""
+        updated = 0
+        for item in all_items:
+            if item.get('pinned') or item.get('haiku_tier') or item.get('gemini_direction'):
+                continue  # already has real classification, nothing to merge
+            cached = gc.get(item.get('headline', ''), {})
+            if not cached or not cached.get('relevant'):
+                continue
+            if cached.get('direction'):
+                direction = cached['direction']
+                item['sentiment_score'] = 0.8 if direction == 'bullish' else -0.8 if direction == 'bearish' else 0.0
+                item['gemini_direction'] = direction
+            if cached.get('summary'):
+                item['description'] = cached['summary']
+            if cached.get('confidence') is not None:
+                item['haiku_confidence'] = cached['confidence']
+            if cached.get('tier') in (1, 2, 3):
+                item['haiku_tier'] = cached['tier']
+            if cached.get('tier_reasoning'):
+                item['haiku_tier_reasoning'] = cached['tier_reasoning']
+            pulse_logger.log(f"🔄 Cache refresh — picked up fresh classification: '{item.get('headline', '')[:60]}'")
+            updated += 1
+        return all_items, updated
+
+    def _refresh_cached_data(self, data):
+        """Bring a cached fetch() result up to date before serving it:
+        1) merge in any Haiku classification that arrived since this snapshot
+           was cached but never made it back into the served item list, and
+        2) re-filter against the current blocklist state.
+        Operates on `all_items` (the full scoring set), not the top-10
+        `news_items` display slice, and falls back to `news_items` for any
+        cache entry saved before `all_items` existed. Recomputes
+        active_flags/pillar_score/news_items if either step changed anything."""
         all_items = data.get('all_items', data.get('news_items', []))
+        all_items, merged = self._merge_fresh_classifications(all_items)
         filtered, removed = self._filter_blocklisted_items(all_items)
-        if not removed:
+        if not merged and not removed:
             return data
         flags = self.identify_flags(filtered)
         score = self.calculate_score(filtered, flags)
@@ -1534,9 +1576,10 @@ CONTEXT: {context}"""
         data['active_flags'] = flags
         data['total_items'] = len(filtered)
         data['pillar_score'] = score
-        pulse_logger.log(
-            f"🚫 Cache fallback — removed {removed} blocklisted item(s), score recomputed: {score}"
-        )
+        if merged:
+            pulse_logger.log(f"🔄 Cache refresh — merged {merged} newly-classified article(s), score recomputed: {score}")
+        if removed:
+            pulse_logger.log(f"🚫 Cache fallback — removed {removed} blocklisted item(s), score recomputed: {score}")
         return data
 
     def fetch(self):
@@ -1545,7 +1588,7 @@ CONTEXT: {context}"""
             age_minutes = cache.get_age_minutes(self.cache_key)
             if existing and age_minutes < 3:
                 pulse_logger.log("↺ Geopolitical — using cache (TheNewsAPI refresh every 3min)")
-                return self._apply_blocklist_to_cached_data(existing['data'])
+                return self._refresh_cached_data(existing['data'])
 
             items = self.fetch_news()
 
@@ -1554,7 +1597,7 @@ CONTEXT: {context}"""
                 if existing:
                     self._reclassify_cached_pending(existing['data'].get('all_items', existing['data'].get('news_items', [])))
                     existing['data']['status'] = 'cached'
-                    return self._apply_blocklist_to_cached_data(existing['data'])
+                    return self._refresh_cached_data(existing['data'])
                 pinned = self.load_pinned_stories()
                 if pinned:
                     pulse_logger.log(f"⚠️ Geopolitical — News API unavailable and no cache, using {len(pinned)} pinned stories only", level="WARNING")
@@ -1594,7 +1637,7 @@ CONTEXT: {context}"""
             cached = cache.load(self.cache_key)
             if cached:
                 cached['data']['status'] = 'stale'
-                return self._apply_blocklist_to_cached_data(cached['data'])
+                return self._refresh_cached_data(cached['data'])
             return None
 
 geopolitical_pipeline = GeopoliticalPipeline()
