@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import threading
 import requests
 import concurrent.futures
@@ -842,21 +843,31 @@ CONTEXT: {context}"""
 
     # ── Existing methods (unchanged) ────────────────────────────────────────
 
+    @staticmethod
+    def _keyword_matches(text_lower, keyword):
+        """Whole-word/whole-phrase match — keyword must not be embedded inside
+        a longer word (e.g. 'war' inside 'Edwards', 'rate hike' inside
+        'corporate hike'). \\b boundaries are evaluated only at the start/end
+        of the matched substring, so this works correctly for multi-word
+        phrases too — the internal space in 'rate hike' is matched literally,
+        no special handling needed."""
+        return re.search(r'\b' + re.escape(keyword) + r'\b', text_lower) is not None
+
     def is_market_relevant(self, text):
         if not text:
             return False
         text_lower = text.lower()
-        
+
         # Layer 1 — blocklist: explicit noise, always reject
         for ignore in self.ignore_keywords:
-            if ignore in text_lower:
+            if self._keyword_matches(text_lower, ignore):
                 return False
-        
+
         # Layer 2 — allowlist: must contain at least one market keyword to proceed
-        has_market_keyword = any(keyword in text_lower for keyword in self.market_keywords)
+        has_market_keyword = any(self._keyword_matches(text_lower, keyword) for keyword in self.market_keywords)
         if not has_market_keyword:
             return False
-        
+
         return True
 
     def get_sentiment_score(self, text):
@@ -1397,7 +1408,7 @@ CONTEXT: {context}"""
             priority = 0
             flag_type = None
             for keyword, score in high_impact_keywords.items():
-                if keyword in text:
+                if self._keyword_matches(text, keyword):
                     if score > priority:
                         priority = score
                         flag_type = keyword
@@ -1460,7 +1471,7 @@ CONTEXT: {context}"""
             return 0
         priority = 0
         for keyword, kw_score in _keywords.items():
-            if keyword in text:
+            if self._keyword_matches(text, keyword):
                 if kw_score > priority:
                     priority = kw_score
         if priority >= 65 and any(ts in source for ts in _trusted):
