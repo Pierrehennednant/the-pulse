@@ -19,7 +19,12 @@ VIX_SESSION_FILE = '/data/vix_intraday_session.json'
 VXN_SESSION_FILE = '/data/vxn_intraday_session.json'
 
 # Scheduled intraday pull slots (ET) — main.py registers one scheduled job per slot.
-INTRADAY_SLOTS = ["09:15", "09:25", "09:45", "10:30"]
+INTRADAY_SLOTS = ["09:40", "09:45", "09:55", "10:30"]
+# 09:40 and 10:30 always attempt a live yfinance pull. 09:45 and 09:55 are
+# conditional — they only attempt yfinance if no same-day slot has yet
+# captured a real live value; otherwise they skip the live call and just
+# carry the existing value forward via the session-cache fallback path.
+ALWAYS_LIVE_SLOTS = {"09:40", "10:30"}
 VALID_RANGE = (5.0, 100.0)  # sane bounds for both VIX and VXN
 
 class MacroSentimentPipeline:
@@ -198,62 +203,93 @@ class MacroSentimentPipeline:
                 return slot, entry
         return None, None
 
+    def _apply_fallback(self, session, slot_idx, symbol, fred_cache_loader, slot, reason):
+        """Resolve this slot's value via Level-2 (same-day session-cache lookback)
+        then Level-3 (FRED prior-day close) fallback, and log the outcome.
+        Shared by both the real-failure path and the conditional-skip path in
+        run_scheduled_pull() — the resolution logic is identical, only the
+        leading `reason` phrase in the log line differs."""
+        fb_slot, fb_entry = self._resolve_slot_fallback(session, slot_idx)
+        if fb_entry:
+            session['slots'][slot] = {
+                'value': fb_entry['value'],
+                'timestamp': fb_entry['timestamp'],
+                'source': f'session-cache ({fb_slot})'
+            }
+            pulse_logger.log(
+                f"⚠️ {symbol} — {slot} {reason}, using {fb_slot} cached data "
+                f"({fb_entry['value']}, from {fb_entry['timestamp']})"
+            )
+            return True
+        fred_file = fred_cache_loader()
+        fred_key = 'vix' if symbol == 'VIX' else 'vxn'
+        if fred_file and fred_file.get(fred_key, {}).get('value') is not None:
+            fred_val = fred_file[fred_key]['value']
+            fred_ts = fred_file.get('timestamp', '')
+            session['slots'][slot] = {
+                'value': fred_val,
+                'timestamp': fred_ts,
+                'source': 'fred-prior-day'
+            }
+            pulse_logger.log(
+                f"⚠️ {symbol} — {slot} {reason}, no live data today, using FRED prior-day close "
+                f"({fred_val}, from {fred_ts})"
+            )
+            return True
+        pulse_logger.log(f"⚠️ {symbol} — {slot} {reason} and no fallback available", level="WARNING")
+        return False
+
     def run_scheduled_pull(self, slot):
-        """Called by the 4 scheduled jobs (9:15/9:25/9:45/10:30 ET, registered in
-        main.py). Pulls yfinance for VIX and VXN with retries, falls back per the
-        documented hierarchy (session-cache -> FRED prior-day close), tracks
-        consecutive failures for the UI warning, and freezes the day's reading
-        after the 10:30 slot."""
+        """Called by the 4 scheduled jobs (9:40/9:45/9:55/10:30 ET, registered in
+        main.py).
+
+        9:40 and 10:30 always attempt a live yfinance pull. 9:45 and 9:55 are
+        conditional: each only calls yfinance if no same-day slot has yet
+        captured a real live value (i.e. the prior attempt(s) failed) — if a
+        live value already exists today, the slot skips the API call entirely
+        and just carries that value forward via the session-cache fallback.
+
+        Falls back per the documented hierarchy (session-cache -> FRED
+        prior-day close), tracks consecutive REAL failures for the UI warning
+        (skipped slots never count as failures), and freezes the day's
+        reading after the 10:30 slot."""
         if slot not in INTRADAY_SLOTS:
             pulse_logger.log(f"⚠️ Unknown intraday slot '{slot}' — skipping", level="WARNING")
             return
         slot_idx = INTRADAY_SLOTS.index(slot)
+        always_live = slot in ALWAYS_LIVE_SLOTS
 
         for symbol, ticker, session_file, fred_cache_loader in (
             ('VIX', '^VIX', VIX_SESSION_FILE, self._load_vix_cache),
             ('VXN', '^VXN', VXN_SESSION_FILE, self._load_vxn_cache),
         ):
             session = self._load_session(session_file)
-            value = self._yfinance_pull(ticker, f"{symbol} {slot}")
+            already_live_today = any(
+                entry and entry.get('source') == 'yfinance'
+                for entry in session['slots'].values()
+            )
+            attempt_live = always_live or not already_live_today
 
-            if value is not None:
-                session['slots'][slot] = {
-                    'value': value,
-                    'timestamp': datetime.now(self.timezone).isoformat(),
-                    'source': 'yfinance'
-                }
-                session['consecutive_failures'] = 0
-                pulse_logger.log(f"✓ {symbol} — yfinance {slot} pull: {value}")
+            if not attempt_live:
+                # Conditional slot, prior slot already captured a real live
+                # value today — skip the yfinance call, no effect on
+                # consecutive_failures (this is not a failure).
+                self._apply_fallback(session, slot_idx, symbol, fred_cache_loader, slot,
+                                      reason="skipped (live value already captured earlier today)")
             else:
-                session['consecutive_failures'] = session.get('consecutive_failures', 0) + 1
-                fb_slot, fb_entry = self._resolve_slot_fallback(session, slot_idx)
-                if fb_entry:
+                value = self._yfinance_pull(ticker, f"{symbol} {slot}")
+                if value is not None:
                     session['slots'][slot] = {
-                        'value': fb_entry['value'],
-                        'timestamp': fb_entry['timestamp'],
-                        'source': f'session-cache ({fb_slot})'
+                        'value': value,
+                        'timestamp': datetime.now(self.timezone).isoformat(),
+                        'source': 'yfinance'
                     }
-                    pulse_logger.log(
-                        f"⚠️ {symbol} — {slot} pull failed, using {fb_slot} cached data "
-                        f"({fb_entry['value']}, from {fb_entry['timestamp']})"
-                    )
+                    session['consecutive_failures'] = 0
+                    pulse_logger.log(f"✓ {symbol} — yfinance {slot} pull: {value}")
                 else:
-                    fred_file = fred_cache_loader()
-                    fred_key = 'vix' if symbol == 'VIX' else 'vxn'
-                    if fred_file and fred_file.get(fred_key, {}).get('value') is not None:
-                        fred_val = fred_file[fred_key]['value']
-                        fred_ts = fred_file.get('timestamp', '')
-                        session['slots'][slot] = {
-                            'value': fred_val,
-                            'timestamp': fred_ts,
-                            'source': 'fred-prior-day'
-                        }
-                        pulse_logger.log(
-                            f"⚠️ {symbol} — no live data today, using FRED prior-day close "
-                            f"({fred_val}, from {fred_ts})"
-                        )
-                    else:
-                        pulse_logger.log(f"⚠️ {symbol} — {slot} pull failed and no fallback available", level="WARNING")
+                    session['consecutive_failures'] = session.get('consecutive_failures', 0) + 1
+                    self._apply_fallback(session, slot_idx, symbol, fred_cache_loader, slot,
+                                          reason="pull failed")
 
             session['intraday_warning'] = session.get('consecutive_failures', 0) >= 2
 

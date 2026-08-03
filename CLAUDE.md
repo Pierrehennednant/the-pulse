@@ -132,13 +132,30 @@ Score is rounded (not truncated) to match CNN's own display rounding.
 
 ## VIX/VXN Intraday Pulls (`pipelines/macro_sentiment.py`)
 
-Live VIX/VXN values come from **yfinance** (`^VIX`, `^VXN`) via 4 scheduled pulls per
-day, not FRED — FRED is now a fallback-only source. Scheduled at **9:15, 9:25, 9:45,
+Live VIX/VXN values come from **yfinance** (`^VIX`, `^VXN`) via 4 scheduled slots per
+day, not FRED — FRED is now a fallback-only source. Scheduled at **9:40, 9:45, 9:55,
 and 10:30 AM ET** (`INTRADAY_SLOTS`), registered in `main.py`'s `run_scheduler()` via
 `schedule.every().day.at(slot, TIMEZONE)`.
 
-**Per-pull retry:** 3 attempts total (1 initial + 2 retries), backoff 3s then 5s,
-before a slot is marked failed.
+**Not all 4 slots call yfinance — two are conditional retries:**
+- **9:40 (always live):** primary pull, always attempts yfinance.
+- **9:45 (conditional):** only calls yfinance if no same-day slot has yet captured
+  a real live value (i.e. 9:40 failed). If 9:40 succeeded, 9:45 skips the API call
+  entirely and carries the 9:40 value forward via the session-cache fallback path
+  — logged as `↺ skipped (live value already captured earlier today)`, and does
+  **not** count toward `consecutive_failures`.
+- **9:55 (conditional):** same rule — only calls yfinance if both 9:40 and 9:45
+  failed to capture a live value.
+- **10:30 (always live):** planned refresh, always attempts a fresh pull
+  regardless of earlier outcomes, then freezes.
+
+`ALWAYS_LIVE_SLOTS = {"09:40", "10:30"}` in `pipelines/macro_sentiment.py` marks
+which slots skip the conditional check. `run_scheduled_pull()` determines
+`already_live_today` by scanning the session's slots for any entry with
+`source == 'yfinance'`.
+
+**Per-pull retry:** for a slot that does attempt yfinance, 3 attempts total (1
+initial + 2 retries), backoff 3s then 5s, before that slot is marked a real failure.
 
 **Validation ("sane" value):** not None, not NaN, and within **5.0–100.0**. Anything
 outside this range is treated as a failed pull, not a bad reading.
@@ -157,16 +174,19 @@ outside this range is treated as a failed pull, not a bad reading.
 cache. Resets automatically when the stored date rolls over. Tracks all 4 slots,
 `consecutive_failures`, and freeze state.
 
-**UI warning:** after the **2nd consecutive same-day failure** (9:15 and 9:25 both
-failed), `intraday_warning: true` is set and the dashboard shows "⚠️ Live VIX/VXN
-data unavailable — using [fallback source]" in the Macro Sentiment pillar. Not shown
+**UI warning:** `consecutive_failures` only increments on a **real** yfinance attempt
+that fails — a conditionally-skipped slot never increments it. After the **2nd
+consecutive real failure** (9:40 and 9:45 both actually attempted and failed —
+which also means 9:55 will attempt next, since no live value exists yet),
+`intraday_warning: true` is set and the dashboard shows "⚠️ Live VIX/VXN data
+unavailable — using [fallback source]" in the Macro Sentiment pillar. Not shown
 after only the first failure. Clears immediately on the next successful pull.
 
 **Freeze:** immediately after the 10:30 slot resolves (success or fallback), that
 value is frozen for the rest of the day (`frozen: true`, `frozen_value`, `frozen_at`).
 The regular 5-minute refresh cycle (`fetch_vix()`/`fetch_vxn()`) becomes a passive
 reader after this — no further yfinance or FRED calls until the session resets at
-the next 9:15 AM ET slot.
+the next 9:40 AM ET slot.
 
 **Daily FRED refresh:** a 5th scheduled job, once daily at **4:35 PM ET**
 (`daily_fred_refresh()`), independent of the intraday pulls — keeps `/data/vix_cache.json`
@@ -303,8 +323,8 @@ Haiku assigns tier, direction, confidence, and reasoning for every geo article a
 | `/data/snapshots/daily/` | Daily 4 PM closing snapshots | Last 10 |
 | `/data/vix_cache.json` | VIX Level-3 fallback (FRED prior-day close) | Refreshed daily 4:35 PM ET |
 | `/data/vxn_cache.json` | VXN Level-3 fallback (FRED prior-day close) | Refreshed daily 4:35 PM ET |
-| `/data/vix_intraday_session.json` | VIX today's 4 scheduled yfinance pulls + freeze state | Resets at 9:15 AM ET |
-| `/data/vxn_intraday_session.json` | VXN today's 4 scheduled yfinance pulls + freeze state | Resets at 9:15 AM ET |
+| `/data/vix_intraday_session.json` | VIX today's 4 scheduled yfinance pulls + freeze state | Resets at 9:40 AM ET |
+| `/data/vxn_intraday_session.json` | VXN today's 4 scheduled yfinance pulls + freeze state | Resets at 9:40 AM ET |
 | `/data/fear_greed_cache.json` | Fear & Greed fallback cache | Until next fetch |
 
 ## Project Layout

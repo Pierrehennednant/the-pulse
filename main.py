@@ -152,7 +152,8 @@ def run_scheduler():
     schedule.every(REFRESH_INTERVAL_MINUTES).minutes.do(run_pulse)
     schedule.every(24).hours.do(manual_input_pipeline.clear_old_inputs)
 
-    # VIX/VXN intraday yfinance pulls — 9:15, 9:25, 9:45, 10:30 AM ET
+    # VIX/VXN intraday yfinance pulls — 9:40 (primary), 9:45 & 9:55 (conditional
+    # retries, only fire if the prior slot failed), 10:30 (always-live, freezes)
     for slot in INTRADAY_SLOTS:
         schedule.every().day.at(slot, TIMEZONE).do(macro_sentiment_pipeline.run_scheduled_pull, slot)
 
