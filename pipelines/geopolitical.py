@@ -603,7 +603,16 @@ CONTEXT: {context}"""
         a chance to self-correct within a day, rather than persisting
         untouched for the full 48h TTL. Reuses classify_relevance_batch()
         directly so there is exactly one place the relevance criteria live —
-        this pass never duplicates the prompt."""
+        this pass never duplicates the prompt.
+
+        Chunks the active set into groups of ~25 rather than one unbounded
+        batch — a single call covering many articles risks silent truncation
+        against classify_relevance_batch()'s 4096-token output cap, exactly
+        on the high-volume news days where revalidation matters most. Each
+        chunk is an independent Haiku call; a failure in one chunk does not
+        block the others. Logs the chunk count and verifies the total
+        articles processed matches the active count, so a partial run is
+        visible in logs rather than silently swallowed."""
         if self.anthropic_client is None:
             return
         gemini_cache_file = "/data/gemini_classifications.json"
@@ -623,36 +632,69 @@ CONTEXT: {context}"""
         if not active_relevant:
             return
 
-        pulse_logger.log(f"🔄 Daily re-validation — re-checking {len(active_relevant)} active article(s)")
-
-        # Re-run using the cached summary as context — no re-fetch of the
-        # original URL, which may be paywalled, moved, or removed by now.
-        pseudo_articles = [
-            {'headline': h, 'description': e.get('summary') or e.get('reason') or '', 'link': ''}
-            for h, e in active_relevant.items()
-        ]
-        results = self.classify_relevance_batch(pseudo_articles)
-        if not results:
-            pulse_logger.log("⚠️ Daily re-validation — Haiku call returned nothing, leaving cache untouched", level="WARNING")
-            return
+        total_active = len(active_relevant)
+        CHUNK_SIZE = 25
+        headlines = list(active_relevant.keys())
+        chunks = [headlines[i:i + CHUNK_SIZE] for i in range(0, len(headlines), CHUNK_SIZE)]
+        pulse_logger.log(
+            f"🔄 Daily re-validation — re-checking {total_active} active article(s) "
+            f"in {len(chunks)} chunk(s) of up to {CHUNK_SIZE}"
+        )
 
         revoked = 0
-        for r in results:
-            idx = r['id'] - 1
-            if not (0 <= idx < len(pseudo_articles)):
+        processed = 0
+        failed_chunks = 0
+        for chunk_idx, chunk_headlines in enumerate(chunks, start=1):
+            # Re-run using the cached summary as context — no re-fetch of the
+            # original URL, which may be paywalled, moved, or removed by now.
+            pseudo_articles = [
+                {'headline': h, 'description': active_relevant[h].get('summary') or active_relevant[h].get('reason') or '', 'link': ''}
+                for h in chunk_headlines
+            ]
+            results = self.classify_relevance_batch(pseudo_articles)
+            if not results:
+                failed_chunks += 1
+                pulse_logger.log(
+                    f"⚠️ Daily re-validation — chunk {chunk_idx}/{len(chunks)} returned nothing "
+                    f"({len(pseudo_articles)} article(s) left unrevalidated)",
+                    level="WARNING"
+                )
                 continue
-            headline = pseudo_articles[idx]['headline']
-            if not r.get('relevant'):
-                gemini_cache[headline]['relevant'] = False
-                gemini_cache[headline]['revalidated_at'] = datetime.now(timezone.utc).isoformat()
-                gemini_cache[headline]['revalidation_reason'] = r.get('reason', '')
-                revoked += 1
-                pulse_logger.log(f"🔄 Daily re-validation — revoked relevance: '{headline[:60]}' | {r.get('reason', '')[:100]}")
-            else:
-                gemini_cache[headline]['revalidated_at'] = datetime.now(timezone.utc).isoformat()
+
+            for r in results:
+                idx = r['id'] - 1
+                if not (0 <= idx < len(pseudo_articles)):
+                    continue
+                headline = pseudo_articles[idx]['headline']
+                processed += 1
+                if not r.get('relevant'):
+                    gemini_cache[headline]['relevant'] = False
+                    gemini_cache[headline]['revalidated_at'] = datetime.now(timezone.utc).isoformat()
+                    gemini_cache[headline]['revalidation_reason'] = r.get('reason', '')
+                    revoked += 1
+                    pulse_logger.log(f"🔄 Daily re-validation — revoked relevance: '{headline[:60]}' | {r.get('reason', '')[:100]}")
+                else:
+                    gemini_cache[headline]['revalidated_at'] = datetime.now(timezone.utc).isoformat()
+
+            pulse_logger.log(
+                f"🔄 Daily re-validation — chunk {chunk_idx}/{len(chunks)} done: "
+                f"{len(results)}/{len(pseudo_articles)} article(s) processed"
+            )
 
         atomic_write_json(gemini_cache_file, gemini_cache)
-        pulse_logger.log(f"✅ Daily re-validation done — {revoked}/{len(results)} article(s) revoked")
+
+        if processed == total_active:
+            pulse_logger.log(
+                f"✅ Daily re-validation done — {processed}/{total_active} article(s) processed "
+                f"across {len(chunks)} chunk(s), {revoked} revoked"
+            )
+        else:
+            pulse_logger.log(
+                f"⚠️ Daily re-validation — PARTIAL run: {processed}/{total_active} article(s) processed "
+                f"({failed_chunks}/{len(chunks)} chunk(s) failed), {revoked} revoked. "
+                f"{total_active - processed} article(s) left unrevalidated this cycle.",
+                level="WARNING"
+            )
 
     def _ensure_geo_blocklist(self):
         """Seed /data/geo_blocklist.json from the repo-bundled default if it doesn't
