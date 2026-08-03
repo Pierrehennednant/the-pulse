@@ -161,6 +161,12 @@ def run_scheduler():
     # independent of whether the intraday yfinance pulls succeeded that day
     schedule.every().day.at("16:35", TIMEZONE).do(macro_sentiment_pipeline.daily_fred_refresh)
 
+    # Daily Geo relevance re-validation — re-runs the Haiku relevance prompt
+    # against every still-active cached article once a day, giving a bad
+    # initial classification a chance to self-correct within a day instead
+    # of persisting untouched for the full 48h TTL
+    schedule.every().day.at("06:00", TIMEZONE).do(geopolitical_pipeline.daily_relevance_revalidation)
+
     while True:
         try:
             schedule.run_pending()

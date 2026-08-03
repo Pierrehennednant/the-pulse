@@ -212,7 +212,7 @@ Think like a trader sitting down at 8AM asking: "Does this change anything about
 
 Pass if it involves: Federal Reserve policy or official commentary, geopolitical escalation or resolution affecting global risk sentiment, major economic data surprises, energy market shocks, trade policy changes with immediate impact, systemic financial risk, or significant government actions with direct market consequences.
 
-Fail if it involves: opinion or commentary on past market moves, investment advice or tips, personal finance stories, single company news unless systemically important, celebrity investor quotes, lifestyle or consumer behavior stories, newsletter recap formats, or anything that describes what already happened rather than new information.
+Fail if it involves: opinion or commentary on past market moves, investment advice or tips, personal finance stories, single company news unless systemically important, celebrity investor quotes, lifestyle or consumer behavior stories, retail shopping guides or consumer deal/discount roundups (e.g. "back to school savings," "extra deals," holiday shopping tips, or similar listicle-style consumer spending content — even if framed around tariffs or prices), newsletter recap formats, or anything that describes what already happened rather than new information.
 
 Before passing any article, run it through these six filters. If it fails any one of them, reject it:
 
@@ -595,6 +595,64 @@ CONTEXT: {context}"""
         if updated:
             atomic_write_json(gemini_cache_file, gemini_cache)
             pulse_logger.log(f"✅ Tier backfill complete — {updated} active article(s) now have Haiku tier")
+
+    def daily_relevance_revalidation(self):
+        """Once-daily maintenance pass (not per-cycle): re-run the current Haiku
+        relevance prompt against every cached article still within its 48h
+        active window and marked relevant. Gives a bad initial classification
+        a chance to self-correct within a day, rather than persisting
+        untouched for the full 48h TTL. Reuses classify_relevance_batch()
+        directly so there is exactly one place the relevance criteria live —
+        this pass never duplicates the prompt."""
+        if self.anthropic_client is None:
+            return
+        gemini_cache_file = "/data/gemini_classifications.json"
+        try:
+            if not os.path.exists(gemini_cache_file):
+                return
+            with open(gemini_cache_file, 'r') as f:
+                gemini_cache = json.load(f)
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Daily re-validation — failed to load classification cache: {e}", level="WARNING")
+            return
+
+        active_relevant = {
+            headline: entry for headline, entry in gemini_cache.items()
+            if entry.get('relevant') and not self.is_article_too_old(entry.get('classified_at', ''))
+        }
+        if not active_relevant:
+            return
+
+        pulse_logger.log(f"🔄 Daily re-validation — re-checking {len(active_relevant)} active article(s)")
+
+        # Re-run using the cached summary as context — no re-fetch of the
+        # original URL, which may be paywalled, moved, or removed by now.
+        pseudo_articles = [
+            {'headline': h, 'description': e.get('summary') or e.get('reason') or '', 'link': ''}
+            for h, e in active_relevant.items()
+        ]
+        results = self.classify_relevance_batch(pseudo_articles)
+        if not results:
+            pulse_logger.log("⚠️ Daily re-validation — Haiku call returned nothing, leaving cache untouched", level="WARNING")
+            return
+
+        revoked = 0
+        for r in results:
+            idx = r['id'] - 1
+            if not (0 <= idx < len(pseudo_articles)):
+                continue
+            headline = pseudo_articles[idx]['headline']
+            if not r.get('relevant'):
+                gemini_cache[headline]['relevant'] = False
+                gemini_cache[headline]['revalidated_at'] = datetime.now(timezone.utc).isoformat()
+                gemini_cache[headline]['revalidation_reason'] = r.get('reason', '')
+                revoked += 1
+                pulse_logger.log(f"🔄 Daily re-validation — revoked relevance: '{headline[:60]}' | {r.get('reason', '')[:100]}")
+            else:
+                gemini_cache[headline]['revalidated_at'] = datetime.now(timezone.utc).isoformat()
+
+        atomic_write_json(gemini_cache_file, gemini_cache)
+        pulse_logger.log(f"✅ Daily re-validation done — {revoked}/{len(results)} article(s) revoked")
 
     def _ensure_geo_blocklist(self):
         """Seed /data/geo_blocklist.json from the repo-bundled default if it doesn't
