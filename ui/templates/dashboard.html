@@ -235,9 +235,12 @@
         <div class="gauge-wrapper">
             <svg class="gauge-svg" viewBox="0 0 260 160">
                 <path d="M 30 140 A 100 100 0 0 1 230 140" fill="none" stroke="#1e2d4a" stroke-width="20"/>
-                <path d="M 30 140 A 100 100 0 0 1 80 57" fill="none" stroke="#e74c3c" stroke-width="20" opacity="0.7"/>
-                <path d="M 80 57 A 100 100 0 0 1 180 57" fill="none" stroke="#f39c12" stroke-width="20" opacity="0.7"/>
-                <path d="M 180 57 A 100 100 0 0 1 230 140" fill="none" stroke="#2ecc71" stroke-width="20" opacity="0.7"/>
+                <path d="M 30 140 A 100 100 0 0 1 38 102" fill="none" stroke="#e74c3c" stroke-width="20" opacity="0.9"/>
+                <path d="M 38 102 A 100 100 0 0 1 54 75" fill="none" stroke="#e74c3c" stroke-width="20" opacity="0.4"/>
+                <path d="M 54 75 A 100 100 0 0 1 130 40" fill="none" stroke="#7a8fa8" stroke-width="20" opacity="0.6"/>
+                <path d="M 130 40 A 100 100 0 0 1 206 75" fill="none" stroke="#7a8fa8" stroke-width="20" opacity="0.6"/>
+                <path d="M 206 75 A 100 100 0 0 1 222 102" fill="none" stroke="#2ecc71" stroke-width="20" opacity="0.4"/>
+                <path d="M 222 102 A 100 100 0 0 1 230 140" fill="none" stroke="#2ecc71" stroke-width="20" opacity="0.9"/>
                 <line id="gauge-needle" x1="130" y1="140" x2="130" y2="50" stroke="#fff" stroke-width="3" stroke-linecap="round" transform="rotate(0, 130, 140)"/>
                 <circle cx="130" cy="140" r="6" fill="#4a9eff"/>
                 <text x="130" y="125" text-anchor="middle" fill="#fff" font-size="22" font-weight="bold" id="gauge-score-text">--</text>
@@ -690,7 +693,7 @@
         _snapshot = snapshot;
         const bias = snapshot.bias || {};
         const pillars = snapshot.pillars || {};
-        setGauge(bias.gauge_value || 50, bias);
+        setGauge(bias.gauge_value ?? 50, bias);
         const biasLabel = document.getElementById('bias-label');
         biasLabel.textContent = `${bias.bias_emoji || ''} ${bias.bias || 'Neutral'}`;
         biasLabel.className = `gauge-label ${(bias.bias || 'neutral').toLowerCase()}`;

@@ -176,6 +176,12 @@ class BiasCalculator:
                 directive = "🟢 Bullish — Quarter size."
                 directive_color = "#2ecc71"
 
+        # Gauge needle — signed confidence (direction x magnitude), not final_score.
+        # Neutral has no direction (sign 0), so the needle centers rather than leaning
+        # either way. Range -100..+100 maps to gauge_value 0..100 (50 = center/no signal).
+        direction_sign = 1 if bias == 'Bullish' else (-1 if bias == 'Bearish' else 0)
+        signed_confidence = confidence * direction_sign
+
         result = {
             'final_score': final_score,
             'bias': bias,
@@ -187,7 +193,7 @@ class BiasCalculator:
             'active_pillars': active_pillars,
             'pillar_signals': pillar_signals,
             'pillar_contributions': pillar_contributions,
-            'gauge_value': int((final_score + 2) / 4 * 100),
+            'gauge_value': int((signed_confidence + 100) / 2),
             'directive': directive,
             'directive_color': directive_color,
         }
