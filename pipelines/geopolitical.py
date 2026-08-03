@@ -1482,13 +1482,69 @@ CONTEXT: {context}"""
 
         threading.Thread(target=_classify, daemon=True).start()
 
+    def _filter_blocklisted_items(self, news_items):
+        """Remove any article currently on the keyword or manual blocklist from
+        a cached news_items list. Mirrors the two 'final pass' checks already
+        applied inside fetch_news() (keyword substring match + manual exact
+        title match) — needed here too because cache-fallback paths in fetch()
+        can serve a snapshot captured before a blocklist add took effect."""
+        if not news_items:
+            return news_items, 0
+        kw_blocklist = self._load_blocklist_strings()
+        manual_blocked = self._load_manual_blocklist_titles()
+        if not kw_blocklist and not manual_blocked:
+            return news_items, 0
+        kept = []
+        removed = 0
+        for item in news_items:
+            headline_lower = item.get('headline', '').lower()
+            if manual_blocked and headline_lower in manual_blocked:
+                pulse_logger.log(f"🚫 Manually blocked by user (cache fallback): {item.get('headline', '')[:80]}")
+                removed += 1
+                continue
+            matched = [b for b in kw_blocklist if b in headline_lower] if kw_blocklist else []
+            if matched:
+                pulse_logger.log(f"🚫 Blocked by blocklist (cache fallback): {item.get('headline', '')[:80]} | matched: {matched[0][:60]}")
+                removed += 1
+                continue
+            kept.append(item)
+        return kept, removed
+
+    def _apply_blocklist_to_cached_data(self, data):
+        """Re-filter a cached fetch() result against the CURRENT blocklist
+        state before serving it, so a blocklist add takes effect immediately
+        on every cache-fallback path — not just on the next successful live
+        fetch_news() call. Recomputes active_flags/pillar_score from the
+        filtered list when anything was actually removed.
+
+        Note: news_items in the cache is already truncated to the top 10
+        display items, so a recompute here is an approximation of what a
+        full live fetch_news() would score — it's strictly more accurate
+        than serving the stale, unfiltered score, but not a perfect
+        reproduction of the original full-list calculation."""
+        news_items = data.get('news_items', [])
+        filtered, removed = self._filter_blocklisted_items(news_items)
+        if not removed:
+            return data
+        flags = self.identify_flags(filtered)
+        score = self.calculate_score(filtered, flags)
+        data['news_items'] = filtered
+        data['active_flags'] = flags
+        data['total_items'] = len(filtered)
+        data['pillar_score'] = score
+        pulse_logger.log(
+            f"🚫 Geo cache fallback — re-filtered {removed} blocklisted article(s), "
+            f"score recalculated: {score}"
+        )
+        return data
+
     def fetch(self):
         try:
             existing = cache.load(self.cache_key)
             age_minutes = cache.get_age_minutes(self.cache_key)
             if existing and age_minutes < 3:
                 pulse_logger.log("↺ Geopolitical — using cache (TheNewsAPI refresh every 3min)")
-                return existing['data']
+                return self._apply_blocklist_to_cached_data(existing['data'])
 
             items = self.fetch_news()
 
@@ -1497,7 +1553,7 @@ CONTEXT: {context}"""
                 if existing:
                     self._reclassify_cached_pending(existing['data'].get('news_items', []))
                     existing['data']['status'] = 'cached'
-                    return existing['data']
+                    return self._apply_blocklist_to_cached_data(existing['data'])
                 pinned = self.load_pinned_stories()
                 if pinned:
                     pulse_logger.log(f"⚠️ Geopolitical — News API unavailable and no cache, using {len(pinned)} pinned stories only", level="WARNING")
@@ -1535,7 +1591,7 @@ CONTEXT: {context}"""
             cached = cache.load(self.cache_key)
             if cached:
                 cached['data']['status'] = 'stale'
-                return cached['data']
+                return self._apply_blocklist_to_cached_data(cached['data'])
             return None
 
 geopolitical_pipeline = GeopoliticalPipeline()
