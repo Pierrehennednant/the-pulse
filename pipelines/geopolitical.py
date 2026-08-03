@@ -1517,24 +1517,25 @@ CONTEXT: {context}"""
         fetch_news() call. Recomputes active_flags/pillar_score from the
         filtered list when anything was actually removed.
 
-        Note: news_items in the cache is already truncated to the top 10
-        display items, so a recompute here is an approximation of what a
-        full live fetch_news() would score — it's strictly more accurate
-        than serving the stale, unfiltered score, but not a perfect
-        reproduction of the original full-list calculation."""
-        news_items = data.get('news_items', [])
-        filtered, removed = self._filter_blocklisted_items(news_items)
+        Operates on `all_items` (the full scoring set fetch() now persists),
+        not the top-10 `news_items` display slice — a blocklisted article
+        ranked below the top 10 is still caught and still moves the score,
+        which a top-10-only filter would silently miss. Falls back to
+        `news_items` for any cache entry saved before this field existed
+        (until the next successful live fetch_news() rewrites it)."""
+        all_items = data.get('all_items', data.get('news_items', []))
+        filtered, removed = self._filter_blocklisted_items(all_items)
         if not removed:
             return data
         flags = self.identify_flags(filtered)
         score = self.calculate_score(filtered, flags)
-        data['news_items'] = filtered
+        data['all_items'] = filtered
+        data['news_items'] = filtered[:10]
         data['active_flags'] = flags
         data['total_items'] = len(filtered)
         data['pillar_score'] = score
         pulse_logger.log(
-            f"🚫 Geo cache fallback — re-filtered {removed} blocklisted article(s), "
-            f"score recalculated: {score}"
+            f"🚫 Cache fallback — removed {removed} blocklisted item(s), score recomputed: {score}"
         )
         return data
 
@@ -1551,7 +1552,7 @@ CONTEXT: {context}"""
             if not items:
                 pulse_logger.log("↺ Geopolitical — fetch empty, using last cache")
                 if existing:
-                    self._reclassify_cached_pending(existing['data'].get('news_items', []))
+                    self._reclassify_cached_pending(existing['data'].get('all_items', existing['data'].get('news_items', [])))
                     existing['data']['status'] = 'cached'
                     return self._apply_blocklist_to_cached_data(existing['data'])
                 pinned = self.load_pinned_stories()
@@ -1563,6 +1564,7 @@ CONTEXT: {context}"""
                         'pillar': 'geopolitical',
                         'timestamp': datetime.now(self.timezone).isoformat(),
                         'news_items': pinned[:10],
+                        'all_items': pinned,
                         'active_flags': flags,
                         'total_items': len(pinned),
                         'pillar_score': score,
@@ -1577,6 +1579,7 @@ CONTEXT: {context}"""
                 'pillar': 'geopolitical',
                 'timestamp': datetime.now(self.timezone).isoformat(),
                 'news_items': items[:10],
+                'all_items': items,
                 'active_flags': flags,
                 'total_items': len(items),
                 'pillar_score': score,
