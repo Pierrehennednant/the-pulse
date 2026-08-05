@@ -1770,7 +1770,17 @@ CONTEXT: {context}"""
         all_items = data.get('all_items', data.get('news_items', []))
         all_items, merged = self._merge_fresh_classifications(all_items)
         filtered, removed = self._filter_blocklisted_items(all_items)
-        if not merged and not removed:
+
+        # 48h TTL — previously only enforced inside fetch_news() when a live fetch
+        # actually ran. On repeated fetch failures/empty results this path served
+        # the same cached all_items indefinitely, past their TTL. Items without a
+        # published_at (pinned stories) are left alone — they're aged out via their
+        # own pinned_at check in load_pinned_stories().
+        before_age = len(filtered)
+        filtered = [i for i in filtered if not self.is_article_too_old(i.get('published_at', ''))]
+        aged_out = before_age - len(filtered)
+
+        if not merged and not removed and not aged_out:
             return data
         flags = self.identify_flags(filtered)
         score = self.calculate_score(filtered, flags)
@@ -1783,6 +1793,8 @@ CONTEXT: {context}"""
             pulse_logger.log(f"🔄 Cache refresh — merged {merged} newly-classified article(s), score recomputed: {score}")
         if removed:
             pulse_logger.log(f"🚫 Cache fallback — removed {removed} blocklisted item(s), score recomputed: {score}")
+        if aged_out:
+            pulse_logger.log(f"🕐 Cache fallback — aged out {aged_out} item(s) past 48h TTL, score recomputed: {score}")
         return data
 
     def fetch(self):
