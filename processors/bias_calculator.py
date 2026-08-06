@@ -6,6 +6,7 @@ from utils.logger import pulse_logger
 class BiasCalculator:
     def compute(self, formatted_data, bias_threshold=0.5):
         total_score = 0.0
+        total_weight_used = 0.0   # sum of base_weight for genuinely-reporting pillars only
         pillar_contributions = {}
         active_pillars = 0
         pillar_signals = []
@@ -68,8 +69,27 @@ class BiasCalculator:
                     elif today == 0:
                         pulse_logger.log(f"✅ COT weight — Monday, full {base_weight}% effective")
 
-            contribution = score * (weight / 100)
-            total_score += contribution
+            # True silence — no fetch succeeded, no cached fallback available this
+            # cycle (data_formatter.py forces status='unavailable' for a None
+            # pipeline result; a main.py exception-fallback {} lands here too via
+            # this method's own .get default below). A silent pillar casts no
+            # vote in either direction: its contribution is 0 AND its weight is
+            # excluded from the renormalization base below — dragging final_score
+            # toward Neutral would itself be an unearned directional statement.
+            # A genuinely-computed 0.0 (status='live'/'cached'/'stale'/'pinned_only')
+            # is real signal and keeps contributing/counting exactly as before.
+            is_silent = status == 'unavailable'
+
+            if not is_silent:
+                contribution = score * (weight / 100)
+                total_score += contribution
+                # Full base_weight, NOT the decay-adjusted `weight` — so COT decay
+                # still permanently dampens its own contribution ceiling instead of
+                # being invisibly refunded by renormalization inflating everyone
+                # else (including itself) back up on a decay day.
+                total_weight_used += base_weight
+            else:
+                contribution = 0.0
 
             if status not in ['unavailable'] and score != 0:
                 active_pillars += 1
@@ -88,10 +108,17 @@ class BiasCalculator:
                 'base_weight': base_weight,
                 'weight': weight,
                 'contribution': round(contribution, 3),
-                'status': status
+                'status': status,
+                'silent': is_silent,
             }
 
-        final_score = round(total_score, 3)
+        # Renormalize against only genuinely-reporting pillars' base weight. If
+        # every pillar is silent this cycle, final_score is 0.0 (Neutral) rather
+        # than a division by zero.
+        if total_weight_used > 0:
+            final_score = round(total_score / (total_weight_used / 100), 3)
+        else:
+            final_score = 0.0
 
         if final_score >= bias_threshold:
             bias = 'Bullish'
