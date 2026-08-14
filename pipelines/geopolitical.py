@@ -57,7 +57,16 @@ class GeopoliticalPipeline:
             'recession', 'unemployment', 'oil price', 'oil prices', 'energy crisis',
             'supply chain', 'bank failure', 'bank failures',
             'default', 'defaulted', 'defaulting', 'currency crisis',
-            'stock market', 'market crash', 'bear market', 'bull market'
+            'stock market', 'market crash', 'bear market', 'bull market',
+            # Priority tech/AI mega-cap companies + tickers
+            'nvidia', 'nvda', 'apple', 'aapl', 'microsoft', 'msft',
+            'alphabet', 'googl', 'google', 'amazon', 'amzn', 'meta',
+            'broadcom', 'avgo', 'amd', 'intel', 'intc',
+            'taiwan semiconductor', 'tsm', 'coreweave',
+            # Tech/AI mega-deal terminology
+            'deal', 'deals', 'partnership', 'partnerships',
+            'billion', 'billions', 'chip', 'chips', 'capex',
+            'ai infrastructure'
         ]
         self.ignore_keywords = [
             # CNBC investment commentary
@@ -213,6 +222,26 @@ KNOWN ARTICLE OVERRIDES — if an article matches one of these titles exactly, u
 - "U.S.-Iran negotiations postponed as Netanyahu blasts Hezbollah over apparent attacks" → Tier 1, bearish, reasoning: "Collapse of U.S.-Iran negotiations with simultaneous military escalation — direct threat to regional stability and oil supply."
 - "U.S. Navy ends blockade of Iran's ports and coastal areas" → Tier 2, bullish, reasoning: "Naval de-escalation removes energy supply disruption risk — positive for risk sentiment."
 
+TECH / AI MEGA-DEAL RULES — applies to any article centered on one of these companies: Nvidia, Apple, Microsoft, Alphabet/Google, Amazon, Meta, Broadcom, AMD, Intel, Taiwan Semiconductor (TSM), or a comparable major AI-infrastructure player (CoreWeave-scale or larger).
+
+RELEVANCE THRESHOLD: A tech/AI mega-deal, capex commitment, or strategic partnership is relevant only at $2B or more in a single commitment. Multiple tranches announced the same day count as one combined commitment; tranches announced on separate dates are independent commitments — evaluate each on its own size. Below $2B, reject as routine corporate news UNLESS multiple linked/compounding announcements from the same actor within a short window collectively cross the threshold — in that case, treat the aggregate as one event.
+
+SOURCE PRIORITY: Prefer information from a press release or SEC filing first, an earnings call or investor update second, and Tier-1 financial media (Reuters, Bloomberg, WSJ, CNBC breaking coverage) third. Discount unconfirmed reports, analyst speculation, or secondary outlets restating another outlet's story.
+
+STANDARD EXCLUSIONS (always reject): routine product launches, sub-$1B customer wins, minor earnings beats/misses, and normal single-company operational noise (hiring, office moves, executive changes, minor guidance tweaks) — none of these clear the systemic-relevance bar regardless of company size.
+
+RE-FLAGGING RULE: If this article reports on a deal, partnership, or capex commitment that has already been covered (same actors, same core terms), do not treat it as newly relevant unless it reports material new terms, a timeline acceleration, or a scope expansion beyond what was previously announced. A recap, confirmation, or analyst reaction to an already-known deal is an echo — fail it under Filter 6 (Confirmation Trap Test).
+
+TIER CLASSIFICATION FOR TECH/AI MEGA-DEALS (use in place of the geopolitical tier definitions in DECISION 5 for this category):
+Tier 1: Commitment >$5B, OR a capex beat >20% over prior guidance paired with strong demand/backlog framing, OR a strategic government/industrial partnership with index-level market impact.
+Tier 2: Commitment $2B-$5B, OR material but not immediately market-moving (e.g. multi-year build-out without near-term capex acceleration).
+Tier 3: Below the $2B threshold — only assign if it's part of a compounding set of linked announcements (see RELEVANCE THRESHOLD above); otherwise reject entirely rather than assigning Tier 3.
+
+DIRECTION FOR TECH/AI MEGA-DEALS — DELIBERATELY DIFFERENT FROM THE GEOPOLITICAL CHAINS BELOW: Do not default to a confident bullish or bearish call for this category. Even a large, clearly-covered mega-deal can coincide with a same-day stock move driven by unrelated macro conditions — a confident directional call here risks being wrong for reasons that have nothing to do with the deal's actual merits (real example: the Apple-Broadcom $30B chip deal, August 2026). Default to "neutral" and use the summary/reasoning fields to surface the event, its size, and its terms factually. Only lean bullish or bearish when the article itself contains genuinely one-sided evidence:
+- Lean BEARISH only if the article contains explicit margin-pressure language or explicit no-ROI/return-timeline-risk language from the company or credible analysts.
+- Lean BULLISH only if there is a capex beat >20% over prior guidance AND an explicit strong-demand, backlog, or monetization link stated in the article (not inferred).
+- Otherwise: direction = "neutral", relevant = true, and the summary should surface the deal size/terms/actors so a trader can weigh it themselves.
+
 Your job is to read each full article, then make five decisions:
 
 DECISION 1 — RELEVANCE
@@ -220,7 +249,7 @@ Is this genuinely new, market-moving information that would cause a futures trad
 
 Think like a trader sitting down at 8AM asking: "Does this change anything about how I trade today?"
 
-Pass if it involves: Federal Reserve policy or official commentary, geopolitical escalation or resolution affecting global risk sentiment, major economic data surprises, energy market shocks, trade policy changes with immediate impact, systemic financial risk, or significant government actions with direct market consequences.
+Pass if it involves: Federal Reserve policy or official commentary, geopolitical escalation or resolution affecting global risk sentiment, major economic data surprises, energy market shocks, trade policy changes with immediate impact, systemic financial risk, or significant government actions with direct market consequences, or major tech/AI infrastructure deals/capex commitments meeting the TECH/AI MEGA-DEAL RULES threshold above.
 
 Fail if it involves: opinion or commentary on past market moves, investment advice or tips, personal finance stories, single company news unless systemically important, celebrity investor quotes, lifestyle or consumer behavior stories, retail shopping guides or consumer deal/discount roundups (e.g. "back to school savings," "extra deals," holiday shopping tips, or similar listicle-style consumer spending content — even if framed around tariffs or prices), prediction-market or betting-market odds and probability content (e.g. Kalshi, Polymarket, or PredictIt contract prices or probability shifts on a geopolitical or economic outcome) — a market's aggregated probability estimate is not itself a new event, even when the underlying outcome concerns something market-moving like a nuclear deal, election, or rate decision, newsletter recap formats, or anything that describes what already happened rather than new information.
 
@@ -230,6 +259,8 @@ FILTER 1 — SOURCE VS ECHO
 Is this the event itself or a reaction to an event that already happened? A SOURCE event is new information the market hasn't priced in yet. It originates from a primary actor — a government, central bank, military, or natural force. An ECHO event is any person, company, or institution RESPONDING to or REPORTING ON a known macro situation.
 
 Critical rule: If a company name appears as the subject of the headline and the headline describes them REACTING to a macro event (adding fees, raising prices, cutting jobs, warning of impacts, adjusting operations) — it is ALWAYS an echo. Reject it.
+
+Exception: a company announcing, signing, or confirming its own new deal, partnership, or capex commitment is the SOURCE of that event, not an echo — they are the primary actor creating new information, not reacting to someone else's action. Reserve "echo" for a company responding to an external event (tariffs, energy prices, a war, a competitor's move, etc.).
 
 The presence of macro keywords like "war", "energy", "Iran", "tariff" in a headline does NOT make it a source event. Ask: who is the ACTOR and what ACTION did they take? If the actor is a corporation reacting to an existing situation — it's an echo regardless of the macro language surrounding it.
 
@@ -306,6 +337,8 @@ Key rule: A confirmed bearish event with clear direction scores LOW uncertainty 
 
 DECISION 5 — TIER CLASSIFICATION
 Classify the magnitude of this event's market impact into one of three tiers, using the full article context — not headline keywords.
+
+For tech/AI mega-deal articles, use the TIER CLASSIFICATION FOR TECH/AI MEGA-DEALS section above instead of the definitions below.
 
 Tier 1 (±1.7): Active war or escalation between major powers, nuclear threats/incidents, major confirmed peace deals or ceasefires that meaningfully reduce geopolitical risk, or credible major supply disruptions (e.g. Hormuz closure threat).
 Tier 2 (±0.75): Significant troop buildups, major diplomatic breakdowns, new meaningful sanctions, or credible energy market threats that are not Tier 1 level.
