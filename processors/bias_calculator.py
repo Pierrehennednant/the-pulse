@@ -91,7 +91,7 @@ class BiasCalculator:
             else:
                 contribution = 0.0
 
-            if status not in ['unavailable'] and score != 0:
+            if not is_silent:
                 active_pillars += 1
                 active_pillar_weights[config_key] = weight
                 if score > 0.15:
