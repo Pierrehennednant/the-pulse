@@ -217,15 +217,20 @@ the next 9:40 AM ET slot.
 | Confidence for half entry (aggressive) | ≥ 75% |
 | Pillar alignment | ≥ 45% of total week weight must agree with bias |
 
-**Quiet week mode (Prop Firm only):** Evaluated once at the start of each ISO week. Counts red folder **days** (not individual events — a day with multiple red folder events counts as 1 red folder day). Persisted to `/data/prop_firm_weekly_threshold.json` for the entire week — does not change mid-week.
+**Quiet week mode (Prop Firm only):** Recomputed once per calendar day — on the first genuinely-live Economic Calendar cycle of that day (`status` not `unavailable`/`stale`, `events` non-empty) — then held for the rest of the day. Same-day freshness, not same-cycle (5-minute) freshness: the red-folder-day count changes because of calendar edits (new event added, reclassified impact), not live market movement, so recomputing every 5 minutes would just add noise and risk a false "classification changed" line firing on a transient bad cycle. Counts red folder **days** (not individual events — a day with multiple red folder events counts as 1 red folder day), via the shared `economic_calendar_pipeline._count_red_folder_days()` (excludes `SCORING_EXCLUSIONS`). Persisted to `/data/prop_firm_weekly_threshold.json`, keyed by calendar date. On a cycle where EC data isn't usable, the last computed day's value is held rather than recomputed from empty data.
 
 - 0 or 1 red folder days → quiet week: bias threshold ± 0.30, EC weight drops from 30% to 15%, total weight 85%, pillar alignment threshold 45% of 85% = 38.25%
 - 2+ red folder days → standard week: bias threshold ± 0.33, EC weight 30%, total weight 100%, pillar alignment threshold 45%
 
-Logged once per week in Railway logs:
+Logged on the first live cycle of each day:
 ```
 🔇 Quiet week active — 1 red folder day — EC 15%, bias ±0.30
 📅 Standard week — 3 red folder days — EC 30%, bias ±0.33
+```
+
+If the classification flips relative to the last persisted value (a red folder day appears or disappears and crosses the 0-1 / 2+ boundary between one day's check and the next), an additional loud line fires:
+```
+⚠️ Week classification changed: Standard → Quiet (EC 30% → 15%, bias ±0.33 → ±0.30) — red folder day removed since last check (2 → 1)
 ```
 
 ## Snapshot System

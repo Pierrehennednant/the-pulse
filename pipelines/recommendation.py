@@ -56,7 +56,16 @@ class PropFirmRecommendationEngine(RecommendationEngine):
 
     Quiet week = 0 or 1 calendar days with at least one red folder event.
     A day with multiple red folder events counts as 1 red folder day.
-    Threshold evaluated once per ISO week; persisted to PROP_FIRM_THRESHOLD_FILE.
+    Threshold recomputed once per calendar day — on the first genuinely-
+    live EC cycle of that day — then held for the rest of the day.
+    EC's red-folder-day count changes from calendar edits, not live market
+    movement, so same-day freshness is what matters, not same-cycle.
+    Persisted to PROP_FIRM_THRESHOLD_FILE, keyed by date (with the ISO
+    week also stored, to distinguish a daily refresh from an actual new
+    week for the "new week detected" log). On a cycle where EC data isn't
+    usable, the last computed day's value is held rather than recomputed
+    from empty data. A distinct log line fires whenever the quiet/standard
+    classification itself flips relative to the last persisted value.
     """
 
     _WEEK_WEIGHTS = {
@@ -65,7 +74,11 @@ class PropFirmRecommendationEngine(RecommendationEngine):
     }
 
     def _get_weekly_threshold(self, econ_data):
-        """Return week mode dict. Reads cache for current ISO week; recomputes on new week.
+        """Return week mode dict. Recomputes once per calendar day — on the
+        first genuinely-live EC cycle of that day — then holds for the rest
+        of the day. EC's red-folder-day count changes because of calendar
+        edits (new/reclassified events), not live market movement, so
+        same-day freshness is what's needed, not same-cycle (5-min) freshness.
 
         Returns dict with keys:
           bias_threshold, red_folder_days, is_new_week, is_quiet_week,
@@ -74,27 +87,69 @@ class PropFirmRecommendationEngine(RecommendationEngine):
         now = datetime.now(self.timezone)
         iso = now.isocalendar()
         current_week = (iso[0], iso[1])
+        today_str = now.strftime('%Y-%m-%d')
 
+        prior_cached = None
         try:
             if os.path.exists(PROP_FIRM_THRESHOLD_FILE):
                 with open(PROP_FIRM_THRESHOLD_FILE, 'r') as f:
-                    cached = json.load(f)
-                if tuple(cached.get('week', [])) == current_week and 'is_quiet_week' in cached:
+                    on_disk = json.load(f)
+                if on_disk.get('date') == today_str and 'is_quiet_week' in on_disk:
+                    # Already computed today — hold for the rest of the day.
                     return {
-                        'bias_threshold': cached['threshold'],
-                        'red_folder_days': cached['red_folder_days'],
+                        'bias_threshold': on_disk['threshold'],
+                        'red_folder_days': on_disk['red_folder_days'],
                         'is_new_week': False,
-                        'is_quiet_week': cached['is_quiet_week'],
-                        'ec_weight': cached['ec_weight'],
-                        'total_weight': cached['total_weight'],
-                        'alignment_threshold': cached['alignment_threshold'],
+                        'is_quiet_week': on_disk['is_quiet_week'],
+                        'ec_weight': on_disk['ec_weight'],
+                        'total_weight': on_disk['total_weight'],
+                        'alignment_threshold': on_disk['alignment_threshold'],
                     }
+                prior_cached = on_disk  # from a previous day — change-log baseline
         except Exception as e:
             pulse_logger.log(f"⚠️ Prop Firm threshold cache read failed: {e}", level="WARNING")
 
-        # Canonical count — shared with economic_calendar.py's weak_ec_week determination
-        # so the two paths can't silently drift apart again.
         events = econ_data.get('events', []) if econ_data else []
+        status = (econ_data or {}).get('status')
+        should_defer = status in ('unavailable', 'stale') or not events
+
+        if should_defer:
+            pulse_logger.log(
+                f"⏳ Prop Firm weekly threshold — EC data not yet live this cycle "
+                f"(status={status!r}, {len(events)} events) — deferring today's recompute, will retry next cycle"
+            )
+            if prior_cached:
+                # Hold the last computed day's value until a live cycle today
+                # actually succeeds — don't flicker to a fresh empty-data read.
+                return {
+                    'bias_threshold': prior_cached['threshold'],
+                    'red_folder_days': prior_cached['red_folder_days'],
+                    'is_new_week': False,
+                    'is_quiet_week': prior_cached['is_quiet_week'],
+                    'ec_weight': prior_cached['ec_weight'],
+                    'total_weight': prior_cached['total_weight'],
+                    'alignment_threshold': prior_cached['alignment_threshold'],
+                }
+            # No prior value at all — compute honestly from whatever econ_data
+            # has (as before) but don't persist it.
+            red_folder_days = economic_calendar_pipeline._count_red_folder_days(events)
+            is_quiet = red_folder_days <= 1
+            threshold = 0.30 if is_quiet else 0.33
+            ec_weight = 15 if is_quiet else 30
+            total_weight = 85 if is_quiet else 100
+            return {
+                'bias_threshold': threshold,
+                'red_folder_days': red_folder_days,
+                'is_new_week': True,
+                'is_quiet_week': is_quiet,
+                'ec_weight': ec_weight,
+                'total_weight': total_weight,
+                'alignment_threshold': round(total_weight * 0.45, 2),
+            }
+
+        # Canonical count — shared with economic_calendar.py's weak_ec_week
+        # determination so the two paths can't silently drift apart again.
+        # Genuinely live EC data — first live cycle of the new calendar day.
         red_folder_days = economic_calendar_pipeline._count_red_folder_days(events)
         is_quiet = red_folder_days <= 1
         threshold = 0.30 if is_quiet else 0.33
@@ -102,40 +157,38 @@ class PropFirmRecommendationEngine(RecommendationEngine):
         total_weight = 85 if is_quiet else 100
         alignment_threshold = round(total_weight * 0.45, 2)  # 38.25 (quiet) or 45.0 (standard)
 
-        # Freeze guard — this is the first pulse cycle of the new ISO week, so this
-        # result would normally be persisted and locked in for the whole week. If
-        # the EC pipeline hasn't actually produced live data yet this cycle (fetch
-        # failed with no data, or a stale/cached-from-last-week fallback), don't
-        # freeze on it — skip the cache write and let the next cycle's call retry,
-        # so whatever eventually lands is a genuinely successful fetch instead of
-        # a garbage zero-events read from a transient failure at the exact moment
-        # the week rolled over.
-        status = (econ_data or {}).get('status')
-        should_defer_cache = status in ('unavailable', 'stale') or not events
-        if should_defer_cache:
+        if prior_cached and prior_cached['is_quiet_week'] != is_quiet:
+            old_label = 'Quiet' if prior_cached['is_quiet_week'] else 'Standard'
+            new_label = 'Quiet' if is_quiet else 'Standard'
+            direction = 'added' if red_folder_days > prior_cached['red_folder_days'] else 'removed'
             pulse_logger.log(
-                f"⏳ Prop Firm weekly threshold — EC data not yet live this cycle "
-                f"(status={status!r}, {len(events)} events) — deferring cache write, will retry next cycle"
+                f"⚠️ Week classification changed: {old_label} → {new_label} "
+                f"(EC {prior_cached['ec_weight']}% → {ec_weight}%, bias ±{prior_cached['threshold']} → ±{threshold}) "
+                f"— red folder day {direction} since last check "
+                f"({prior_cached['red_folder_days']} → {red_folder_days})"
             )
-        else:
-            try:
-                atomic_write_json(PROP_FIRM_THRESHOLD_FILE, {
-                    'week': list(current_week),
-                    'threshold': threshold,
-                    'red_folder_days': red_folder_days,
-                    'is_quiet_week': is_quiet,
-                    'ec_weight': ec_weight,
-                    'total_weight': total_weight,
-                    'alignment_threshold': alignment_threshold,
-                    'set_at': now.isoformat(),
-                })
-            except Exception as e:
-                pulse_logger.log(f"⚠️ Prop Firm threshold cache write failed: {e}", level="WARNING")
+
+        is_new_week = prior_cached is None or prior_cached.get('week') != list(current_week)
+
+        try:
+            atomic_write_json(PROP_FIRM_THRESHOLD_FILE, {
+                'week': list(current_week),
+                'date': today_str,
+                'threshold': threshold,
+                'red_folder_days': red_folder_days,
+                'is_quiet_week': is_quiet,
+                'ec_weight': ec_weight,
+                'total_weight': total_weight,
+                'alignment_threshold': alignment_threshold,
+                'set_at': now.isoformat(),
+            })
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Prop Firm threshold cache write failed: {e}", level="WARNING")
 
         return {
             'bias_threshold': threshold,
             'red_folder_days': red_folder_days,
-            'is_new_week': True,
+            'is_new_week': is_new_week,
             'is_quiet_week': is_quiet,
             'ec_weight': ec_weight,
             'total_weight': total_weight,
