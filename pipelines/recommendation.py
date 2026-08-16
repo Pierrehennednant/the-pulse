@@ -5,6 +5,7 @@ import pytz
 from config import TIMEZONE
 from utils.file_lock import atomic_write_json
 from utils.logger import pulse_logger
+from pipelines.economic_calendar import economic_calendar_pipeline
 
 PROP_FIRM_THRESHOLD_FILE = '/data/prop_firm_weekly_threshold.json'
 
@@ -63,19 +64,6 @@ class PropFirmRecommendationEngine(RecommendationEngine):
         'quiet':    {'economic_calendar': 15, 'geopolitical': 25, 'institutional': 25, 'macro_sentiment': 20},
     }
 
-    def _count_red_folder_days(self, econ_data):
-        """Count calendar days with at least one red folder (high-impact) event this week."""
-        if not econ_data:
-            return 0
-        red_days = set()
-        for e in econ_data.get('events', []):
-            if e.get('impact', '').lower() == 'high':
-                time_est = e.get('time_est', '')
-                day = time_est.split(',')[0] if ',' in time_est else time_est[:10]
-                if day:
-                    red_days.add(day)
-        return len(red_days)
-
     def _get_weekly_threshold(self, econ_data):
         """Return week mode dict. Reads cache for current ISO week; recomputes on new week.
 
@@ -104,26 +92,45 @@ class PropFirmRecommendationEngine(RecommendationEngine):
         except Exception as e:
             pulse_logger.log(f"⚠️ Prop Firm threshold cache read failed: {e}", level="WARNING")
 
-        red_folder_days = self._count_red_folder_days(econ_data)
+        # Canonical count — shared with economic_calendar.py's weak_ec_week determination
+        # so the two paths can't silently drift apart again.
+        events = econ_data.get('events', []) if econ_data else []
+        red_folder_days = economic_calendar_pipeline._count_red_folder_days(events)
         is_quiet = red_folder_days <= 1
         threshold = 0.30 if is_quiet else 0.33
         ec_weight = 15 if is_quiet else 30
         total_weight = 85 if is_quiet else 100
         alignment_threshold = round(total_weight * 0.45, 2)  # 38.25 (quiet) or 45.0 (standard)
 
-        try:
-            atomic_write_json(PROP_FIRM_THRESHOLD_FILE, {
-                'week': list(current_week),
-                'threshold': threshold,
-                'red_folder_days': red_folder_days,
-                'is_quiet_week': is_quiet,
-                'ec_weight': ec_weight,
-                'total_weight': total_weight,
-                'alignment_threshold': alignment_threshold,
-                'set_at': now.isoformat(),
-            })
-        except Exception as e:
-            pulse_logger.log(f"⚠️ Prop Firm threshold cache write failed: {e}", level="WARNING")
+        # Freeze guard — this is the first pulse cycle of the new ISO week, so this
+        # result would normally be persisted and locked in for the whole week. If
+        # the EC pipeline hasn't actually produced live data yet this cycle (fetch
+        # failed with no data, or a stale/cached-from-last-week fallback), don't
+        # freeze on it — skip the cache write and let the next cycle's call retry,
+        # so whatever eventually lands is a genuinely successful fetch instead of
+        # a garbage zero-events read from a transient failure at the exact moment
+        # the week rolled over.
+        status = (econ_data or {}).get('status')
+        should_defer_cache = status in ('unavailable', 'stale') or not events
+        if should_defer_cache:
+            pulse_logger.log(
+                f"⏳ Prop Firm weekly threshold — EC data not yet live this cycle "
+                f"(status={status!r}, {len(events)} events) — deferring cache write, will retry next cycle"
+            )
+        else:
+            try:
+                atomic_write_json(PROP_FIRM_THRESHOLD_FILE, {
+                    'week': list(current_week),
+                    'threshold': threshold,
+                    'red_folder_days': red_folder_days,
+                    'is_quiet_week': is_quiet,
+                    'ec_weight': ec_weight,
+                    'total_weight': total_weight,
+                    'alignment_threshold': alignment_threshold,
+                    'set_at': now.isoformat(),
+                })
+            except Exception as e:
+                pulse_logger.log(f"⚠️ Prop Firm threshold cache write failed: {e}", level="WARNING")
 
         return {
             'bias_threshold': threshold,

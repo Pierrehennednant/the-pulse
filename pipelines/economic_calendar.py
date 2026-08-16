@@ -341,8 +341,12 @@ class EconomicCalendarPipeline:
         return magnitude if direction > 0 else -magnitude
 
     def _count_red_folder_days(self, events):
-        """Count calendar days with at least one high-impact event (excluding SCORING_EXCLUSIONS)."""
-        red_days = set()
+        """Count calendar days with at least one high-impact event (excluding SCORING_EXCLUSIONS).
+
+        Canonical implementation — also used by recommendation.py's Prop Firm
+        quiet/standard week determination, so both paths stay in sync instead
+        of maintaining independent copies that can silently drift apart."""
+        red_days = {}  # day -> [event titles], for diagnostic logging
         for e in events:
             if e.get('title') in self.SCORING_EXCLUSIONS:
                 continue
@@ -350,7 +354,12 @@ class EconomicCalendarPipeline:
                 time_est = e.get('time_est', '')
                 day = time_est.split(',')[0] if ',' in time_est else time_est[:10]
                 if day:
-                    red_days.add(day)
+                    red_days.setdefault(day, []).append(e.get('title', '(untitled)'))
+        if red_days:
+            detail = '; '.join(
+                f"{day}: {', '.join(titles)}" for day, titles in sorted(red_days.items())
+            )
+            pulse_logger.log(f"🔍 Red folder day breakdown — {detail}")
         return len(red_days)
 
     def calculate_score(self, events):
