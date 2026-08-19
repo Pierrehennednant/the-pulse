@@ -1352,9 +1352,43 @@ CONTEXT: {context}"""
                                         or abs((existing.get('confidence') or 0) - (new_class.get('confidence') or 0)) >= 0.10
                                     )
                                     if materially_changed:
-                                        gemini_cache[duplicate_of] = new_class
-                                        pulse_logger.log(f"🔁 Duplicate event — updated existing entry in place: '{headline[:60]}' → merged into '{duplicate_of[:60]}'")
-                                        self._refresh_pin_classification(duplicate_of, new_class)
+                                        # A single Haiku read — even at confidence 1.0 — is not
+                                        # reliable enough to flip a PINNED entry's classification
+                                        # (confirmed incident: one same-story headline merged in at
+                                        # conf=1.0 flipped a stable pin's direction, then a second
+                                        # merge 6.5h later flipped it back, also at conf=1.0).
+                                        # Pinned entries therefore require two consecutive merge
+                                        # reads agreeing on direction AND tier before committing;
+                                        # the first read is staged as pending_merge on the entry.
+                                        # Confidence is deliberately not part of the agreement
+                                        # check. A disagreeing read replaces the staged candidate;
+                                        # an unconfirmed candidate just ages out with the entry's
+                                        # normal 48h TTL. Non-pinned entries keep single-merge
+                                        # overwrite behavior unchanged.
+                                        is_pinned = any(
+                                            p.get('headline') == duplicate_of
+                                            for p in self.load_pinned_stories()
+                                        )
+                                        if is_pinned:
+                                            pending = existing.get('pending_merge')
+                                            if (
+                                                pending
+                                                and pending.get('direction') == new_class['direction']
+                                                and pending.get('tier') == new_class['tier']
+                                            ):
+                                                gemini_cache[duplicate_of] = new_class
+                                                gemini_cache[duplicate_of].pop('pending_merge', None)
+                                                pulse_logger.log(f"🔁 Pinned entry updated after 2 agreeing merges: '{headline[:60]}' → '{duplicate_of[:60]}'")
+                                                self._refresh_pin_classification(duplicate_of, new_class)
+                                            else:
+                                                if pending:
+                                                    pulse_logger.log(f"🔁 Pinned entry staged candidate cleared by disagreeing merge: '{duplicate_of[:60]}'")
+                                                gemini_cache[duplicate_of]['pending_merge'] = new_class
+                                                pulse_logger.log(f"🔁 Pinned entry candidate staged, awaiting confirmation: '{headline[:60]}' → '{duplicate_of[:60]}'")
+                                        else:
+                                            gemini_cache[duplicate_of] = new_class
+                                            pulse_logger.log(f"🔁 Duplicate event — updated existing entry in place: '{headline[:60]}' → merged into '{duplicate_of[:60]}'")
+                                            self._refresh_pin_classification(duplicate_of, new_class)
                                     else:
                                         pulse_logger.log(f"🔁 Duplicate event — no material change, skipped: '{headline[:60]}' (same as '{duplicate_of[:60]}')")
                                     gemini_cache[headline] = {
