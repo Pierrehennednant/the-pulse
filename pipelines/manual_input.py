@@ -23,7 +23,7 @@ class ManualInputPipeline:
             return f"{title}::{event_date}"
         return title
 
-    def save_actual(self, event_title, actual_value, story_url=None, event_date='', confidence=0.75, elevated_importance=False):
+    def save_actual(self, event_title, actual_value, story_url=None, event_date='', confidence=0.75):
         try:
             story_context = None
             if story_url:
@@ -43,8 +43,6 @@ class ManualInputPipeline:
                 'confidence': confidence,
                 'timestamp': datetime.now(self.timezone).isoformat()
             }
-            if elevated_importance:
-                inputs[key]['elevated_importance'] = True
 
             atomic_write_json(self.permanent_file, inputs)
 
