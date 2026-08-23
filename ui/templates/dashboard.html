@@ -410,6 +410,12 @@
 <div style="background:#1a0a2a;border:1px solid #4a1a7a;border-radius:8px;padding:10px;margin-top:8px;font-size:13px;color:#c084fc">
     🚫 Speech Event — No trade 30 min before. Auto-detection triggers 60 min after start. Override below if needed.
 </div>
+<div style="margin-top:8px;display:flex;align-items:center;gap:6px">
+    <input type="checkbox" id="elevated_${eventId}" style="cursor:pointer"/>
+    <label for="elevated_${eventId}" style="font-size:11px;color:#c084fc;cursor:pointer">
+        ⭐ Elevated importance — cap ±0.70 instead of ±0.55 (applies to this submission only)
+    </label>
+</div>
 <div style="margin-top:8px;display:flex;gap:6px">
     <button onclick="submitActual('${e.title}', '${eventId}', 'bearish', this, '${e.event_date || ''}')" style="flex:1;background:#3a1a1a;color:#e74c3c;border:1px solid #5a2a2a;border-radius:6px;padding:6px;font-size:12px;cursor:pointer">🔴 Bearish</button>
     <button onclick="submitActual('${e.title}', '${eventId}', 'neutral', this, '${e.event_date || ''}')" style="flex:1;background:#2a2a1a;color:#f39c12;border:1px solid #4a4a2a;border-radius:6px;padding:6px;font-size:12px;cursor:pointer">🟡 Neutral</button>
@@ -886,6 +892,8 @@
             ? String(presetActual).trim()
             : (actualInput ? actualInput.value.trim() : '');
         const storyUrl = storyInput ? storyInput.value.trim() : '';
+        const elevatedInput = document.getElementById('elevated_' + eventId);
+        const elevated = elevatedInput ? elevatedInput.checked : false;
 
         if (!actual) {
             alert('Please enter the actual value first.');
@@ -903,7 +911,8 @@
                     event_title: eventTitle,
                     actual_value: actual,
                     story_url: storyUrl || null,
-                    event_date: eventDate || ''
+                    event_date: eventDate || '',
+                    elevated_importance: elevated
                 })
             });
 

@@ -393,7 +393,10 @@ class EconomicCalendarPipeline:
             elif event.get('is_speech'):
                 speaker_type = event.get('speaker_type', 'Other')
                 if speaker_type == 'Fed Chair':
-                    cap = 0.55
+                    # Per-event manual override — elevated_importance is set only by
+                    # an explicit checkbox on that one submission (keyed title::date),
+                    # never auto-detected and never carried forward to future speeches.
+                    cap = 0.70 if event.get('elevated_importance') else 0.55
                     confidence = event.get('confidence', 0.75)
                     evt_score = cap * direction * confidence
                 elif speaker_type == 'Presidential':
@@ -424,6 +427,7 @@ class EconomicCalendarPipeline:
                 event['story_url'] = manual.get('story_url')
                 event['story_context'] = manual.get('story_context')
                 event['confidence'] = manual.get('confidence', 0.75)
+                event['elevated_importance'] = bool(manual.get('elevated_importance', False))
                 result, market_impact, reason = self.get_market_implication(
                     event['title'], manual['actual'], event['forecast'], event['previous']
                 )
@@ -442,6 +446,7 @@ class EconomicCalendarPipeline:
                 event.pop('confidence', None)
                 event.pop('story_url', None)
                 event.pop('story_context', None)
+                event.pop('elevated_importance', None)
         return events
 
     def fetch(self):
