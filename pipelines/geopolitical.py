@@ -2,6 +2,7 @@ import json
 import os
 import re
 import threading
+import time
 import requests
 import concurrent.futures
 from datetime import datetime, timedelta, timezone
@@ -354,23 +355,55 @@ Key rules:
 Articles to classify:
 {article_list}"""
 
-        try:
-            response = self.anthropic_client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=4096,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            text = response.content[0].text.strip()
-            if '```' in text:
-                text = text.split('```')[1]
-                if text.startswith('json'):
-                    text = text[4:]
-            results = json.loads(text)
-            pulse_logger.log(f"✅ Claude Haiku classified {len(results)} articles")
-            return results
-        except Exception as e:
-            pulse_logger.log(f"⚠️ Claude Haiku classifier failed: {e}", level="WARNING")
-            return []
+        # Retry/backoff mirrors utils.retry.fetch_with_retry's shape and defaults
+        # (3 attempts, 2s/4s exponential backoff) — can't reuse that function
+        # directly since it's built around requests.get()/HTTP status codes, not
+        # the Anthropic SDK call, and the observed failure mode here isn't even
+        # an SDK exception: the API call succeeds but returns an empty text
+        # block, which then fails json.loads() — confirmed root cause of the
+        # 2026-08-25 incident (27 consecutive failures over 2h, no retry existed,
+        # recovery was luck — the same headlines happening to still be in
+        # TheNewsAPI's next returned set — not resilience).
+        RETRIES = 3
+        BACKOFF = 2
+        last_exc = None
+        for attempt in range(RETRIES):
+            response = None
+            try:
+                response = self.anthropic_client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=4096,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                text = response.content[0].text.strip()
+                if '```' in text:
+                    text = text.split('```')[1]
+                    if text.startswith('json'):
+                        text = text[4:]
+                results = json.loads(text)
+                if attempt:
+                    pulse_logger.log(f"✅ Claude Haiku classified {len(results)} articles (succeeded on attempt {attempt + 1}/{RETRIES})")
+                else:
+                    pulse_logger.log(f"✅ Claude Haiku classified {len(results)} articles")
+                return results
+            except Exception as e:
+                last_exc = e
+                stop_reason = getattr(response, 'stop_reason', None) if response is not None else None
+                raw_preview = None
+                if response is not None:
+                    try:
+                        raw_preview = response.content[0].text[:200]
+                    except Exception:
+                        raw_preview = None
+                pulse_logger.log(
+                    f"⚠️ Claude Haiku classifier failed (attempt {attempt + 1}/{RETRIES}): {e} | "
+                    f"stop_reason={stop_reason!r} | raw_response_preview={raw_preview!r}",
+                    level="WARNING"
+                )
+                if attempt < RETRIES - 1:
+                    time.sleep(BACKOFF * (2 ** attempt))
+        pulse_logger.log(f"⚠️ Claude Haiku classifier exhausted {RETRIES} attempts, giving up this cycle: {last_exc}", level="WARNING")
+        return []
 
     # ── Pinned Stories Store ─────────────────────────────────────────────────
 
