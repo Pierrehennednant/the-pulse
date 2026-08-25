@@ -534,6 +534,50 @@ Respond with only one word: SAME or DIFFERENT"""
             pulse_logger.log(f"⚠️ Haiku story comparison failed: {e}", level="WARNING")
             return False
 
+    def has_outcome_diverged(self, existing_summary, existing_reason, new_summary, new_reason):
+        """Ask Haiku whether two same-story classifications actually describe a
+        different underlying outcome, despite matching direction/tier/confidence
+        labels. Only ever called when those three labels already agree — this is
+        the check for exactly that blind spot (e.g. "trade deal near-final" vs
+        "50% retaliatory tariffs imposed" can both score bearish/tier-2 for
+        unrelated reasons, so label agreement alone can't tell real staleness
+        from coincidence).
+
+        Fails CLOSED (returns True = diverged) on no client, empty summary/reason
+        text on either side, a malformed/unexpected response, or any API error —
+        deliberately biased toward treating an ambiguous read as a real change
+        rather than silently reusing what might be a stale classification."""
+        if self.anthropic_client is None:
+            return True
+        existing_text = (existing_summary or existing_reason or '').strip()
+        new_text = (new_summary or new_reason or '').strip()
+        if not existing_text or not new_text:
+            return True
+        try:
+            prompt = f"""You are comparing two market/geopolitical event summaries that have already been classified as the same underlying story, with matching direction and impact tier.
+
+EXISTING SUMMARY: {existing_text}
+
+NEW SUMMARY: {new_text}
+
+Despite matching direction/tier, has the underlying situation materially changed between these two summaries — e.g. a negotiation becoming an actual action taken, a threat becoming a confirmed event, a deal being reached or falling through, or any other concrete change in what actually happened (not just different wording for the same state of affairs)?
+
+Respond with only one word: DIVERGED or UNCHANGED"""
+
+            response = self.anthropic_client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=10,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            result = response.content[0].text.strip().upper()
+            if result == "UNCHANGED":
+                return False
+            # "DIVERGED", or anything malformed/unexpected — fail closed.
+            return True
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Haiku outcome divergence check failed: {e}", level="WARNING")
+            return True
+
     def update_pinned_store(self, new_items, classifications):
         """Update pinned store with newly Haiku-verified high-confidence articles."""
         pinned = self.load_pinned_stories()
@@ -1379,11 +1423,27 @@ CONTEXT: {context}"""
 
                                 if duplicate_of:
                                     existing = gemini_cache[duplicate_of]
-                                    materially_changed = (
-                                        existing.get('tier') != new_class['tier']
-                                        or existing.get('direction') != new_class['direction']
-                                        or abs((existing.get('confidence') or 0) - (new_class.get('confidence') or 0)) >= 0.10
-                                    )
+                                    tier_changed = existing.get('tier') != new_class['tier']
+                                    direction_changed = existing.get('direction') != new_class['direction']
+                                    confidence_shifted = abs((existing.get('confidence') or 0) - (new_class.get('confidence') or 0)) >= 0.10
+
+                                    # Only reached when the three cheap label checks above all
+                                    # agree — exactly the blind spot that let a stale "trade deal
+                                    # near-final" anchor keep absorbing "50% retaliatory tariffs
+                                    # imposed" headlines: both score bearish/tier-2 for unrelated
+                                    # reasons, so label agreement alone can't tell real staleness
+                                    # from coincidence. has_outcome_diverged() re-reads the actual
+                                    # summary/reason text instead of the coarse labels.
+                                    outcome_diverged = False
+                                    if not (tier_changed or direction_changed or confidence_shifted):
+                                        outcome_diverged = self.has_outcome_diverged(
+                                            existing.get('summary', ''), existing.get('reason', ''),
+                                            new_class.get('summary', ''), new_class.get('reason', '')
+                                        )
+                                        if outcome_diverged:
+                                            pulse_logger.log(f"🧭 Outcome divergence detected despite matching labels: '{headline[:60]}' vs anchor '{duplicate_of[:60]}'")
+
+                                    materially_changed = tier_changed or direction_changed or confidence_shifted or outcome_diverged
                                     if materially_changed:
                                         # A single Haiku read — even at confidence 1.0 — is not
                                         # reliable enough to flip a PINNED entry's classification
