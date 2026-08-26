@@ -1095,7 +1095,7 @@ CONTEXT: {context}"""
                 f"&published_after={(datetime.now(pytz.utc) - timedelta(hours=MAX_ARTICLE_AGE_HOURS)).strftime('%Y-%m-%dT%H:%M:%S')}"
                 f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,abcnews.go.com,washingtonpost.com,nytimes.com"
             )
-            response = fetch_with_retry(url, timeout=6, retries=2)
+            response = fetch_with_retry(url, timeout=6, retries=3)
             if not response.ok:
                 pulse_logger.log(f"⚠️ TheNewsAPI top stories returned {response.status_code} — skipping", level="WARNING")
                 return {}
@@ -1112,7 +1112,7 @@ CONTEXT: {context}"""
                 f"&published_after={(datetime.now(pytz.utc) - timedelta(hours=MAX_ARTICLE_AGE_HOURS)).strftime('%Y-%m-%dT%H:%M:%S')}"
                 f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,washingtonpost.com,nytimes.com"
             )
-            response = fetch_with_retry(url, timeout=6, retries=2)
+            response = fetch_with_retry(url, timeout=6, retries=3)
             if not response.ok:
                 pulse_logger.log(f"⚠️ TheNewsAPI query '{query}' returned {response.status_code} — skipping", level="WARNING")
                 return {}
