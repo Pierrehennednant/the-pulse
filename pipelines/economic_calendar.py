@@ -157,6 +157,20 @@ class EconomicCalendarPipeline:
             pulse_logger.log(f"⚠️ Failed to parse values for '{title}': {e}", level="WARNING")
             return 'pending', 'unknown', f'{title} — cannot parse values'
 
+        # No consensus forecast is published for this event, and comparing
+        # this year's revision to LAST year's (the generic previous_val path
+        # below) produces a nonsensical signal — e.g. a mild -50K revision
+        # scoring bullish purely for being smaller than a prior -911K print.
+        # Score the revision's own absolute magnitude and sign directly,
+        # via manually-calibrated tiers (see _magnitude_score) instead.
+        if title == 'Preliminary Benchmark Payrolls Revision':
+            if actual_val > 0:
+                return 'beat', 'bullish', f'{title} — revised up {actual}, more jobs than previously believed, bullish for equities'
+            elif actual_val < 0:
+                return 'miss', 'bearish', f'{title} — revised down {actual}, fewer jobs than previously believed, bearish for equities'
+            else:
+                return 'inline', 'neutral', f'{title} — no net revision'
+
         # Rate decision — lower actual rate = bullish (cut = bullish, hike = bearish)
         if title in ('FOMC Statement', 'Federal Funds Rate') and forecast_val is not None:
             if actual_val < forecast_val:
@@ -317,6 +331,26 @@ class EconomicCalendarPipeline:
         """
         if direction == 0.0:
             return 0.0
+        title = event.get('title', '')
+        # Manually-calibrated tiers (not forecast-relative-deviation, not a
+        # historical-sigma calculation — see feasibility check: ~11 known
+        # annual points, non-stationary, too thin to trust a stdev on).
+        # Cutoffs sit in the two largest gaps in the actual historical
+        # distribution (187K→489K and 598K→861K). Base magnitudes mirror
+        # the standard 0.40/0.63/0.88 bands, reduced 0.4x — a revision
+        # restates history rather than signaling new momentum, so it
+        # shouldn't move the pillar as hard as a genuine forecast surprise.
+        if title == 'Preliminary Benchmark Payrolls Revision':
+            actual_str = event.get('actual', '')
+            try:
+                actual_val = float(str(actual_str).replace('%', '').replace('K', '').replace('M', '')
+                                    .replace('B', '').replace('T', '').strip())
+            except (ValueError, TypeError):
+                return direction
+            abs_val = abs(actual_val)
+            magnitude = 0.35 if abs_val > 700 else 0.25 if abs_val > 200 else 0.16
+            sign = 1 if actual_val > 0 else (-1 if actual_val < 0 else 0)
+            return magnitude * sign
         forecast_str = event.get('forecast', '')
         actual_str = event.get('actual', '')
         if not forecast_str or forecast_str in ('N/A', ''):
