@@ -67,7 +67,12 @@ class GeopoliticalPipeline:
             # Tech/AI mega-deal terminology
             'deal', 'deals', 'partnership', 'partnerships',
             'billion', 'billions', 'chip', 'chips', 'capex',
-            'ai infrastructure'
+            'ai infrastructure',
+            # Mega-cap regulatory/legal outcome terminology
+            'settlement', 'settlements', 'lawsuit', 'lawsuits',
+            'verdict', 'verdicts', 'fined', 'fines',
+            'judgment', 'judgments', 'judgement', 'judgements',
+            'antitrust'
         ]
         self.ignore_keywords = [
             # CNBC investment commentary
@@ -243,6 +248,31 @@ DIRECTION FOR TECH/AI MEGA-DEALS — DELIBERATELY DIFFERENT FROM THE GEOPOLITICA
 - Lean BULLISH only if there is a capex beat >20% over prior guidance AND an explicit strong-demand, backlog, or monetization link stated in the article (not inferred).
 - Otherwise: direction = "neutral", relevant = true, and the summary should surface the deal size/terms/actors so a trader can weigh it themselves.
 
+MEGA-CAP REGULATORY/LEGAL OUTCOME RULES — applies to any article reporting a settlement, fine, verdict, judgment, or forced product/business change resulting from a regulatory or legal proceeding against one or more priority mega-cap companies (Nvidia, Apple, Microsoft, Alphabet/Google, Amazon, Meta, Broadcom, AMD, Intel, Taiwan Semiconductor (TSM), or a comparable index-weight tech/AI-infrastructure company).
+
+TWO SEPARATE, ALWAYS-INDEPENDENT ASSESSMENTS:
+1. COMPANY-LEVEL IMPACT — negative, neutral, or positive for the company itself.
+2. NQ/TECH-COMPLEX IMPACT — negative, neutral, or positive for broader risk appetite today.
+These can disagree — a clearly negative outcome for one company can be a non-event for the index, and vice versa. Only the NQ-level assessment sets this article's direction and tier. The company-level assessment is reported in the reason field but never overrides the NQ-level read.
+
+TIER IS DRIVEN BY MAGNITUDE OF ACTUAL NQ-LEVEL IMPACT, NOT SURFACE PATTERN-MATCHING. Do not tier by simply counting how many companies are involved — count is one input, not the rule. Weigh all of the following together for the specific headline in front of you; none of them is individually decisive:
+- Scale of the number relative to the company/companies involved — a fine that's trivial relative to one company's cash flow is not the same magnitude as one that's trivial for a smaller company but material for a larger one, or vice versa. Judge relative to what the entity(ies) involved can actually absorb, not the raw dollar figure alone.
+- How many priority mega-caps are affected, and whether the exposure is genuinely shared or coincidental — two unrelated companies fined for two unrelated things on the same day is different from two companies fined for the same underlying practice, which signals a sector-wide pattern regulators are now pursuing broadly.
+- Certainty of the number — capped/known/payable-over-time vs. open-ended/uncapped/appealable.
+- Whether the market had already priced in a worse outcome — genuine relief vs. genuine surprise.
+- Forward-looking business impact — does the remedy change how the company/sector operates going forward (product redesign, engagement limits, structural changes), or does it just resolve past liability with no operational change?
+- Confirmed market reaction, if available — did the stock/sector actually move on the print, or is that unknown/pending?
+- Whether this looks like an isolated event or part of an emerging pattern — one lawsuit is different from what looks like the third in a developing wave of similar actions against the same sector.
+
+TIER CLASSIFICATION FOR MEGA-CAP REGULATORY/LEGAL OUTCOMES (use in place of the geopolitical tier definitions in DECISION 5 for this category), defined by the combined weight of the factors above, not any single factor alone:
+Tier 3: The weighted factors suggest limited, contained NQ-level impact — no matter whether that's one company or several, and no matter the raw dollar size, if the market can plausibly absorb it without a genuine repricing of sector risk.
+Tier 2: The weighted factors suggest a real, if not extreme, shift in how the market prices sector-wide legal/regulatory risk — this can be triggered by one company (an unexpected verdict) or several (a coordinated pattern), driven by the substance of the factors above, not a headcount threshold.
+Tier 1 (rare): Structural/existential impact to a core NQ business model, or a same-day event significant enough to reprice the sector's risk premium broadly.
+
+DIRECTION FOR MEGA-CAP REGULATORY/LEGAL OUTCOMES IS NOT A LOOKUP TABLE. Do not pre-map specific factor combinations to specific directions. Weigh the factors for the specific headline and reach whatever direction genuinely fits — bearish, neutral, or bullish for NQ specifically (separate from whatever the company-level read is). A "negative for the company" outcome does not automatically mean bearish for NQ, and a "positive for the company" outcome does not automatically mean bullish for NQ — judge the NQ-level factors on their own terms.
+
+REASON FIELD FORMAT FOR THIS CATEGORY: write the reason field as three lines — company-level assessment (one line, exactly one of negative/neutral/positive with a brief cause), NQ-level assessment (one line, exactly one of negative/neutral/positive, naming which factors above weighed most), then tier. Format: "Company: [negative/neutral/positive] — [why]. NQ: [negative/neutral/positive] — [why, citing the deciding factors]. Tier: [1/2/3]." If the two levels disagree, the NQ-level read is what's scored.
+
 Your job is to read each full article, then make five decisions:
 
 DECISION 1 — RELEVANCE
@@ -250,7 +280,7 @@ Is this genuinely new, market-moving information that would cause a futures trad
 
 Think like a trader sitting down at 8AM asking: "Does this change anything about how I trade today?"
 
-Pass if it involves: Federal Reserve policy or official commentary, geopolitical escalation or resolution affecting global risk sentiment, major economic data surprises, energy market shocks, trade policy changes with immediate impact, systemic financial risk, or significant government actions with direct market consequences, or major tech/AI infrastructure deals/capex commitments meeting the TECH/AI MEGA-DEAL RULES threshold above.
+Pass if it involves: Federal Reserve policy or official commentary, geopolitical escalation or resolution affecting global risk sentiment, major economic data surprises, energy market shocks, trade policy changes with immediate impact, systemic financial risk, or significant government actions with direct market consequences, or major tech/AI infrastructure deals/capex commitments meeting the TECH/AI MEGA-DEAL RULES threshold above, or mega-cap regulatory/legal outcomes meeting the MEGA-CAP REGULATORY/LEGAL OUTCOME RULES above.
 
 Fail if it involves: opinion or commentary on past market moves, investment advice or tips, personal finance stories, single company news unless systemically important, celebrity investor quotes, lifestyle or consumer behavior stories, retail shopping guides or consumer deal/discount roundups (e.g. "back to school savings," "extra deals," holiday shopping tips, or similar listicle-style consumer spending content — even if framed around tariffs or prices), prediction-market or betting-market odds and probability content (e.g. Kalshi, Polymarket, or PredictIt contract prices or probability shifts on a geopolitical or economic outcome) — a market's aggregated probability estimate is not itself a new event, even when the underlying outcome concerns something market-moving like a nuclear deal, election, or rate decision, newsletter recap formats, or anything that describes what already happened rather than new information.
 
@@ -262,6 +292,8 @@ Is this the event itself or a reaction to an event that already happened? A SOUR
 Critical rule: If a company name appears as the subject of the headline and the headline describes them REACTING to a macro event (adding fees, raising prices, cutting jobs, warning of impacts, adjusting operations) — it is ALWAYS an echo. Reject it.
 
 Exception: a company announcing, signing, or confirming its own new deal, partnership, or capex commitment is the SOURCE of that event, not an echo — they are the primary actor creating new information, not reacting to someone else's action. Reserve "echo" for a company responding to an external event (tariffs, energy prices, a war, a competitor's move, etc.).
+
+A regulatory settlement, fine, verdict, or court judgment against a company is also a SOURCE event, not an echo — the regulator or court is the primary actor delivering new information, even though the company is the named subject.
 
 The presence of macro keywords like "war", "energy", "Iran", "tariff" in a headline does NOT make it a source event. Ask: who is the ACTOR and what ACTION did they take? If the actor is a corporation reacting to an existing situation — it's an echo regardless of the macro language surrounding it.
 
@@ -340,6 +372,7 @@ DECISION 5 — TIER CLASSIFICATION
 Classify the magnitude of this event's market impact into one of three tiers, using the full article context — not headline keywords.
 
 For tech/AI mega-deal articles, use the TIER CLASSIFICATION FOR TECH/AI MEGA-DEALS section above instead of the definitions below.
+For mega-cap regulatory/legal outcome articles, use the TIER CLASSIFICATION FOR MEGA-CAP REGULATORY/LEGAL OUTCOMES section above instead of the definitions below.
 
 Tier 1 (±1.7): Active war or escalation between major powers, nuclear threats/incidents, major confirmed peace deals or ceasefires that meaningfully reduce geopolitical risk, or credible major supply disruptions (e.g. Hormuz closure threat).
 Tier 2 (±0.75): Significant troop buildups, major diplomatic breakdowns, new meaningful sanctions, or credible energy market threats that are not Tier 1 level.
