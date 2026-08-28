@@ -142,7 +142,7 @@ and 10:30 AM ET** (`INTRADAY_SLOTS`), registered in `main.py`'s `run_scheduler()
 - **9:45 (conditional):** only calls yfinance if no same-day slot has yet captured
   a real live value (i.e. 9:40 failed). If 9:40 succeeded, 9:45 skips the API call
   entirely and carries the 9:40 value forward via the session-cache fallback path
-  — logged as `↺ skipped (live value already captured earlier today)`, and does
+  — logged as `↻ skipped (live value already captured earlier today)`, and does
   **not** count toward `consecutive_failures`.
 - **9:55 (conditional):** same rule — only calls yfinance if both 9:40 and 9:45
   failed to capture a live value.
@@ -247,7 +247,11 @@ The persisted pin store (`/data/pinned_stories.json`) exists purely to bridge sc
 continuity for articles that fall out of the live TheNewsAPI feed; it is uncapped and
 uses exact-headline matching only (never a Haiku same-story judgment) to avoid
 re-injecting a literal duplicate. The sole eviction mechanism is the 48-hour TTL
-(`is_article_too_old`) applied in `load_pinned_stories()`.
+(`_pin_is_expired` in `load_pinned_stories()`), measured from the article's
+own timestamp (`published_at`, then `timestamp`, then `date`) — never from
+`pinned_at`. Pins persist `published_at` when saved. A missing or unparseable
+article timestamp fails closed (the pin is dropped) so a card cannot sit past
+48 hours of the story itself.
 
 ## Geopolitical — Haiku Contextual Tiering
 
