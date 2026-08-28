@@ -40,6 +40,8 @@ from pipelines.macro_sentiment import macro_sentiment_pipeline, INTRADAY_SLOTS
 from pipelines.economic_calendar import economic_calendar_pipeline
 from pipelines.institutional import institutional_pipeline
 from pipelines.geopolitical import geopolitical_pipeline
+from pipelines.geo_pin_ttl import apply_pin_ttl
+apply_pin_ttl(geopolitical_pipeline)
 from pipelines.weekly_summary import weekly_summary_pipeline
 from pipelines.ai_lens import ai_lens_pipeline
 from pipelines.manual_input import manual_input_pipeline
@@ -158,7 +160,7 @@ def run_scheduler():
         schedule.every().day.at(slot, TIMEZONE).do(macro_sentiment_pipeline.run_scheduled_pull, slot)
 
     # Daily FRED refresh — keeps the Level-3 prior-day-close fallback fresh,
-    # independent of whether the intraday yfinance pulls succeeded that day
+    # independent of whether the intradaily yfinance pulls succeeded that day
     schedule.every().day.at("16:35", TIMEZONE).do(macro_sentiment_pipeline.daily_fred_refresh)
 
     # Daily Geo relevance re-validation — re-runs the Haiku relevance prompt
