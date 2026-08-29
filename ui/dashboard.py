@@ -436,6 +436,20 @@ def add_geo_blocklist():
         })
         atomic_write_json(GEO_MANUAL_BLOCKLIST_FILE, blocklist)
     pulse_logger.log(f"🚫 Geo manual blocklist — added: {title[:60]}")
+    # Sync the geo pillar cache immediately — _run_partial_refresh() below reads
+    # this cache raw, with no blocklist filtering of its own. Without this, the
+    # freshly-blocked article (and the score it just contributed) stays in the
+    # cache until the next scheduled fetch() cycle, up to 5 minutes later, even
+    # though the blocklist file itself is already updated.
+    try:
+        from pipelines.geopolitical import geopolitical_pipeline
+        from utils.cache import cache as _cache
+        geo_cached = _cache.load('geopolitical')
+        if geo_cached:
+            refreshed = geopolitical_pipeline._refresh_cached_data(geo_cached['data'])
+            _cache.save('geopolitical', refreshed)
+    except Exception as cache_err:
+        pulse_logger.log(f"⚠️ geo-blocklist cache sync failed: {cache_err}", level="WARNING")
     try:
         _run_partial_refresh(f"geo-blocklist | {title[:40]}")
     except Exception as refresh_err:
@@ -456,6 +470,16 @@ def remove_geo_blocklist():
         return jsonify({'error': 'Title not found in blocklist'}), 404
     atomic_write_json(GEO_MANUAL_BLOCKLIST_FILE, new_blocklist)
     pulse_logger.log(f"🚫 Geo manual blocklist — removed: {title[:60]}")
+    # Same sync as add_geo_blocklist() — keep the two symmetric.
+    try:
+        from pipelines.geopolitical import geopolitical_pipeline
+        from utils.cache import cache as _cache
+        geo_cached = _cache.load('geopolitical')
+        if geo_cached:
+            refreshed = geopolitical_pipeline._refresh_cached_data(geo_cached['data'])
+            _cache.save('geopolitical', refreshed)
+    except Exception as cache_err:
+        pulse_logger.log(f"⚠️ geo-unblock cache sync failed: {cache_err}", level="WARNING")
     try:
         _run_partial_refresh(f"geo-unblock | {title[:40]}")
     except Exception as refresh_err:
