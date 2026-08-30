@@ -453,9 +453,13 @@ Articles to classify:
 
     @staticmethod
     def is_article_too_old(timestamp_str, max_hours=MAX_ARTICLE_AGE_HOURS):
-        """Return True if the article's timestamp is older than max_hours."""
+        """Return True if the article's timestamp is older than max_hours.
+        Fails CLOSED (treats as too old) on a missing or malformed
+        timestamp — this function exists specifically to enforce a
+        freshness ceiling, so bad/missing input should never be read as
+        "keep it forever." """
         if not timestamp_str:
-            return False
+            return True
         try:
             dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
             if dt.tzinfo is None:
@@ -463,7 +467,7 @@ Articles to classify:
             age_hours = (datetime.now(timezone.utc) - dt).total_seconds() / 3600
             return age_hours > max_hours
         except Exception:
-            return False
+            return True
 
     def load_pinned_stories(self):
         """Load pinned stories, dropping any older than 48 hours or matching blocklist."""

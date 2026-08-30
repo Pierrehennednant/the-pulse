@@ -450,6 +450,17 @@ def add_geo_blocklist():
             _cache.save('geopolitical', refreshed)
     except Exception as cache_err:
         pulse_logger.log(f"⚠️ geo-blocklist cache sync failed: {cache_err}", level="WARNING")
+    # Also scrub the persisted pin store immediately — _refresh_cached_data()
+    # above only touches this cycle's cached all_items, it never looks at
+    # pinned_stories.json. Without this, a blocked PINNED article stays in
+    # the pin file untouched, and only gets purged whenever the next genuine
+    # live fetch_news() cycle happens to run load_pinned_stories() — which
+    # can be delayed indefinitely during a TheNewsAPI outage stretch, since
+    # every cache-fallback cycle in between skips this function entirely.
+    try:
+        geopolitical_pipeline.load_pinned_stories()
+    except Exception as pin_err:
+        pulse_logger.log(f"⚠️ geo-blocklist pin scrub failed: {pin_err}", level="WARNING")
     try:
         _run_partial_refresh(f"geo-blocklist | {title[:40]}")
     except Exception as refresh_err:
@@ -480,6 +491,11 @@ def remove_geo_blocklist():
             _cache.save('geopolitical', refreshed)
     except Exception as cache_err:
         pulse_logger.log(f"⚠️ geo-unblock cache sync failed: {cache_err}", level="WARNING")
+    # Same pin-store scrub as add_geo_blocklist() — keep the two symmetric.
+    try:
+        geopolitical_pipeline.load_pinned_stories()
+    except Exception as pin_err:
+        pulse_logger.log(f"⚠️ geo-unblock pin scrub failed: {pin_err}", level="WARNING")
     try:
         _run_partial_refresh(f"geo-unblock | {title[:40]}")
     except Exception as refresh_err:
