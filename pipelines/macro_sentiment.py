@@ -1,7 +1,7 @@
 import json
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import pytz
 import fear_greed
 import yfinance as yf
@@ -137,12 +137,21 @@ class MacroSentimentPipeline:
 
     # -- Intraday session cache (Level-1/2: today's yfinance pulls) --------
 
-    def _today_str(self):
-        return datetime.now(self.timezone).strftime('%Y-%m-%d')
+    def _current_trading_day_str(self):
+        """Date string of the current/most recent trading day. Weekends
+        roll back to Friday — VIX/VXN don't trade Sat/Sun, so no new
+        session should start (or the prior day's frozen value get wiped)
+        until markets reopen Monday."""
+        now = datetime.now(self.timezone)
+        if now.weekday() == 5:      # Saturday
+            now -= timedelta(days=1)
+        elif now.weekday() == 6:    # Sunday
+            now -= timedelta(days=2)
+        return now.strftime('%Y-%m-%d')
 
     def _empty_session(self):
         return {
-            'date': self._today_str(),
+            'date': self._current_trading_day_str(),
             'slots': {s: None for s in INTRADAY_SLOTS},
             'consecutive_failures': 0,
             'intraday_warning': False,
@@ -156,7 +165,7 @@ class MacroSentimentPipeline:
             if os.path.exists(path):
                 with open(path, 'r') as f:
                     data = json.load(f)
-                if data.get('date') == self._today_str():
+                if data.get('date') == self._current_trading_day_str():
                     return data
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to load intraday session {path}: {e}", level="WARNING")
@@ -264,6 +273,9 @@ class MacroSentimentPipeline:
         reading after the 10:30 slot."""
         if slot not in INTRADAY_SLOTS:
             pulse_logger.log(f"⚠️ Unknown intraday slot '{slot}' — skipping", level="WARNING")
+            return
+        if datetime.now(self.timezone).weekday() >= 5:
+            pulse_logger.log(f"↺ {slot} intraday pull skipped — market closed (weekend)")
             return
         slot_idx = INTRADAY_SLOTS.index(slot)
         always_live = slot in ALWAYS_LIVE_SLOTS
