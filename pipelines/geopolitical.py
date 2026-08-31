@@ -1358,11 +1358,19 @@ CONTEXT: {context}"""
             current_headlines.add(pin_headline)
             injected += 1
 
-        # Hard age cutoff — drop stale articles before scoring
+        # Hard age cutoff — drop stale articles before scoring. Pinned items
+        # never carry published_at (only pinned_at) — that's by design, not
+        # missing data, so they're exempted here and left to their own
+        # pinned_at check inside load_pinned_stories() (which already ran
+        # before these items were injected above).
         before_age = len(immediately_available)
         age_kept = []
         for i in immediately_available:
-            if self.is_article_too_old(i.get('published_at', '')):
+            published_at = i.get('published_at', '')
+            if i.get('pinned') and not published_at:
+                age_kept.append(i)
+                continue
+            if self.is_article_too_old(published_at):
                 pulse_logger.log(f"🕐 Age cutoff: {i['headline'][:80]}")
                 continue
             age_kept.append(i)
@@ -1970,11 +1978,17 @@ CONTEXT: {context}"""
 
         # 48h TTL — previously only enforced inside fetch_news() when a live fetch
         # actually ran. On repeated fetch failures/empty results this path served
-        # the same cached all_items indefinitely, past their TTL. Items without a
-        # published_at (pinned stories) are left alone — they're aged out via their
-        # own pinned_at check in load_pinned_stories().
+        # the same cached all_items indefinitely, past their TTL. Pinned items
+        # never carry published_at by design (only pinned_at, checked inside
+        # load_pinned_stories()) — explicitly exempted here rather than relying
+        # on is_article_too_old('')'s old fail-open default, which no longer
+        # exists now that that function fails closed on missing/malformed input.
         before_age = len(filtered)
-        filtered = [i for i in filtered if not self.is_article_too_old(i.get('published_at', ''))]
+        filtered = [
+            i for i in filtered
+            if (i.get('pinned') and not i.get('published_at'))
+            or not self.is_article_too_old(i.get('published_at', ''))
+        ]
         aged_out = before_age - len(filtered)
 
         if not merged and not removed and not aged_out:
