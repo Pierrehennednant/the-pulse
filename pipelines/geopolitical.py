@@ -469,8 +469,47 @@ Articles to classify:
         except Exception:
             return True
 
+    @staticmethod
+    def _pin_ttl_timestamp(story):
+        """First non-empty of published_at/timestamp/date on a pinned-story
+        record. Pins expire by when the underlying ARTICLE was published,
+        not by when the system got around to pinning it — otherwise an
+        article that took a while to get classified and pinned would get
+        a fresh 48h lease from that late pin time instead of its real age.
+        (Folded in from the former pipelines/geo_pin_ttl.py monkeypatch —
+        same logic, now native.)"""
+        for field in ('published_at', 'timestamp', 'date'):
+            val = (story.get(field) or '').strip()
+            if val:
+                return val
+        return ''
+
+    def _pin_is_expired(self, story):
+        """Fails CLOSED (treats as expired) on a missing or unparseable
+        timestamp, same reasoning as is_article_too_old(). Kept as its own
+        check rather than reusing is_article_too_old() directly because it
+        parses via dateutil (handling display-formatted strings like
+        pin['timestamp'], e.g. "Aug 29, 10:00 AM EST", not just ISO 8601)
+        and needs the EST/EDT tzinfo map to do it."""
+        ts = self._pin_ttl_timestamp(story)
+        if not ts:
+            return True
+        try:
+            dt = dateutil_parser.parse(
+                ts,
+                default=datetime.now(timezone.utc),
+                tzinfos={"EST": -18000, "EDT": -14400},
+            )
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            age_hours = (datetime.now(timezone.utc) - dt).total_seconds() / 3600
+            return age_hours > MAX_ARTICLE_AGE_HOURS
+        except Exception:
+            return True
+
     def load_pinned_stories(self):
-        """Load pinned stories, dropping any older than 48 hours or matching blocklist."""
+        """Load pinned stories, dropping any that are blocklisted or whose
+        underlying article is older than 48 hours (see _pin_is_expired)."""
         try:
             if not os.path.exists(self.pinned_store_file):
                 return []
@@ -493,8 +532,8 @@ Articles to classify:
                         pulse_logger.log(f"🚫 Blocked by blocklist (pinned): {headline[:80]} | matched: {matched[0][:60]}")
                         dirty = True
                         continue
-                if self.is_article_too_old(story.get('pinned_at', '')):
-                    pulse_logger.log(f"🕐 Age cutoff (pinned): {headline[:80]}")
+                if self._pin_is_expired(story):
+                    pulse_logger.log(f"🕐 Age cutoff (pinned, article timestamp): {headline[:80]}")
                     dirty = True
                     continue
                 valid.append(story)
@@ -657,6 +696,42 @@ Respond with only one word: DIVERGED or UNCHANGED"""
                 pulse_logger.log(f"📌 New story pinned: {headline[:60]}")
 
         self.save_pinned_stories(pinned)
+
+        # Backfill published_at on any pin missing it, sourced from this same
+        # cycle's new_items (published_at/timestamp/date fallback chain).
+        # New entries above never set published_at directly, so this is what
+        # actually populates it — which is what _pin_is_expired() reads.
+        # Folded in from the former geo_pin_ttl.py monkeypatch, which ran
+        # this as a genuinely separate pass re-reading the just-saved file;
+        # preserved as-is (two passes, not merged into the loop above) to
+        # keep this refactor behavior-identical rather than restructuring it.
+        by_hl = {}
+        for article in new_items or []:
+            hl = article.get('headline', '')
+            if not hl:
+                continue
+            by_hl[hl] = (
+                (article.get('published_at') or '').strip()
+                or (article.get('timestamp') or '').strip()
+                or (article.get('date') or '').strip()
+            )
+        try:
+            if not os.path.exists(self.pinned_store_file):
+                return
+            with open(self.pinned_store_file, 'r') as f:
+                pinned_on_disk = json.load(f)
+            backfill_dirty = False
+            for pin in pinned_on_disk:
+                if (pin.get('published_at') or '').strip():
+                    continue
+                val = by_hl.get(pin.get('headline', ''), '')
+                if val:
+                    pin['published_at'] = val
+                    backfill_dirty = True
+            if backfill_dirty:
+                self.save_pinned_stories(pinned_on_disk)
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Pin published_at backfill failed: {e}", level="WARNING")
 
     def backfill_missing_tiers(self, active_headlines):
         """One-time-per-article maintenance pass: assign Haiku contextual tier to any
@@ -977,6 +1052,35 @@ CONTEXT: {context}"""
                 pulse_logger.log(f"🧹 Classification cache: {len(classifications)} entries after cleaning ({blocked} blocked, {aged} aged out)")
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to purge classification cache: {e}", level="WARNING")
+
+        # Second, article-time-based pass — the pinned-stories purge above
+        # only catches pins whose OWN pinned_at is >48h old. A pin that took
+        # a while to get classified could still pass that check while its
+        # underlying article is well past 48h old by publish time. Catches
+        # anything the pinned_at-based pass above missed. Folded in from the
+        # former geo_pin_ttl.py monkeypatch, which ran this as a genuinely
+        # separate pass after the original method returned; preserved as a
+        # second pass here rather than merged into the loop above, matching
+        # its exact prior behavior.
+        try:
+            if os.path.exists(self.pinned_store_file):
+                with open(self.pinned_store_file, 'r') as f:
+                    pinned = json.load(f)
+                kept = []
+                aged = 0
+                for story in pinned:
+                    if self._pin_is_expired(story):
+                        pulse_logger.log(
+                            f"🗑️ Force-removed pinned article (>48h from article timestamp): {story.get('headline', '')}"
+                        )
+                        aged += 1
+                        continue
+                    kept.append(story)
+                if aged:
+                    self.save_pinned_stories(kept)
+                    pulse_logger.log(f"🧹 Pin TTL — aged out {aged} pin(s) from article timestamp")
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Pin TTL extra purge failed: {e}", level="WARNING")
 
     def maybe_reset_geo_blocklist(self):
         """Clear the geo blocklist on Sunday weekly reset, matching EC blocklist schedule."""
@@ -2018,13 +2122,30 @@ CONTEXT: {context}"""
             pulse_logger.log(f"🕐 Cache fallback — aged out {aged_out} item(s) past 48h TTL, score recomputed: {score}")
         return data
 
+    def _backfill_live_published_at(self, data):
+        """Best-effort published_at backfill on the data fetch() is about to
+        return, sourced from each item's own timestamp/date when missing.
+        Folded in from the former geo_pin_ttl.py monkeypatch (previously
+        wrapped fetch() externally, applied to whatever the original
+        returned) — same effect, now applied natively at each return site."""
+        if not isinstance(data, dict):
+            return data
+        for key in ('all_items', 'news_items'):
+            for item in data.get(key) or []:
+                if not (item.get('published_at') or '').strip():
+                    item['published_at'] = (
+                        (item.get('timestamp') or '').strip()
+                        or (item.get('date') or '').strip()
+                    )
+        return data
+
     def fetch(self):
         try:
             existing = cache.load(self.cache_key)
             age_minutes = cache.get_age_minutes(self.cache_key)
             if existing and age_minutes < 3:
                 pulse_logger.log("↺ Geopolitical — using cache (TheNewsAPI refresh every 3min)")
-                return self._refresh_cached_data(existing['data'])
+                return self._backfill_live_published_at(self._refresh_cached_data(existing['data']))
 
             items = self.fetch_news()
 
@@ -2033,13 +2154,13 @@ CONTEXT: {context}"""
                 if existing:
                     self._reclassify_cached_pending(existing['data'].get('all_items', existing['data'].get('news_items', [])))
                     existing['data']['status'] = 'cached'
-                    return self._refresh_cached_data(existing['data'])
+                    return self._backfill_live_published_at(self._refresh_cached_data(existing['data']))
                 pinned = self.load_pinned_stories()
                 if pinned:
                     pulse_logger.log(f"⚠️ Geopolitical — News API unavailable and no cache, using {len(pinned)} pinned stories only", level="WARNING")
                     flags = self.identify_flags(pinned)
                     score = self.calculate_score(pinned, flags)
-                    return {
+                    return self._backfill_live_published_at({
                         'pillar': 'geopolitical',
                         'timestamp': datetime.now(self.timezone).isoformat(),
                         'news_items': pinned[:10],
@@ -2048,7 +2169,7 @@ CONTEXT: {context}"""
                         'total_items': len(pinned),
                         'pillar_score': score,
                         'status': 'pinned_only'
-                    }
+                    })
                 return None
 
             flags = self.identify_flags(items)
@@ -2066,14 +2187,14 @@ CONTEXT: {context}"""
             }
             cache.save(self.cache_key, result)
             pulse_logger.log(f"✓ Geopolitical updated | {len(flags)} active flags | {len(items)} articles | Score: {score}")
-            return result
+            return self._backfill_live_published_at(result)
 
         except Exception as e:
             error_handler.handle(e, "Geopolitical")
             cached = cache.load(self.cache_key)
             if cached:
                 cached['data']['status'] = 'stale'
-                return self._refresh_cached_data(cached['data'])
+                return self._backfill_live_published_at(self._refresh_cached_data(cached['data']))
             return None
 
 geopolitical_pipeline = GeopoliticalPipeline()

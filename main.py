@@ -40,8 +40,6 @@ from pipelines.macro_sentiment import macro_sentiment_pipeline, INTRADAY_SLOTS
 from pipelines.economic_calendar import economic_calendar_pipeline
 from pipelines.institutional import institutional_pipeline
 from pipelines.geopolitical import geopolitical_pipeline
-from pipelines.geo_pin_ttl import apply_pin_ttl
-apply_pin_ttl(geopolitical_pipeline)
 from pipelines.weekly_summary import weekly_summary_pipeline
 from pipelines.ai_lens import ai_lens_pipeline
 from pipelines.manual_input import manual_input_pipeline
