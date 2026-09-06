@@ -3,7 +3,7 @@ import os
 from datetime import datetime, timedelta
 import anthropic
 import pytz
-from config import TIMEZONE, STALE_THRESHOLDS
+from config import TIMEZONE
 from utils.retry import fetch_with_retry
 from utils.file_lock import atomic_write_json
 from utils.cache import cache

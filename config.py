@@ -14,7 +14,6 @@ TIMEZONE = "US/Eastern"
 
 # Refresh Rate
 REFRESH_INTERVAL_MINUTES = 5
-GEO_REFRESH_INTERVAL_MINUTES = 3
 
 # Pillar Weights
 PILLAR_WEIGHTS = {
@@ -24,22 +23,5 @@ PILLAR_WEIGHTS = {
     "macro_sentiment": 20
 }
 
-# Stale Data Thresholds (minutes)
-STALE_THRESHOLDS = {
-    "economic_calendar": 1440,
-    "macro_sentiment": 30,
-    "geopolitical": 120
-}
-
-# Bias Score Range
-MIN_BIAS_SCORE = -2.0
-MAX_BIAS_SCORE = 2.0
-
-# COT Update Day
-COT_UPDATE_DAY = "Friday"
-
 # Sentiment Model
 SENTIMENT_MODEL = "distilbert-base-uncased-finetuned-sst-2-english"
-
-# Cache Settings
-CACHE_DIR = "/data"

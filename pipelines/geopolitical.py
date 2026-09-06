@@ -1159,64 +1159,6 @@ CONTEXT: {context}"""
         except Exception:
             return fallback_description
 
-    def _parse_articles(self, data, seen_titles, items):
-        for article in data.get('data', []):
-            title = article.get('title', '')
-            if not title or title in seen_titles:
-                continue
-
-            # Same-source deduplication — skip if same source posted similar headline within 2 hours
-            is_source_duplicate = False
-            source = article.get('source', '')
-            published = article.get('published_at', '')
-            for existing in items:
-                if existing['source'] == source:
-                    try:
-                        existing_dt = datetime.fromisoformat(existing.get('published_at', '').replace('Z', '+00:00'))
-                        current_dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
-                        time_diff_hours = abs((current_dt - existing_dt).total_seconds()) / 3600
-                        if time_diff_hours < 2:
-                            existing_words = set(existing['headline'].lower().split())
-                            current_words = set(title.lower().split())
-                            overlap = len(existing_words & current_words) / max(len(existing_words | current_words), 1)
-                            if overlap > 0.3:
-                                is_source_duplicate = True
-                                break
-                    except Exception as e:
-                        pulse_logger.log(f"⚠️ Failed to parse article timestamp for dedup: {e}", level="WARNING")
-            if is_source_duplicate:
-                continue
-
-            if not self.is_market_relevant(title):
-                continue
-            seen_titles.add(title)
-            description = article.get('description', '') or ''
-            full_text = f"{title} {description}"
-            sentiment = self.get_sentiment_score(full_text)
-            published = article.get('published_at', '')
-            try:
-                dt = datetime.fromisoformat(published.replace('Z', '+00:00'))
-                est = dt.astimezone(pytz.timezone(TIMEZONE))
-                timestamp = est.strftime('%b %d, %I:%M %p EST')
-                date = est.strftime('%Y-%m-%d')
-            except Exception as e:
-                pulse_logger.log(f"⚠️ Failed to parse article publish date: {e}", level="WARNING")
-                timestamp = published
-                date = datetime.now(self.timezone).strftime('%Y-%m-%d')
-            if self.is_article_too_old(published):
-                continue
-            items.append({
-                'headline': title,
-                'description': ' '.join(description[:800].split()),
-                'source': article.get('source', 'TheNewsAPI'),
-                'timestamp': timestamp,
-                'date': date,
-                'link': article.get('url', ''),
-                'sentiment_score': sentiment,
-                'market_relevant': True,
-                'published_at': article.get('published_at', '')
-            })
-
     def fetch_news(self):
         if not THENEWS_API_KEY:
             pulse_logger.log("⚠️ THENEWS_API_KEY not set — skipping geopolitical news fetch", level="WARNING")

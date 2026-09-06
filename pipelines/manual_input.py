@@ -1,11 +1,9 @@
 import json
-import os
 from datetime import datetime
 import pytz
 from config import TIMEZONE
 from utils.file_lock import atomic_write_json
 from utils.retry import fetch_with_retry
-from utils.cache import cache
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
 from bs4 import BeautifulSoup

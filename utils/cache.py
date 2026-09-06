@@ -32,16 +32,5 @@ class Cache:
             return float('inf')
         cached_time = datetime.fromisoformat(cached['timestamp'].replace('Z', '+00:00'))
         return (datetime.now(timezone.utc) - cached_time).total_seconds() / 60
-    
-    def is_stale(self, key, threshold_minutes):
-        return self.get_age_minutes(key) > threshold_minutes
-
-    def delete(self, key):
-        cache_file = os.path.join(self.cache_dir, f"{key}.json")
-        try:
-            if os.path.exists(cache_file):
-                os.remove(cache_file)
-        except Exception:
-            pass
 
 cache = Cache()

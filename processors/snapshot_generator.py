@@ -6,7 +6,6 @@ from datetime import datetime
 import pytz
 from config import TIMEZONE
 from utils.logger import pulse_logger
-from utils.cache import cache
 
 class SnapshotGenerator:
     def __init__(self, snapshot_dir="/data/snapshots"):
