@@ -224,13 +224,37 @@ class GeopoliticalPipeline:
 
         prompt = f"""You are assisting a professional NQ and ES futures day trader with pre-market preparation.
 
+FALSE POSITIVES COST MORE THAN MISSES: you are classifying headlines for a Nasdaq-100/S&P 500 futures regime filter used by a low-frequency discretionary-exit system. False positives keep the operator flat or push a fake lean. When unsure whether an item reprices NQ or ES risk appetite, drop it. Do not "be complete." Completeness is how $12.9B software deals sit in the score for two days after the tape is done.
+
+FIRST_PRINT vs FOLLOW_UP — classify every relevant item as one of these before anything else below. This determines how long the item can live in the score, not whether it's interesting enough to include.
+
+FIRST_PRINT (48-hour clock): the article introduces a new fact — new kinetic action, new official restriction, new signed agreement, new disclosed size/terms, or first confirmation from a primary actor. A new kinetic act after silence of 5+ trading days is FIRST_PRINT even if it's the same war or the same underlying conflict.
+
+FOLLOW_UP (24-hour clock): the article restates an already-scored event with no new target class, no new supply-chain implication, and no new fact — "talks are close" with no third-party confirmation, an analyst note repeating a press release, a senator's comment on an already-scored story, a recap of an already-announced deal, a second strike inside an already-active 48-hour campaign with no new target class. FOLLOW_UP is still relevant: true — it is ingested and scored on the shorter clock, not rejected. Do not fail a FOLLOW_UP item under DECISION 1 or FILTER 2/6 below purely because it restates rather than introduces — that's exactly what makes it FOLLOW_UP, not grounds for rejection.
+
+Reject an item entirely (relevant: false, no tier, no kind) only if it neither introduces a new fact (FIRST_PRINT) nor restates an identifiable, already-scored, still-live event (FOLLOW_UP) — i.e. it has no traceable connection to anything market-moving, or it fails one of the other filters below on its own terms (source-vs-echo, actor test, market domain, etc.).
+
+M&A/PARTNERSHIP/DEAL ITEMS: apply the DEAL GATE inside the TECH/AI MEGA-DEAL RULES section below FIRST, before FIRST_PRINT/FOLLOW_UP or anything else. If an item fails that gate, set relevant: false and do not assign a tier or a kind.
+
 KNOWN ARTICLE OVERRIDES — if an article matches one of these titles exactly, use the specified tier, direction, and reasoning. Do not apply your normal tiering logic to these articles:
 - "U.S.-Iran negotiations postponed as Netanyahu blasts Hezbollah over apparent attacks" → Tier 1, bearish, reasoning: "Collapse of U.S.-Iran negotiations with simultaneous military escalation — direct threat to regional stability and oil supply."
 - "U.S. Navy ends blockade of Iran's ports and coastal areas" → Tier 2, bullish, reasoning: "Naval de-escalation removes energy supply disruption risk — positive for risk sentiment."
 
 TECH / AI MEGA-DEAL RULES — applies to any article centered on one of these companies: Nvidia, Apple, Microsoft, Alphabet/Google, Amazon, Meta, Broadcom, AMD, Intel, Taiwan Semiconductor (TSM), or a comparable major AI-infrastructure player (CoreWeave-scale or larger).
 
-RELEVANCE THRESHOLD: A tech/AI mega-deal, capex commitment, or strategic partnership is relevant only at $2B or more in a single commitment. Multiple tranches announced the same day count as one combined commitment; tranches announced on separate dates are independent commitments — evaluate each on its own size. Below $2B, reject as routine corporate news UNLESS multiple linked/compounding announcements from the same actor within a short window collectively cross the threshold — in that case, treat the aggregate as one event.
+DEAL GATE (replaces the old $2B floor for M&A/partnership/minority-stake items only — a hyperscaler's own capex/guidance print from an earnings call or investor update is a different category, still governed by the locked capex rule elsewhere, and bypasses this gate entirely):
+
+OUT — relevant: false, no tier, no kind: any M&A/partnership/minority-stake commitment under $20B (unless it's a hyperscaler capex/guidance print, which doesn't use this gate at all).
+
+LIVE (goes on to FIRST_PRINT/FOLLOW_UP classification above) requires BOTH a size test AND a confirmation test — a deal that only clears the size threshold via an unconfirmed report (anonymous sources, "people familiar with the matter," analyst speculation, or a single outlet's own reporting with no primary-source citation) does NOT clear this gate, no matter how specific or credible the dollar figure sounds. The dollar figure itself must be confirmed by an actual press release, SEC filing (e.g. an 8-K), or the company's own earnings call/investor update — not merely reported by a news outlet citing unnamed sources. A credible report that clearly identifies a specific pending deal and figure, sourced only to anonymous/unofficial channels with no company or regulatory confirmation yet, does not clear this gate — treat it as an unconfirmed rumor (reject it, or if it's restating an ALREADY-confirmed deal's terms, FOLLOW_UP per the step above), regardless of size.
+
+With that confirmation requirement satisfied, LIVE if EITHER:
+(a) the buyer is Nvidia, Microsoft, Alphabet/Google, Amazon, Meta, or Broadcom AND the confirmed disclosed value is $20B or more, OR
+(b) the transaction is a compute/foundry/networking/AI-energy/data-center deal of $50B or more, regardless of buyer.
+
+AMD, TSM, Intel, and Apple do NOT get the automatic $20B line — only the $50B-any-buyer line applies to them, unless the deal changes export rules, foundry capacity, or the legal stack in a way statable as an index-level effect in one sentence.
+
+Calibration, not exact-match overrides — reason from the rule, not these specific numbers: a ~$13B software/AI-startup purchase by a single mega-cap buyer is OUT (below $20B, a stock story, not a regime move). A ~$32B or ~$20B confirmed acquisition by one of the six named buyers is LIVE. A ~$40B infrastructure consortium deal is OUT under both tests (no single buyer clears $20B, and $40B misses the $50B infrastructure line). An ~$80B confirmed infrastructure/chip-producer takeout is LIVE under the $50B-any-buyer line regardless of buyer.
 
 SOURCE PRIORITY: Prefer information from a press release or SEC filing first, an earnings call or investor update second, and Tier-1 financial media (Reuters, Bloomberg, WSJ, CNBC breaking coverage) third. Discount unconfirmed reports, analyst speculation, or secondary outlets restating another outlet's story.
 
@@ -238,10 +262,11 @@ STANDARD EXCLUSIONS (always reject): routine product launches, sub-$1B customer 
 
 RE-FLAGGING RULE: If this article reports on a deal, partnership, or capex commitment that has already been covered (same actors, same core terms), do not treat it as newly relevant unless it reports material new terms, a timeline acceleration, or a scope expansion beyond what was previously announced. A recap, confirmation, or analyst reaction to an already-known deal is an echo — fail it under Filter 6 (Confirmation Trap Test).
 
-TIER CLASSIFICATION FOR TECH/AI MEGA-DEALS (use in place of the geopolitical tier definitions in DECISION 5 for this category):
-Tier 1: Commitment >$5B, OR a capex beat >20% over prior guidance paired with strong demand/backlog framing, OR a strategic government/industrial partnership with index-level market impact.
-Tier 2: Commitment $2B-$5B, OR material but not immediately market-moving (e.g. multi-year build-out without near-term capex acceleration).
-Tier 3: Below the $2B threshold — only assign if it's part of a compounding set of linked announcements (see RELEVANCE THRESHOLD above); otherwise reject entirely rather than assigning Tier 3.
+TIER FOR DEALS THAT CLEAR THE GATE ABOVE (use in place of the geopolitical tier definitions in DECISION 5 for this category; a deal that fails the gate is never tiered at all — Tier 3 is not a landing spot for a gate failure. A capex beat keeps its own separate tier treatment below, not this section):
+Tier 1: an immediate, clear index-level catalyst — a finalized, signed transformative takeout with a stated close path, or a comparable unambiguous done-deal.
+Tier 2: material but still contingent — announced but not yet closed, a regulator still ahead, or "getting close" language from a primary actor plus a confirming third party.
+Tier 3: the deal itself is confirmed (buyer, target, and size disclosed via a real press release/8-K/earnings call — the gate's confirmation requirement is already satisfied), but the article is otherwise thin — single-outlet coverage of that disclosure with no additional corroboration yet, or the disclosure itself is a brief/preliminary announcement without full deal terms. Tier 3 always means "confirmed but under-specified," never "unconfirmed."
+Capex beat (separate from the deal gate — evaluated on its own, not against the $20B/$50B thresholds): Tier 1 for a capex beat >20% over prior guidance paired with strong demand/backlog framing; Tier 2 for a strategic government/industrial partnership or multi-year build-out without near-term capex acceleration.
 
 DIRECTION FOR TECH/AI MEGA-DEALS — DELIBERATELY DIFFERENT FROM THE GEOPOLITICAL CHAINS BELOW: Do not default to a confident bullish or bearish call for this category. Even a large, clearly-covered mega-deal can coincide with a same-day stock move driven by unrelated macro conditions — a confident directional call here risks being wrong for reasons that have nothing to do with the deal's actual merits (real example: the Apple-Broadcom $30B chip deal, August 2026). Default to "neutral" and use the summary/reasoning fields to surface the event, its size, and its terms factually. Only lean bullish or bearish when the article itself contains genuinely one-sided evidence:
 - Lean BEARISH only if the article contains explicit margin-pressure language or explicit no-ROI/return-timeline-risk language from the company or credible analysts.
@@ -282,7 +307,7 @@ Think like a trader sitting down at 8AM asking: "Does this change anything about
 
 Pass if it involves: Federal Reserve policy or official commentary, geopolitical escalation or resolution affecting global risk sentiment, major economic data surprises, energy market shocks, trade policy changes with immediate impact, systemic financial risk, or significant government actions with direct market consequences, or major tech/AI infrastructure deals/capex commitments meeting the TECH/AI MEGA-DEAL RULES threshold above, or mega-cap regulatory/legal outcomes meeting the MEGA-CAP REGULATORY/LEGAL OUTCOME RULES above.
 
-Fail if it involves: opinion or commentary on past market moves, investment advice or tips, personal finance stories, single company news unless systemically important, celebrity investor quotes, lifestyle or consumer behavior stories, retail shopping guides or consumer deal/discount roundups (e.g. "back to school savings," "extra deals," holiday shopping tips, or similar listicle-style consumer spending content — even if framed around tariffs or prices), prediction-market or betting-market odds and probability content (e.g. Kalshi, Polymarket, or PredictIt contract prices or probability shifts on a geopolitical or economic outcome) — a market's aggregated probability estimate is not itself a new event, even when the underlying outcome concerns something market-moving like a nuclear deal, election, or rate decision, third-party commentary or reaction pieces about an already-reported, already-scored event (a deal, settlement, ruling, or similar) that contain no new dollar figures, no new company actions, and no new development beyond restating or opining on what's already known (e.g. "[Company]'s [already-known settlement/deal] — [expert/analyst] says [opinion about it]" is a reaction to old news, not new news, even if freshly published), newsletter recap formats, or anything that describes what already happened rather than new information.
+Fail if it involves: opinion or commentary on past market moves, investment advice or tips, personal finance stories, single company news unless systemically important, celebrity investor quotes, lifestyle or consumer behavior stories, retail shopping guides or consumer deal/discount roundups (e.g. "back to school savings," "extra deals," holiday shopping tips, or similar listicle-style consumer spending content — even if framed around tariffs or prices), prediction-market or betting-market odds and probability content (e.g. Kalshi, Polymarket, or PredictIt contract prices or probability shifts on a geopolitical or economic outcome) — a market's aggregated probability estimate is not itself a new event, even when the underlying outcome concerns something market-moving like a nuclear deal, election, or rate decision, newsletter recap formats, or anything that describes what already happened rather than new information AND cannot be tied to an identifiable already-scored event still within its FOLLOW_UP window (see the FIRST_PRINT/FOLLOW_UP step above — a same-story restatement that IS tied to a still-live event is FOLLOW_UP, not a DECISION 1 failure).
 
 Before passing any article, run it through these six filters. If it fails any one of them, reject it:
 
@@ -298,7 +323,7 @@ A regulatory settlement, fine, verdict, or court judgment against a company is a
 The presence of macro keywords like "war", "energy", "Iran", "tariff" in a headline does NOT make it a source event. Ask: who is the ACTOR and what ACTION did they take? If the actor is a corporation reacting to an existing situation — it's an echo regardless of the macro language surrounding it.
 
 FILTER 2 — RECENCY TEST
-Is this reporting something happening RIGHT NOW or recapping something that already happened? Recaps, week-in-review pieces, "after X weeks of..." articles, and historical context pieces are not new information.
+Is this reporting something happening RIGHT NOW, a FOLLOW_UP-window restatement of a still-live event (classify those FOLLOW_UP per the step above — don't fail here), or something genuinely stale — a week-in-review piece, an "after X weeks of..." article, or historical context with no live connection? Only that last category fails this filter.
 
 FILTER 3 — SPECIFICITY TEST
 Is this about a specific actionable event or a general mood/sentiment piece? Vibe articles, market psychology pieces, and "how to navigate" content are not tradeable information.
@@ -310,7 +335,7 @@ FILTER 5 — MARKET DOMAIN TEST
 Does this article exist within the domain of financial markets, geopolitics affecting markets, energy, trade, or monetary policy? Articles about space missions, scientific discoveries, social policy, and non-financial government activity should be rejected even if they use financial language.
 
 FILTER 6 — CONFIRMATION TRAP TEST
-Is this article just confirming something the market already knows and has already priced in? If the macro situation is already established and this is just another data point piling on — it adds no new directional information. Fail it.
+Is this article just confirming something the market already knows and has already priced in? If the macro situation is already established and this is just another data point piling on, it adds no new directional information ON ITS OWN — but per the FIRST_PRINT/FOLLOW_UP step above, that is grounds for classifying it FOLLOW_UP (relevant: true, 24-hour clock), not for failing it under this filter. Only fail it here if it also can't be tied to any identifiable already-scored event at all.
 
 DECISION 2 — MARKET DIRECTION
 If relevant, what is the directional impact on NQ and ES equity futures specifically?
@@ -338,11 +363,12 @@ DECISION 3 — SUMMARY
 Write a clean 3-4 sentence market-focused summary of the article. Cover: what happened, who the key actor is, what the immediate consequence is, and what it means for NQ/ES traders today. Write it as if briefing a trader in 30 seconds. Do not use jargon. Be direct and specific.
 
 Return ONLY a JSON array with no markdown, no explanation, no preamble. Exactly this format:
-[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Iran war escalation directly affects oil and risk sentiment", "summary": "Your 3-4 sentence market summary here.", "uncertainty_score": 85, "tier": 1, "reasoning": "Active war escalation directly threatens oil supply and broad risk sentiment."}}]
+[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Iran war escalation directly affects oil and risk sentiment", "summary": "Your 3-4 sentence market summary here.", "uncertainty_score": 85, "tier": 1, "kind": "first_print", "reasoning": "Active war escalation directly threatens oil supply and broad risk sentiment."}}]
 
 Use only "bearish", "bullish", or "neutral" for direction.
 Use confidence between 0.0 and 1.0.
 Use tier as an integer: 1, 2, or 3.
+Use kind as either "first_print" or "follow_up" for every relevant item, per the FIRST_PRINT/FOLLOW_UP step above. Omit for a non-relevant item.
 If relevant is false, still provide a summary field but it can be empty string.
 
 DECISION 4 — UNCERTAINTY SCORE
@@ -666,6 +692,17 @@ Respond with only one word: DIVERGED or UNCHANGED"""
                 continue
             if r.get('direction', 'neutral') == 'neutral':
                 continue
+            if r.get('kind') == 'follow_up':
+                # A follow_up's only claim to relevance is borrowed from
+                # whatever it's restating — if the underlying story needs
+                # to survive past a feed gap, its first_print already had
+                # its own independent shot at getting pinned. Letting a
+                # restatement spawn its own pin would give it the pin
+                # mechanism's ~48h-from-article-time window instead of its
+                # intended 24h ceiling, and is the same "stacking" pattern
+                # Section 2.3 already warns against for tiers, showing up
+                # in the pin mechanism instead.
+                continue
 
             article = new_items[idx]
             headline = article.get('headline', '')
@@ -859,7 +896,10 @@ CONTEXT: {context}"""
 
         active_relevant = {
             headline: entry for headline, entry in gemini_cache.items()
-            if entry.get('relevant') and not self.is_article_too_old(entry.get('classified_at', ''))
+            if entry.get('relevant') and not self.is_article_too_old(
+                entry.get('classified_at', ''),
+                max_hours=24 if entry.get('kind') == 'follow_up' else MAX_ARTICLE_AGE_HOURS
+            )
         }
         if not active_relevant:
             return
@@ -1328,7 +1368,8 @@ CONTEXT: {context}"""
         for i in items:
             cached = gemini_cache.get(i['headline'], {})
             if cached.get('relevant') and cached.get('confidence', 0) >= 0.75:
-                if self.is_article_too_old(cached.get('classified_at', '')):
+                kind_max_hours = 24 if cached.get('kind') == 'follow_up' else MAX_ARTICLE_AGE_HOURS
+                if self.is_article_too_old(cached.get('classified_at', ''), max_hours=kind_max_hours):
                     continue
                 if cached.get('direction'):
                     direction = cached['direction']
@@ -1344,6 +1385,7 @@ CONTEXT: {context}"""
                     i['haiku_tier'] = cached['tier']
                 if cached.get('tier_reasoning'):
                     i['haiku_tier_reasoning'] = cached['tier_reasoning']
+                i['kind'] = cached.get('kind')
                 known_relevant.append(i)
 
         # Articles not yet classified — use keyword filter as temporary pass
@@ -1489,6 +1531,11 @@ CONTEXT: {context}"""
                                     if tier is not None:
                                         pulse_logger.log(f"⚠️ Haiku returned malformed tier '{tier}' for '{headline[:60]}' — falling back to keyword tiering", level="WARNING")
                                     tier = None
+                                kind = r.get('kind')
+                                if kind not in ('first_print', 'follow_up'):
+                                    if kind is not None:
+                                        pulse_logger.log(f"⚠️ Haiku returned malformed kind '{kind}' for '{headline[:60]}' — defaulting to first_print", level="WARNING")
+                                    kind = 'first_print'
                                 text_source = new_items[idx].get('_text_source', 'unknown')
                                 new_class = {
                                     'relevant': r.get('relevant', False),
@@ -1499,6 +1546,7 @@ CONTEXT: {context}"""
                                     'summary': r.get('summary', ''),
                                     'uncertainty_score': r.get('uncertainty_score', 0),
                                     'tier': tier,
+                                    'kind': kind,
                                     'tier_reasoning': r.get('reasoning', ''),
                                     'text_source': text_source,
                                     'classified_at': datetime.now(timezone.utc).isoformat()
@@ -1512,7 +1560,10 @@ CONTEXT: {context}"""
                                     active_entries = [
                                         (h, c) for h, c in gemini_cache.items()
                                         if h != headline and c.get('relevant')
-                                        and not self.is_article_too_old(c.get('classified_at', ''))
+                                        and not self.is_article_too_old(
+                                            c.get('classified_at', ''),
+                                            max_hours=24 if c.get('kind') == 'follow_up' else MAX_ARTICLE_AGE_HOURS
+                                        )
                                     ]
                                     active_entries.sort(key=lambda hc: hc[1].get('classified_at', ''), reverse=True)
                                     for existing_headline, _ in active_entries[:15]:
@@ -1900,6 +1951,9 @@ CONTEXT: {context}"""
                         tier = r.get('tier')
                         if tier not in (1, 2, 3):
                             tier = None
+                        kind = r.get('kind')
+                        if kind not in ('first_print', 'follow_up'):
+                            kind = 'first_print'
                         text_source = pending[idx].get('_text_source', 'unknown')
                         gc[headline] = {
                             'relevant': r.get('relevant', False),
@@ -1910,6 +1964,7 @@ CONTEXT: {context}"""
                             'summary': r.get('summary', ''),
                             'uncertainty_score': r.get('uncertainty_score', 0),
                             'tier': tier,
+                            'kind': kind,
                             'tier_reasoning': r.get('reasoning', ''),
                             'text_source': text_source,
                             'classified_at': datetime.now(timezone.utc).isoformat()
