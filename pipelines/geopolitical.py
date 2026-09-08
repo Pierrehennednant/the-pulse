@@ -1532,10 +1532,13 @@ CONTEXT: {context}"""
                                         pulse_logger.log(f"⚠️ Haiku returned malformed tier '{tier}' for '{headline[:60]}' — falling back to keyword tiering", level="WARNING")
                                     tier = None
                                 kind = r.get('kind')
-                                if kind not in ('first_print', 'follow_up'):
+                                kind_defaulted = kind not in ('first_print', 'follow_up')
+                                if kind_defaulted:
                                     if kind is not None:
                                         pulse_logger.log(f"⚠️ Haiku returned malformed kind '{kind}' for '{headline[:60]}' — defaulting to first_print", level="WARNING")
                                     kind = 'first_print'
+                                kind_hours = 24 if kind == 'follow_up' else MAX_ARTICLE_AGE_HOURS
+                                kind_display = f"{kind} ({kind_hours}h{', defaulted' if kind_defaulted else ''})"
                                 text_source = new_items[idx].get('_text_source', 'unknown')
                                 new_class = {
                                     'relevant': r.get('relevant', False),
@@ -1644,7 +1647,7 @@ CONTEXT: {context}"""
                                     gemini_cache[headline] = new_class
                                     pulse_logger.log(
                                         f"🧭 Haiku tier | {headline[:60]} | Tier {tier if tier is not None else 'N/A (fallback)'} | "
-                                        f"{r.get('direction', 'unknown')} | conf={r.get('confidence', 0)} | src={text_source} | {r.get('reasoning', '')}"
+                                        f"{r.get('direction', 'unknown')} | conf={r.get('confidence', 0)} | kind={kind_display} | src={text_source} | {r.get('reasoning', '')}"
                                     )
                         atomic_write_json(gemini_cache_file, gemini_cache)
                         filtered_classifications = [
@@ -1952,8 +1955,13 @@ CONTEXT: {context}"""
                         if tier not in (1, 2, 3):
                             tier = None
                         kind = r.get('kind')
-                        if kind not in ('first_print', 'follow_up'):
+                        kind_defaulted = kind not in ('first_print', 'follow_up')
+                        if kind_defaulted:
+                            if kind is not None:
+                                pulse_logger.log(f"⚠️ Haiku returned malformed kind '{kind}' for '{headline[:60]}' (fallback reclassification) — defaulting to first_print", level="WARNING")
                             kind = 'first_print'
+                        kind_hours = 24 if kind == 'follow_up' else MAX_ARTICLE_AGE_HOURS
+                        kind_display = f"{kind} ({kind_hours}h{', defaulted' if kind_defaulted else ''})"
                         text_source = pending[idx].get('_text_source', 'unknown')
                         gc[headline] = {
                             'relevant': r.get('relevant', False),
@@ -1972,7 +1980,7 @@ CONTEXT: {context}"""
                         pulse_logger.log(
                             f"🔄 Fallback-reclassified: '{headline[:60]}' → "
                             f"{'relevant' if r.get('relevant') else 'irrelevant'} | "
-                            f"Tier {tier or 'N/A'} | {r.get('direction', 'unknown')} | src={text_source}"
+                            f"Tier {tier or 'N/A'} | {r.get('direction', 'unknown')} | kind={kind_display} | src={text_source}"
                         )
                 atomic_write_json(gemini_cache_file, gc)
                 pulse_logger.log(f"✅ Fallback reclassification done — {len(classifications)} article(s) classified")
