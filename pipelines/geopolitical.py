@@ -1870,9 +1870,12 @@ CONTEXT: {context}"""
                 tier_score, tier_weight = tier_map[haiku_tier]
                 conf = haiku_conf if haiku_conf is not None else 1.0
                 article_score = tier_score * conf
+                item_kind = item.get('kind')
+                kind_hours = 24 if item_kind == 'follow_up' else MAX_ARTICLE_AGE_HOURS
+                kind_display = f"{item_kind} ({kind_hours}h)" if item_kind in ('first_print', 'follow_up') else "N/A"
                 pulse_logger.log(
                     f"🧭 Geo tier (Haiku) | {item.get('headline', '')[:60]} | Tier {haiku_tier} | {direction} | "
-                    f"conf={conf} | {item.get('haiku_tier_reasoning', '')}"
+                    f"conf={conf} | kind={kind_display} | {item.get('haiku_tier_reasoning', '')}"
                 )
             else:
                 fallback_tier_count += 1
