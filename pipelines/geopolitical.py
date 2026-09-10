@@ -232,6 +232,8 @@ FIRST_PRINT (48-hour clock): the article introduces a new fact — new kinetic a
 
 FOLLOW_UP (24-hour clock): the article restates an already-scored event with no new target class, no new supply-chain implication, and no new fact — "talks are close" with no third-party confirmation, an analyst note repeating a press release, a senator's comment on an already-scored story, a recap of an already-announced deal, a second strike inside an already-active 48-hour campaign with no new target class. FOLLOW_UP is still relevant: true — it is ingested and scored on the shorter clock, not rejected. Do not fail a FOLLOW_UP item under DECISION 1 or FILTER 2/6 below purely because it restates rather than introduces — that's exactly what makes it FOLLOW_UP, not grounds for rejection.
 
+EXAMPLE — FOLLOW_UP, not FIRST_PRINT: "Trump told Putin U.S.-Russia ties could be fully restored with a swift end to the Ukraine war, Kremlin says." This is a primary-actor readout of a call stating a desire — no signed ceasefire, no withdrawal, no treaty, no verified pause. It is the "talks are close" case above, not a new fact: kind=follow_up, 24h. Contrast FIRST_PRINT: a joint statement announcing a dated ceasefire, a signed framework, or third-party (UN/Turkey/an official ministry) confirmation that fighting has actually stopped — that is new terms, 48h.
+
 Reject an item entirely (relevant: false, no tier, no kind) only if it neither introduces a new fact (FIRST_PRINT) nor restates an identifiable, already-scored, still-live event (FOLLOW_UP) — i.e. it has no traceable connection to anything market-moving, or it fails one of the other filters below on its own terms (source-vs-echo, actor test, market domain, etc.).
 
 M&A/PARTNERSHIP/DEAL ITEMS: apply the DEAL GATE inside the TECH/AI MEGA-DEAL RULES section below FIRST, before FIRST_PRINT/FOLLOW_UP or anything else. If an item fails that gate, set relevant: false and do not assign a tier or a kind.
@@ -510,16 +512,14 @@ Articles to classify:
                 return val
         return ''
 
-    def _pin_is_expired(self, story):
-        """Fails CLOSED (treats as expired) on a missing or unparseable
-        timestamp, same reasoning as is_article_too_old(). Kept as its own
-        check rather than reusing is_article_too_old() directly because it
-        parses via dateutil (handling display-formatted strings like
-        pin['timestamp'], e.g. "Aug 29, 10:00 AM EST", not just ISO 8601)
-        and needs the EST/EDT tzinfo map to do it."""
-        ts = self._pin_ttl_timestamp(story)
+    def _pin_parsed_timestamp(self, ts):
+        """Parse a pin's article timestamp (ISO or display-formatted,
+        e.g. "Aug 29, 10:00 AM EST") into an aware datetime, or None on
+        failure. Factored out of _pin_is_expired() so the published_at
+        backfill pass (update_pinned_store()) can compute expires_at
+        using the identical parse logic instead of duplicating it."""
         if not ts:
-            return True
+            return None
         try:
             dt = dateutil_parser.parse(
                 ts,
@@ -528,10 +528,31 @@ Articles to classify:
             )
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-            age_hours = (datetime.now(timezone.utc) - dt).total_seconds() / 3600
-            return age_hours > MAX_ARTICLE_AGE_HOURS
+            return dt
         except Exception:
+            return None
+
+    def _pin_is_expired(self, story):
+        """Fails CLOSED (treats as expired) on a missing or unparseable
+        timestamp, same reasoning as is_article_too_old(). Kept as its own
+        check rather than reusing is_article_too_old() directly because it
+        parses via dateutil (handling display-formatted strings like
+        pin['timestamp'], e.g. "Aug 29, 10:00 AM EST", not just ISO 8601)
+        and needs the EST/EDT tzinfo map to do it. Ages by kind_hours (24
+        for a follow_up pin, 48 otherwise) rather than a flat
+        MAX_ARTICLE_AGE_HOURS — under the current pin-creation rules
+        (update_pinned_store() excludes follow_up from ever being pinned,
+        and a refresh never changes an existing pin's kind) every pin is
+        first_print today, so this is a no-op in practice — but it's the
+        correct plumbing rather than an assumption, and costs nothing if
+        that exclusion rule ever changes. Not a third clock — same two."""
+        ts = self._pin_ttl_timestamp(story)
+        dt = self._pin_parsed_timestamp(ts)
+        if dt is None:
             return True
+        age_hours = (datetime.now(timezone.utc) - dt).total_seconds() / 3600
+        kind_hours = 24 if story.get('kind') == 'follow_up' else MAX_ARTICLE_AGE_HOURS
+        return age_hours > kind_hours
 
     def load_pinned_stories(self):
         """Load pinned stories, dropping any that are blocklisted or whose
@@ -558,6 +579,10 @@ Articles to classify:
                         pulse_logger.log(f"🚫 Blocked by blocklist (pinned): {headline[:80]} | matched: {matched[0][:60]}")
                         dirty = True
                         continue
+                if story.get('kind') not in ('first_print', 'follow_up'):
+                    pulse_logger.log(f"⚠️ Pinned story missing/malformed kind '{story.get('kind')}' for '{headline[:60]}' — defaulting to first_print", level="WARNING")
+                    story['kind'] = 'first_print'
+                    dirty = True
                 if self._pin_is_expired(story):
                     pulse_logger.log(f"🕐 Age cutoff (pinned, article timestamp): {headline[:80]}")
                     dirty = True
@@ -709,6 +734,13 @@ Respond with only one word: DIVERGED or UNCHANGED"""
             tier = r.get('tier')
             if tier not in (1, 2, 3):
                 tier = None
+            pin_kind = r.get('kind')
+            if pin_kind not in ('first_print', 'follow_up'):
+                # Same raw Haiku response background_classify() already
+                # resolved and warned about for this headline moments ago
+                # in this same cycle — not a second independent failure,
+                # so no second warning here.
+                pin_kind = 'first_print'
 
             new_entry = {
                 'headline': headline,
@@ -716,6 +748,7 @@ Respond with only one word: DIVERGED or UNCHANGED"""
                 'direction': r.get('direction'),
                 'confidence': r.get('confidence', 0),
                 'tier': tier,
+                'kind': pin_kind,
                 'uncertainty_score': r.get('uncertainty_score', 0),
                 'source': article.get('source', ''),
                 'timestamp': article.get('timestamp', ''),
@@ -764,6 +797,10 @@ Respond with only one word: DIVERGED or UNCHANGED"""
                 val = by_hl.get(pin.get('headline', ''), '')
                 if val:
                     pin['published_at'] = val
+                    parsed = self._pin_parsed_timestamp(val)
+                    if parsed is not None:
+                        kind_hours = 24 if pin.get('kind') == 'follow_up' else MAX_ARTICLE_AGE_HOURS
+                        pin['expires_at'] = (parsed + timedelta(hours=kind_hours)).isoformat()
                     backfill_dirty = True
             if backfill_dirty:
                 self.save_pinned_stories(pinned_on_disk)
@@ -1445,6 +1482,7 @@ CONTEXT: {context}"""
                 'sentiment_score': 0.8 if pin.get('direction') == 'bullish' else -0.8 if pin.get('direction') == 'bearish' else 0.0,
                 'gemini_direction': pin.get('direction'),
                 'haiku_tier': pin.get('tier'),
+                'kind': pin.get('kind'),
                 'uncertainty_score': pin.get('uncertainty_score', 0),
                 'market_relevant': True,
                 'pinned': True
