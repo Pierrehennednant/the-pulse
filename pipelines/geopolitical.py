@@ -24,6 +24,46 @@ class GeopoliticalPipeline:
     GEO_BLOCKLIST_FILE = "/data/geo_blocklist.json"
     GEO_MANUAL_BLOCKLIST_FILE = "/data/geo_manual_blocklist.json"
 
+    # Fields a resolved Haiku classification carries (gemini_cache's per-
+    # headline entry shape) and what each is called once it's on a scored
+    # item (calculate_score()/identify_flags() read the right-hand names).
+    # A pin record uses the SAME left-hand names as a classification entry
+    # (see PIN_CLASSIFICATION_FIELDS) specifically so this one mapping also
+    # projects a pin onto a scored item at injection time. Add ONE entry
+    # here when the classification schema grows a field that needs to
+    # survive onto a scored item — not a line in three separate hand-typed
+    # dict literals (known_relevant's cache-hit path,
+    # _merge_fresh_classifications(), fetch_news()'s pin-injection block).
+    # Confirmed via direct trace (Sep 2026): three independently
+    # maintained copy sites had silently diverged — pins were missing
+    # kind, tier_reasoning, and confidence at various points; the
+    # cache-refresh-promotion path was missing kind and uncertainty_score.
+    # This map is the fix for that class of bug recurring one field at a
+    # time, not just for the specific fields found so far.
+    CLASSIFICATION_TO_ITEM_FIELDS = {
+        'direction': 'gemini_direction',
+        'tier': 'haiku_tier',
+        'confidence': 'haiku_confidence',
+        'tier_reasoning': 'haiku_tier_reasoning',
+        'uncertainty_score': 'uncertainty_score',
+        'kind': 'kind',
+    }
+    # Same names as the map's keys — what a pin record carries forward,
+    # unrenamed, from the classification that created it.
+    PIN_CLASSIFICATION_FIELDS = tuple(CLASSIFICATION_TO_ITEM_FIELDS.keys())
+
+    def _apply_classification_fields(self, item, source):
+        """Copy CLASSIFICATION_TO_ITEM_FIELDS from `source` (a
+        gemini_cache entry or a pin record — both use the classification's
+        own field names) onto `item` (a scored item dict). Single source
+        of truth for known_relevant's cache-hit path,
+        _merge_fresh_classifications(), and fetch_news()'s pin-injection
+        block."""
+        for src_field, item_field in self.CLASSIFICATION_TO_ITEM_FIELDS.items():
+            val = source.get(src_field)
+            if val is not None:
+                item[item_field] = val
+
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "geopolitical"
@@ -742,20 +782,36 @@ Respond with only one word: DIVERGED or UNCHANGED"""
                 # so no second warning here.
                 pin_kind = 'first_print'
 
+            # Normalize the raw Haiku response onto the classification's
+            # own field names (reasoning -> tier_reasoning; tier/kind
+            # overlaid with the already-resolved values above) so the pin
+            # can be built from the same CLASSIFICATION_TO_ITEM_FIELDS
+            # list every other classification-copy site uses, instead of
+            # a fourth hand-typed field subset.
+            resolved = dict(r)
+            resolved['tier'] = tier
+            resolved['kind'] = pin_kind
+            resolved['tier_reasoning'] = r.get('reasoning', '')
+            # dict(r) leaves these absent (None via .get()) if Haiku's raw
+            # response omitted them — pin default-to-0 to match
+            # background_classify()'s own new_class convention, rather
+            # than silently dropping the key.
+            resolved['confidence'] = r.get('confidence', 0)
+            resolved['uncertainty_score'] = r.get('uncertainty_score', 0)
+
             new_entry = {
                 'headline': headline,
                 'summary': r.get('summary', article.get('description', '')),
-                'direction': r.get('direction'),
-                'confidence': r.get('confidence', 0),
-                'tier': tier,
-                'kind': pin_kind,
-                'uncertainty_score': r.get('uncertainty_score', 0),
                 'source': article.get('source', ''),
                 'timestamp': article.get('timestamp', ''),
                 'date': article.get('date', ''),
                 'link': article.get('link', ''),
                 'pinned_at': datetime.now(timezone.utc).isoformat()
             }
+            for field in self.PIN_CLASSIFICATION_FIELDS:
+                val = resolved.get(field)
+                if val is not None:
+                    new_entry[field] = val
 
             # Only skip if this exact headline is already pinned — never evict a
             # distinct headline based on a same-story judgment. TTL (48h, in
@@ -1411,18 +1467,9 @@ CONTEXT: {context}"""
                 if cached.get('direction'):
                     direction = cached['direction']
                     i['sentiment_score'] = 0.8 if direction == 'bullish' else -0.8 if direction == 'bearish' else 0.0
-                    i['gemini_direction'] = direction
                 if cached.get('summary'):
                     i['description'] = cached['summary']
-                if cached.get('uncertainty_score') is not None:
-                    i['uncertainty_score'] = cached['uncertainty_score']
-                if cached.get('confidence') is not None:
-                    i['haiku_confidence'] = cached['confidence']
-                if cached.get('tier') in (1, 2, 3):
-                    i['haiku_tier'] = cached['tier']
-                if cached.get('tier_reasoning'):
-                    i['haiku_tier_reasoning'] = cached['tier_reasoning']
-                i['kind'] = cached.get('kind')
+                self._apply_classification_fields(i, cached)
                 known_relevant.append(i)
 
         # Articles not yet classified — use keyword filter as temporary pass
@@ -1472,7 +1519,7 @@ CONTEXT: {context}"""
             if pin_headline in current_headlines:
                 continue
             # No live coverage — inject the pin
-            immediately_available.append({
+            injected_item = {
                 'headline': pin_headline,
                 'description': pin.get('summary', ''),
                 'source': pin.get('source', ''),
@@ -1480,13 +1527,11 @@ CONTEXT: {context}"""
                 'date': pin.get('date', ''),
                 'link': pin.get('link', ''),
                 'sentiment_score': 0.8 if pin.get('direction') == 'bullish' else -0.8 if pin.get('direction') == 'bearish' else 0.0,
-                'gemini_direction': pin.get('direction'),
-                'haiku_tier': pin.get('tier'),
-                'kind': pin.get('kind'),
-                'uncertainty_score': pin.get('uncertainty_score', 0),
                 'market_relevant': True,
                 'pinned': True
-            })
+            }
+            self._apply_classification_fields(injected_item, pin)
+            immediately_available.append(injected_item)
             current_headlines.add(pin_headline)
             injected += 1
 
@@ -2106,15 +2151,9 @@ CONTEXT: {context}"""
             if cached.get('direction'):
                 direction = cached['direction']
                 item['sentiment_score'] = 0.8 if direction == 'bullish' else -0.8 if direction == 'bearish' else 0.0
-                item['gemini_direction'] = direction
             if cached.get('summary'):
                 item['description'] = cached['summary']
-            if cached.get('confidence') is not None:
-                item['haiku_confidence'] = cached['confidence']
-            if cached.get('tier') in (1, 2, 3):
-                item['haiku_tier'] = cached['tier']
-            if cached.get('tier_reasoning'):
-                item['haiku_tier_reasoning'] = cached['tier_reasoning']
+            self._apply_classification_fields(item, cached)
             item['keyword_fallback_only'] = False
             pulse_logger.log(f"🔄 Cache refresh — picked up fresh classification, promoted to scoring: '{item.get('headline', '')[:60]}'")
             updated += 1
