@@ -202,12 +202,20 @@ def manual_input():
         story_url = data.get('story_url', None)
         event_date = data.get('event_date', '')
         confidence = data.get('confidence', 0.75)
+        # Rate decision events only (Federal Funds Rate / FOMC Statement) — see
+        # pipelines/economic_calendar.py's RATE_DECISION_EVENTS. None for every
+        # other event type.
+        priced_action = data.get('priced_action', None)
+        dots_signal = data.get('dots_signal', None)
 
         ok, err = _validate_manual_input(event_title, actual_value)
         if not ok:
             return jsonify({'error': err}), 400
 
-        success = manual_input_pipeline.save_actual(event_title, actual_value, story_url, event_date=event_date, confidence=confidence)
+        success = manual_input_pipeline.save_actual(
+            event_title, actual_value, story_url, event_date=event_date,
+            confidence=confidence, priced_action=priced_action, dots_signal=dots_signal
+        )
 
         if success:
             # Update the EC cache in place — no live Forex Factory fetch needed.
@@ -221,13 +229,17 @@ def manual_input():
                         if event.get('title') == event_title and (not event_date or event.get('event_date', '') == event_date):
                             result, market_impact, reason = economic_calendar_pipeline.get_market_implication(
                                 event_title, actual_value,
-                                event.get('forecast', ''), event.get('previous', '')
+                                event.get('forecast', ''), event.get('previous', ''),
+                                priced_action=priced_action
                             )
                             event['actual'] = actual_value
                             event['result'] = result
                             event['market_impact'] = market_impact
                             event['reason'] = reason
                             event['confidence'] = confidence
+                            if event_title in economic_calendar_pipeline.RATE_DECISION_EVENTS:
+                                event['priced_action'] = priced_action
+                                event['dots_signal'] = dots_signal
                             if story_url:
                                 event['story_url'] = story_url
                             break

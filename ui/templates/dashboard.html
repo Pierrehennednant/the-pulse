@@ -351,6 +351,11 @@
         events.forEach(e => {
             const isPending = e.result === 'pending';
             const isSpeech = e.is_speech;
+            // Federal Funds Rate / FOMC Statement — two-field Action vs Priced
+            // Action model, not a forecast comparison (see economic_calendar.py's
+            // RATE_DECISION_EVENTS). "Expected" is meaningless for these (no point
+            // forecast exists), so it's replaced with "Priced Action" below.
+            const isRateDecision = (e.title === 'Federal Funds Rate' || e.title === 'FOMC Statement');
             const evtScore = (typeof e.evt_score === 'number') ? e.evt_score : null;
             // impliedImpact drives ALL color and label rendering — derived from evt_score
             // so inverted-polarity events (e.g. Unemployment Rate) show the correct
@@ -381,11 +386,14 @@
                     ${(isPending || isSpeech) ? `<button onclick="deleteEcEvent('${e.title}', this)" style="margin-left:auto;background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Remove from today's calendar">✕</button>` : ''}
                 </div>
                 <div class="data-row"><span class="data-label">Previous</span><span class="data-value">${e.previous}</span></div>
-                <div class="data-row"><span class="data-label">Expected</span><span class="data-value">${e.forecast}</span></div>
+                ${isRateDecision
+                    ? `<div class="data-row"><span class="data-label">Priced Action</span><span class="data-value">${e.priced_action || 'Not yet entered'}</span></div>`
+                    : `<div class="data-row"><span class="data-label">Expected</span><span class="data-value">${e.forecast}</span></div>`}
                 <div class="data-row">
                     <span class="data-label">Actual</span>
                     <span class="data-value ${impactClass}">${e.actual}</span>
                 </div>
+                ${isRateDecision && e.dots_evt_score !== undefined ? `<div class="data-row"><span class="data-label">SEP/Dots signal</span><span class="data-value">${e.dots_signal}</span></div>` : ''}
                 ${!isPending ? `<div class="data-row"><span class="data-label">Impact</span><span class="data-value ${impactClass}">${impliedImpact.toUpperCase()}</span></div>` : ''}
                 ${e.reason ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${e.reason}</div>` : ''}
                 ${e.story_context ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4;border-top:1px solid #1e2d4a;padding-top:6px"><strong style="color:#4a9eff">Context:</strong> ${e.story_context}</div>` : ''}
@@ -411,6 +419,24 @@
                 ${isPending ? `
                 <div style="margin-top:10px;padding-top:10px;border-top:1px solid #1e2d4a">
                     <div style="font-size:11px;color:#4a9eff;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">📝 Enter Actual</div>
+                    ${isRateDecision ? `
+                    <div style="display:flex;gap:6px;margin-bottom:6px">
+                        <input type="text" id="actual_${eventId}" placeholder="Action: Hold / +25 / +50 / -25"
+                            style="flex:1;background:#0a0e1a;border:1px solid #2a4a7a;border-radius:6px;padding:6px 10px;color:#e0e6f0;font-size:13px;outline:none"/>
+                    </div>
+                    <div style="display:flex;gap:6px;margin-bottom:6px">
+                        <input type="text" id="priced_${eventId}" placeholder="Priced Action: Hold / +25 / +50 / -25"
+                            style="flex:1;background:#0a0e1a;border:1px solid #2a4a7a;border-radius:6px;padding:6px 10px;color:#e0e6f0;font-size:13px;outline:none"/>
+                    </div>
+                    <div style="display:flex;gap:6px;margin-bottom:6px">
+                        <input type="text" id="dots_${eventId}" placeholder="Dots/statement override (optional, ±0.35 to ±0.55)"
+                            style="flex:1;background:#0a0e1a;border:1px solid #1e2d4a;border-radius:6px;padding:6px 10px;color:#7a8fa8;font-size:12px;outline:none"/>
+                        <button onclick="submitActual('${e.title}', '${eventId}', null, this, '${e.event_date || ''}')"
+                            style="background:#1a3a6a;color:#4a9eff;border:1px solid #2a4a7a;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer">
+                            Submit
+                        </button>
+                    </div>
+                    ` : `
                     <div style="display:flex;gap:6px;margin-bottom:6px">
                         <input type="text" id="actual_${eventId}" placeholder="e.g. 52.4"
                             style="flex:1;background:#0a0e1a;border:1px solid #2a4a7a;border-radius:6px;padding:6px 10px;color:#e0e6f0;font-size:13px;outline:none"/>
@@ -419,6 +445,7 @@
                             Submit
                         </button>
                     </div>
+                    `}
                     <input type="text" id="story_${eventId}" placeholder="Paste Forex Factory story URL (optional)"
                         style="width:100%;background:#0a0e1a;border:1px solid #1e2d4a;border-radius:6px;padding:6px 10px;color:#7a8fa8;font-size:11px;outline:none;box-sizing:border-box"/>
                 </div>` : ''}
@@ -817,13 +844,21 @@
     async function submitActual(eventTitle, eventId, presetActual, btn, eventDate) {
         const actualInput = document.getElementById('actual_' + eventId);
         const storyInput = document.getElementById('story_' + eventId);
+        const pricedInput = document.getElementById('priced_' + eventId);
+        const dotsInput = document.getElementById('dots_' + eventId);
         const actual = (presetActual != null && String(presetActual).trim() !== '')
             ? String(presetActual).trim()
             : (actualInput ? actualInput.value.trim() : '');
         const storyUrl = storyInput ? storyInput.value.trim() : '';
+        const pricedAction = pricedInput ? pricedInput.value.trim() : '';
+        const dotsSignal = dotsInput ? dotsInput.value.trim() : '';
 
         if (!actual) {
             alert('Please enter the actual value first.');
+            return;
+        }
+        if (pricedInput && !pricedAction) {
+            alert('Please enter Priced Action first.');
             return;
         }
 
@@ -838,7 +873,9 @@
                     event_title: eventTitle,
                     actual_value: actual,
                     story_url: storyUrl || null,
-                    event_date: eventDate || ''
+                    event_date: eventDate || '',
+                    priced_action: pricedAction || null,
+                    dots_signal: dotsSignal || null
                 })
             });
 

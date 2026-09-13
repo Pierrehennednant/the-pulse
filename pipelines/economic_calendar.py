@@ -122,9 +122,46 @@ class EconomicCalendarPipeline:
         "ISM Services PMI":               +1,
         "Retail Sales m/m":               +1,
         "Core Retail Sales m/m":          +1,
-        "FOMC Statement":                 -1,  # surprise cut (actual < forecast) = bullish; hike = bearish
-        "Federal Funds Rate":             -1,  # surprise cut = bullish; hike = bearish
+        # FOMC Statement / Federal Funds Rate deliberately absent — these are
+        # rate DECISION events with no point forecast (ForexFactory returns
+        # 'N/A'), handled via the two-field Action vs Priced Action model
+        # (RATE_DECISION_EVENTS / RATE_SURPRISE_TABLE below), never via this
+        # forecast-comparison path.
     }
+
+    # Rate decision events — Fed Funds Rate itself and the FOMC Statement that
+    # accompanies it. Not point-forecast events (no single number is priced;
+    # the market prices a probability distribution over outcomes), so they
+    # never go through POLARITY / _magnitude_score() — see RATE_SURPRISE_TABLE.
+    RATE_DECISION_EVENTS = ('Federal Funds Rate', 'FOMC Statement')
+
+    # Locked surprise table: Action (what they actually did) vs Priced Action
+    # (market-implied, probability-weighted expectation the morning of the
+    # meeting), both expressed in bps relative to no change (Hold = 0).
+    # NOT a formula, NOT a z-score/sigma derivation — a 25bp policy step is a
+    # discrete policy choice, not continuous data (same reasoning as the
+    # Preliminary Benchmark Payrolls Revision fix: too few, too non-uniform
+    # events to trust a statistical treatment). A fully-priced outcome is
+    # "as expected" — Neutral, never scored as a beat or a miss.
+    # Key: (action_bps, priced_bps) -> (score, market_impact)
+    RATE_SURPRISE_TABLE = {
+        (25, 25):  (0.0,   'neutral'),   # fully priced hike — as expected
+        (0, 25):   (0.55,  'bullish'),   # hike priced, they held — dovish surprise
+        (50, 25):  (-0.80, 'bearish'),   # bigger hike than priced — hawkish shock
+        (-25, 25): (0.80,  'bullish'),   # cut instead of priced hike — big dovish shock
+        (25, 0):   (-0.55, 'bearish'),   # hold priced, they hiked — hawkish surprise
+        (0, 0):    (0.0,   'neutral'),   # fully priced hold — as expected
+    }
+
+    # SEP/dots + press conference tone — a second, separate, capped signal.
+    # Never merged into the rate-decision score above (see calculate_score()):
+    # it is scored as its own independent line item so it can never dominate
+    # or distort the Action-vs-Priced-Action number. No formula exists for
+    # "how hawkish were the dots vs the priced path" — it's a genuine human
+    # judgment call (reading a dot plot and press conference tone), same
+    # shape as the existing Fed Chair/Presidential speech confidence
+    # mechanism, so it's a manual watcher-entered value clamped to this cap.
+    DOTS_SIGNAL_CAP = 0.55
 
     # Inflation metrics — higher = more inflation = bearish for equities
     # Beat/miss logic inverts: miss = less inflation = bullish, beat = more inflation = bearish
@@ -139,7 +176,7 @@ class EconomicCalendarPipeline:
     def is_inflation_metric(self, title):
         return title.lower().strip() in self.INFLATION_METRICS
 
-    def get_market_implication(self, title, actual, forecast, previous):
+    def get_market_implication(self, title, actual, forecast, previous, priced_action=None):
         if actual in ['hawkish', 'dovish', 'neutral', 'bearish', 'bullish']:
             if actual in ['hawkish', 'bearish']:
                 return 'bearish', 'bearish', f"{title} — Bearish tone detected. Rate fears or hawkish stance, bearish for equities."
@@ -149,6 +186,18 @@ class EconomicCalendarPipeline:
                 return 'neutral', 'neutral', f"{title} — Neutral tone. No major market repricing expected."
         if not actual or actual == '':
             return 'pending', 'unknown', f'{title} not yet released'
+
+        # Rate decision events use a two-field Action vs Priced Action model,
+        # never a forecast comparison — forecast is structurally 'N/A' here
+        # (ForexFactory has no point forecast for a rate decision). This MUST
+        # run before the shared value-parsing block below: 'N/A' is a truthy
+        # string, so `if forecast else None` doesn't catch it, float('N/A')
+        # raises, and the shared except would silently degrade this to
+        # pending/unknown before the rate-decision logic ever ran (this was
+        # the original bug — see the feasibility check).
+        if title in self.RATE_DECISION_EVENTS:
+            return self._rate_decision_implication(title, actual, priced_action)
+
         try:
             actual_val = float(actual.replace('%', '').replace('K', '').replace('M', '').replace('B', '').replace('T', ''))
             forecast_val = float(forecast.replace('%', '').replace('K', '').replace('M', '').replace('B', '').replace('T', '')) if forecast else None
@@ -170,20 +219,6 @@ class EconomicCalendarPipeline:
                 return 'miss', 'bearish', f'{title} — revised down {actual}, fewer jobs than previously believed, bearish for equities'
             else:
                 return 'inline', 'neutral', f'{title} — no net revision'
-
-        # Rate decision — lower actual rate = bullish (cut = bullish, hike = bearish)
-        if title in ('FOMC Statement', 'Federal Funds Rate') and forecast_val is not None:
-            if actual_val < forecast_val:
-                return 'miss', 'bullish', (
-                    f'{title} — surprise cut ({actual}% vs {forecast}% consensus) '
-                    f'— dovish shock, bullish for equities'
-                )
-            elif actual_val > forecast_val:
-                return 'beat', 'bearish', (
-                    f'{title} — surprise hike ({actual}% vs {forecast}% consensus) '
-                    f'— hawkish shock, bearish for equities'
-                )
-            return 'inline', 'neutral', f'{title} — inline with consensus ({actual}%)'
 
         inverted = self.is_inflation_metric(title)
 
@@ -210,6 +245,66 @@ class EconomicCalendarPipeline:
             else:
                 return 'unchanged', 'neutral', f'{title} unchanged from previous ({actual})'
         return 'pending', 'unknown', f'{title} — no comparison available'
+
+    def _parse_rate_bps(self, value):
+        """Parse an Action/Priced Action input into bps relative to no change.
+        'Hold' (any case) -> 0. Accepts '+25', '25', '-25', '25bp', '25bps',
+        '0.25%' (=25bp). Returns None if blank/unparseable/not entered yet —
+        callers treat that as 'nothing to score against', same as any other
+        pending value in this pipeline."""
+        if value is None:
+            return None
+        s = str(value).strip()
+        if not s or s.lower() in ('pending', 'n/a'):
+            return None
+        if s.lower() == 'hold':
+            return 0
+        s = s.lower().replace('bps', '').replace('bp', '').strip()
+        try:
+            if '%' in s:
+                return round(float(s.replace('%', '')) * 100)
+            return round(float(s))
+        except (ValueError, TypeError):
+            return None
+
+    def _format_bps(self, bps):
+        return 'Hold' if bps == 0 else f'{bps:+d}bp'
+
+    def _rate_decision_implication(self, title, actual, priced_action):
+        """Two-field model: Action (what they actually did) vs Priced Action
+        (market-implied, probability-weighted expectation the morning of the
+        meeting) — see RATE_SURPRISE_TABLE. Never compares the raw rate level
+        to a forecast. A fully-priced outcome is 'as expected' (inline/
+        neutral), never a beat or a miss."""
+        action_bps = self._parse_rate_bps(actual)
+        priced_bps = self._parse_rate_bps(priced_action)
+        if action_bps is None:
+            return 'pending', 'unknown', f'{title} — action not recognized ({actual!r})'
+        if priced_bps is None:
+            return 'pending', 'unknown', f'{title} — Priced Action not yet entered'
+        entry = self.RATE_SURPRISE_TABLE.get((action_bps, priced_bps))
+        if entry is None:
+            diff = action_bps - priced_bps
+            market_impact = 'neutral' if diff == 0 else ('bullish' if diff < 0 else 'bearish')
+            pulse_logger.log(
+                f"⚠️ Rate surprise table: no locked entry for action={self._format_bps(action_bps)} "
+                f"vs priced={self._format_bps(priced_bps)} — estimating {market_impact} by sign only "
+                f"(outside the 6 locked combinations)", level="WARNING"
+            )
+            result = 'inline' if diff == 0 else 'rate_surprise'
+            return result, market_impact, (
+                f'{title} — action {self._format_bps(action_bps)} vs priced '
+                f'{self._format_bps(priced_bps)} (outside locked table — estimated {market_impact})'
+            )
+        score, market_impact = entry
+        result = 'inline' if score == 0.0 else 'rate_surprise'
+        verb = 'as expected — fully priced in' if score == 0.0 else (
+            'dovish surprise' if score > 0 else 'hawkish surprise'
+        )
+        return result, market_impact, (
+            f'{title} — action {self._format_bps(action_bps)} vs priced '
+            f'{self._format_bps(priced_bps)} — {verb}'
+        )
 
     def is_speech_event(self, title):
         if 'FOMC Statement' in title:
@@ -374,6 +469,28 @@ class EconomicCalendarPipeline:
         pulse_logger.log(f"⚠️ EC scoring: '{title}' not in POLARITY map — using market_impact direction", level="WARNING")
         return magnitude if direction > 0 else -magnitude
 
+    def _rate_decision_score(self, event):
+        """Independently re-derive the locked score from the event's own
+        actual/priced_action fields — same pattern as the Preliminary
+        Benchmark Payrolls Revision special case in _magnitude_score() above
+        (classification and scoring are two independent re-derivations from
+        raw fields, not one value threaded through). Returns 0.0 when
+        Priced Action hasn't been entered yet — nothing to score against."""
+        action_bps = self._parse_rate_bps(event.get('actual'))
+        priced_bps = self._parse_rate_bps(event.get('priced_action'))
+        if action_bps is None or priced_bps is None:
+            return 0.0
+        entry = self.RATE_SURPRISE_TABLE.get((action_bps, priced_bps))
+        if entry is not None:
+            return entry[0]
+        diff = action_bps - priced_bps
+        if diff == 0:
+            return 0.0
+        # Outside the locked table — sign-only fallback, flat magnitude
+        # matching the smallest locked surprise size rather than guessing
+        # a bigger one.
+        return 0.55 if diff < 0 else -0.55
+
     def _count_red_folder_days(self, events):
         """Count calendar days with at least one high-impact event (excluding SCORING_EXCLUSIONS).
 
@@ -414,7 +531,7 @@ class EconomicCalendarPipeline:
                 continue
             result = event.get('result', '')
             market_impact = event.get('market_impact', 'neutral')
-            if result not in ['beat', 'miss', 'inline', 'improved', 'declined', 'unchanged', 'bearish', 'bullish']:
+            if result not in ['beat', 'miss', 'inline', 'improved', 'declined', 'unchanged', 'bearish', 'bullish', 'rate_surprise']:
                 continue
             if market_impact not in flat_map:
                 continue
@@ -422,7 +539,12 @@ class EconomicCalendarPipeline:
             # Magnitude-weighted scoring for numerical events with actual vs forecast.
             # 'improved'/'declined'/'unchanged' compare against previous (no forecast) — flat.
             # Speech events: cap × direction × confidence (Other: flat cap, no confidence scaling).
-            if result in ('beat', 'miss', 'inline'):
+            # Rate decision events (Federal Funds Rate / FOMC Statement): checked FIRST,
+            # ahead of the generic beat/miss/inline dispatch, since their 'inline' result
+            # (fully-priced outcome) must route to the locked table, not _magnitude_score().
+            if event.get('title') in self.RATE_DECISION_EVENTS:
+                evt_score = self._rate_decision_score(event)
+            elif result in ('beat', 'miss', 'inline'):
                 evt_score = self._magnitude_score(event, direction)
             elif event.get('is_speech'):
                 speaker_type = event.get('speaker_type', 'Other')
@@ -448,6 +570,23 @@ class EconomicCalendarPipeline:
             score += evt_score
             count += 1
             event['evt_score'] = round(evt_score, 4)
+            # SEP/dots + press conference tone — a second, separate, capped signal.
+            # Never combined into evt_score above: it contributes its own independent
+            # term to the pillar average, exactly the way a distinct calendar event
+            # would, so it can never dominate or distort the rate-decision's own number.
+            dots = event.get('dots_signal')
+            if event.get('title') in self.RATE_DECISION_EVENTS and dots not in (None, ''):
+                try:
+                    cap = self.DOTS_SIGNAL_CAP
+                    dots_score = max(-cap, min(cap, float(dots)))
+                    score += dots_score
+                    count += 1
+                    event['dots_evt_score'] = round(dots_score, 4)
+                except (ValueError, TypeError):
+                    pulse_logger.log(
+                        f"⚠️ Invalid dots_signal value for '{event.get('title')}': {dots!r}",
+                        level="WARNING"
+                    )
         return round(score / max(count, 1), 2) if count > 0 else 0.0
 
     def apply_manual_inputs(self, events):
@@ -464,8 +603,12 @@ class EconomicCalendarPipeline:
                 event['story_url'] = manual.get('story_url')
                 event['story_context'] = manual.get('story_context')
                 event['confidence'] = manual.get('confidence', 0.75)
+                if title in self.RATE_DECISION_EVENTS:
+                    event['priced_action'] = manual.get('priced_action')
+                    event['dots_signal'] = manual.get('dots_signal')
                 result, market_impact, reason = self.get_market_implication(
-                    event['title'], manual['actual'], event['forecast'], event['previous']
+                    event['title'], manual['actual'], event['forecast'], event['previous'],
+                    priced_action=manual.get('priced_action')
                 )
                 event['result'] = result
                 event['market_impact'] = market_impact

@@ -21,7 +21,8 @@ class ManualInputPipeline:
             return f"{title}::{event_date}"
         return title
 
-    def save_actual(self, event_title, actual_value, story_url=None, event_date='', confidence=0.75):
+    def save_actual(self, event_title, actual_value, story_url=None, event_date='',
+                     confidence=0.75, priced_action=None, dots_signal=None):
         try:
             story_context = None
             if story_url:
@@ -39,6 +40,15 @@ class ManualInputPipeline:
                 'story_url': story_url,
                 'story_context': story_context,
                 'confidence': confidence,
+                # Rate decision events only (Federal Funds Rate / FOMC Statement):
+                # priced_action is the market-implied Action the morning of the
+                # meeting (Hold/+25/+50/-25), watcher-entered from the public CME
+                # FedWatch page — no free programmatic feed exists (see feasibility
+                # check). dots_signal is an optional, separate, capped SEP/dots
+                # override (±0.35–0.55) — a manual judgment call, never merged into
+                # the rate-decision score itself. Both None for every other event.
+                'priced_action': priced_action,
+                'dots_signal': dots_signal,
                 'timestamp': datetime.now(self.timezone).isoformat()
             }
 
