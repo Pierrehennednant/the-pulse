@@ -94,7 +94,6 @@ def _run_partial_refresh(label):
     calling if their action changed EC event data. No outbound HTTP calls.
     """
     from pipelines.institutional import institutional_pipeline
-    from pipelines.recommendation import recommendation_engine
     from processors.data_formatter import data_formatter
     from processors.bias_calculator import bias_calculator
     from utils.cache import cache
@@ -142,13 +141,6 @@ def _run_partial_refresh(label):
         bias_threshold = 0.50
 
     bias_score = bias_calculator.compute(formatted_data, bias_threshold=bias_threshold)
-
-    recommendation = recommendation_engine.compute(
-        bias_score,
-        formatted_data.get('geopolitical', {}),
-        formatted_data.get('macro', {}),
-    )
-    bias_score['recommendation'] = recommendation
 
     from pipelines.recommendation import prop_firm_engine
     prop_recommendation = prop_firm_engine.compute_prop_firm(

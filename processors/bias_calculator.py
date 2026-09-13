@@ -181,7 +181,7 @@ class BiasCalculator:
         elif bias == 'Neutral':
             directive = "🟡 Neutral — Sit out."
             directive_color = "#f39c12"
-        elif confidence >= 75:
+        elif confidence >= 70:
             if bias == 'Bearish':
                 directive = "🔴 Bearish — Half size — scale to Full on confirmation."
                 directive_color = "#e74c3c"

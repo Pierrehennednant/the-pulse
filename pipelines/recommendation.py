@@ -9,50 +9,22 @@ from pipelines.economic_calendar import economic_calendar_pipeline
 
 PROP_FIRM_THRESHOLD_FILE = '/data/prop_firm_weekly_threshold.json'
 
-class RecommendationEngine:
-    def __init__(self):
-        self.timezone = pytz.timezone(TIMEZONE)
+class PropFirmRecommendationEngine:
+    """Prop Firm recommendation — the app's one recommendation engine.
+    Formerly a subclass alongside a separate "Live mode" engine
+    (RecommendationEngine, 55/65 confidence bands); that engine's output
+    was never actually displayed (confirmed via repo-wide search before
+    removal — its only reader was a UI toggle that has itself been
+    removed) and has been deleted rather than left as dead code.
 
-    def compute(self, bias_data, geo_data, macro_data):
-        try:
-            bias = bias_data.get('bias', 'Neutral') if bias_data else 'Neutral'
-            confidence = bias_data.get('confidence', 0) if bias_data else 0
-
-            if bias == 'Neutral' or confidence < 55:
-                return None
-
-            if confidence >= 65:
-                return {
-                    'mode': 'normal',
-                    'label': f'{bias} — Half size',
-                    'reason': f'Confidence {confidence}%',
-                    'strength': 'strong'
-                }
-            return {
-                'mode': 'quarter',
-                'label': f'{bias} — Quarter size',
-                'reason': f'Confidence {confidence}%',
-                'strength': 'moderate'
-            }
-
-        except Exception as e:
-            pulse_logger.log(f"⚠️ Recommendation engine failed: {e}", level="WARNING")
-            return None
-
-recommendation_engine = RecommendationEngine()
-
-
-class PropFirmRecommendationEngine(RecommendationEngine):
-    """Prop Firm recommendation — same pillar data, aggressive entry thresholds.
-
-    Differences from Live:
-      Bias threshold         ±0.30 quiet week (≤1 red folder day) / ±0.33 standard week (≥2)  (Live ±0.50)
-      Show-card confidence     55%  (same as Live)
-      Quarter-entry confidence 55%–64%  (same as Live)
-      Half-entry confidence    ≥65%  (same as Live)
+      Bias threshold         ±0.30 quiet week (≤1 red folder day) / ±0.33 standard week (≥2)
+      Show-card confidence     55%
+      Quarter-entry confidence 55%–59%
+      Normal-entry confidence  60%–69%
+      Aggressive-entry confidence  ≥70%
       Pillar alignment         ≥45% of total week weight must agree with bias
                                Quiet week: EC 15%, total 85%, threshold ≥38.25%
-                               Standard week: EC 30%, total 100%, threshold ≥45%  (Live: none)
+                               Standard week: EC 30%, total 100%, threshold ≥45%
 
     Quiet week = 0 or 1 calendar days with at least one red folder event.
     A day with multiple red folder events counts as 1 red folder day.
@@ -67,6 +39,9 @@ class PropFirmRecommendationEngine(RecommendationEngine):
     from empty data. A distinct log line fires whenever the quiet/standard
     classification itself flips relative to the last persisted value.
     """
+
+    def __init__(self):
+        self.timezone = pytz.timezone(TIMEZONE)
 
     _WEEK_WEIGHTS = {
         'standard': {'economic_calendar': 30, 'geopolitical': 25, 'institutional': 25, 'macro_sentiment': 20},
@@ -260,7 +235,7 @@ class PropFirmRecommendationEngine(RecommendationEngine):
                 return self._no_rec(week_info)
 
             total_w = week_info['total_weight']
-            if confidence >= 65:
+            if confidence >= 70:
                 return self._rec(week_info,
                     mode='normal',
                     label=f'Prop Firm — {bias}, Normal entry',

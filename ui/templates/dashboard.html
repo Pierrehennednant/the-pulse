@@ -220,10 +220,6 @@
     <div class="logo" style="display:flex;align-items:center;gap:10px">
         <span>⚡ THE PULSE</span>
         <div style="width:1px;height:14px;background:#1e2d4a;flex-shrink:0"></div>
-        <div style="display:inline-flex;background:#080c18;border-radius:20px;padding:2px;border:1px solid #1a2438">
-            <button id="tab-btn-live" onclick="switchRecTab('live',this)" style="background:#152540;color:#4a9eff;border:none;border-radius:16px;padding:3px 11px;font-size:9px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:background .15s,color .15s">LIVE</button>
-            <button id="tab-btn-prop" onclick="switchRecTab('prop',this)" style="background:transparent;color:#4a5a70;border:none;border-radius:16px;padding:3px 11px;font-size:9px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:background .15s,color .15s">PROP FIRM</button>
-        </div>
         <span id="quiet-week-badge" style="display:none;margin-left:6px;font-size:9px;font-weight:700;color:#e67e22;background:#2a1400;border:1px solid #e67e22;border-radius:10px;padding:2px 7px;letter-spacing:0.5px;vertical-align:middle">🔇 QUIET WEEK</span>
     </div>
     <div class="datetime" id="datetime"></div>
@@ -252,12 +248,7 @@
 
         <div style="text-align:center;margin-top:7px;font-size:11px;color:#4a5a70"><span class="live-dot"></span><span id="last-updated-text">Fetching data...</span></div>
         <div id="rec-container" style="display:none;margin-top:12px;background:#0d1224;border-radius:10px;border:1px solid #1a2438;padding:14px 16px 12px">
-            <div id="rec-panel-live" style="text-align:center">
-                <div id="live-rec-main" style="font-size:13px;font-weight:600;margin-bottom:6px;line-height:1.5"></div>
-                <div id="live-rec-scaling" style="font-size:11px;color:#7a8fa8;line-height:1.5"></div>
-                <div id="live-tier1-badge" style="display:none;margin-top:8px;font-size:10px;background:#1a0d00;border:1px solid #8B4513;border-radius:4px;padding:3px 9px;color:#e67e22;letter-spacing:0.2px">⚠️ Tier 1 Geopolitical Risk Active</div>
-            </div>
-            <div id="rec-panel-prop" style="display:none;text-align:center">
+            <div id="rec-panel-prop" style="text-align:center">
                 <div id="prop-quiet-info" style="display:none;margin-bottom:8px;font-size:10px;color:#e67e22;background:#1a0d00;border:1px solid #3a2000;border-radius:6px;padding:4px 10px;letter-spacing:0.2px"></div>
                 <div id="prop-rec-main" style="font-size:13px;font-weight:600;margin-bottom:6px;line-height:1.5"></div>
                 <div id="prop-rec-scaling" style="font-size:11px;color:#7a8fa8;line-height:1.5"></div>
@@ -553,24 +544,6 @@
     }
 
     let _snapshot = null;
-    let _toggleLocked = false;
-
-    function _lockToggles(btn) {
-        if (_toggleLocked) return false;
-        _toggleLocked = true;
-        ['tab-btn-live', 'tab-btn-prop'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) { el.disabled = true; el.style.opacity = el === btn ? '0.65' : '0.35'; }
-        });
-        setTimeout(() => {
-            _toggleLocked = false;
-            ['tab-btn-live', 'tab-btn-prop'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) { el.disabled = false; el.style.opacity = ''; }
-            });
-        }, 1000);
-        return true;
-    }
 
     // Tier 1 active definition:
     // Any article in pillars.geopolitical.news_items where haiku_tier === 1.
@@ -594,7 +567,7 @@
                 tier1: tier1Active
             };
         }
-        if (confidence < 75) {
+        if (confidence < 70) {
             return {
                 main: 'Moderate conviction — Half size.',
                 scaling: tier1Active
@@ -621,23 +594,8 @@
         const tier1Active = _hasTier1Active(_snapshot);
         const container = document.getElementById('rec-container');
 
-        // Live panel
-        const liveGuidance = _buildRecGuidance(confidence, biasDir, tier1Active);
-        const liveMain = document.getElementById('live-rec-main');
-        const liveScaling = document.getElementById('live-rec-scaling');
-        const liveTier1 = document.getElementById('live-tier1-badge');
-        if (liveGuidance) {
-            const liveColor = confidence >= 75 ? '#2ecc71' : confidence >= 60 ? '#4a9eff' : '#f39c12';
-            liveMain.style.color = liveColor;
-            liveMain.textContent = '💡 ' + liveGuidance.main;
-            liveScaling.textContent = liveGuidance.scaling || '';
-            liveTier1.style.display = liveGuidance.tier1 ? 'inline-block' : 'none';
-        } else {
-            liveMain.textContent = '';
-            liveScaling.textContent = ''; liveTier1.style.display = 'none';
-        }
-
-        // Prop Firm panel — same guidance text, gated by server-side alignment check
+        // Gated by compute_prop_firm()'s own bias-threshold/alignment/confidence check —
+        // the one and only gate now, no toggle deciding whether this is shown.
         const quietBadge = document.getElementById('quiet-week-badge');
         const propQuietInfo = document.getElementById('prop-quiet-info');
         const isQuiet = propRec && propRec.quiet_week;
@@ -652,7 +610,7 @@
         const propScaling = document.getElementById('prop-rec-scaling');
         const propTier1 = document.getElementById('prop-tier1-badge');
         if (propGuidance) {
-            const propColor = confidence >= 75 ? '#2ecc71' : confidence >= 60 ? '#4a9eff' : '#e67e22';
+            const propColor = confidence >= 70 ? '#2ecc71' : confidence >= 60 ? '#4a9eff' : '#e67e22';
             propMain.style.color = propColor;
             propMain.textContent = '💡 ' + propGuidance.main;
             propScaling.textContent = propGuidance.scaling || '';
@@ -662,30 +620,7 @@
             propScaling.textContent = ''; propTier1.style.display = 'none';
         }
 
-        const activeGuidance = _activeRecTab === 'live' ? liveGuidance : propGuidance;
-        container.style.display = activeGuidance ? 'block' : 'none';
-    }
-
-    let _activeRecTab = 'live';
-
-    function switchRecTab(tab, btn) {
-        if (btn && !_lockToggles(btn)) return;
-        _activeRecTab = tab;
-        localStorage.setItem('pulseRecTab', tab);
-        const btnLive = document.getElementById('tab-btn-live');
-        const btnProp = document.getElementById('tab-btn-prop');
-        const panelLive = document.getElementById('rec-panel-live');
-        const panelProp = document.getElementById('rec-panel-prop');
-        if (tab === 'live') {
-            btnLive.style.background = '#152540'; btnLive.style.color = '#4a9eff';
-            btnProp.style.background = 'transparent'; btnProp.style.color = '#4a5a70';
-            panelLive.style.display = 'block'; panelProp.style.display = 'none';
-        } else {
-            btnProp.style.background = '#2a1400'; btnProp.style.color = '#e67e22';
-            btnLive.style.background = 'transparent'; btnLive.style.color = '#4a5a70';
-            panelLive.style.display = 'none'; panelProp.style.display = 'block';
-        }
-        _renderRecFromSnapshot();
+        container.style.display = propGuidance ? 'block' : 'none';
     }
 
     function updateDashboard(snapshot) {
@@ -1168,8 +1103,6 @@
         refreshTimer = setInterval(fetchData, 5 * 60 * 1000);
     }
 
-    const _savedTab = localStorage.getItem('pulseRecTab');
-    if (_savedTab) switchRecTab(_savedTab);
     fetchData();
     loadAILens();
     scheduleRefresh();
