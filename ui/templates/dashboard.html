@@ -358,6 +358,13 @@
             // NOT included — it's Federal Funds Rate's informational-only companion
             // row (same announcement, single entry point to avoid duplicate entry).
             const isRateDecision = (e.title === 'Federal Funds Rate');
+            // FOMC Economic Projections (SEP dot plot) wants the year-end-
+            // current-year median specifically (see economic_calendar.py's
+            // SEP_BASELINE) — a generic "e.g. 52.4" placeholder invites
+            // mis-entry (a GDP/unemployment/PCE figure, or a different SEP
+            // year, none of which this card scores).
+            const actualPlaceholder = (e.title === 'FOMC Economic Projections')
+                ? 'e.g. 3.8 (year-end median)' : 'e.g. 52.4';
             const evtScore = (typeof e.evt_score === 'number') ? e.evt_score : null;
             // impliedImpact drives ALL color and label rendering — derived from evt_score
             // so inverted-polarity events (e.g. Unemployment Rate) show the correct
@@ -440,7 +447,7 @@
                     </div>
                     ` : `
                     <div style="display:flex;gap:6px;margin-bottom:6px">
-                        <input type="text" id="actual_${eventId}" placeholder="e.g. 52.4"
+                        <input type="text" id="actual_${eventId}" placeholder="${actualPlaceholder}"
                             style="flex:1;background:#0a0e1a;border:1px solid #2a4a7a;border-radius:6px;padding:6px 10px;color:#e0e6f0;font-size:13px;outline:none"/>
                         <button onclick="submitActual('${e.title}', '${eventId}', null, this, '${e.event_date || ''}')"
                             style="background:#1a3a6a;color:#4a9eff;border:1px solid #2a4a7a;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer">
