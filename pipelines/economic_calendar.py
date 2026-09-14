@@ -68,6 +68,15 @@ class EconomicCalendarPipeline:
     def is_market_moving(self, event):
         if event.get('country', '').upper() != 'USD':
             return False
+        # Force-include regardless of ForexFactory's own impact tag — these are
+        # independently appraisable signals (see INDEPENDENT_RED_FOLDER_EVENTS)
+        # and at least one has been observed NOT reliably tagged 'high' by FF
+        # (the Sep 16 red-folder undercount this fixes). Without this,
+        # 'FOMC Economic Projections' in particular has no speech-keyword
+        # fallback and would be silently dropped here before ever reaching
+        # scoring if FF ever tags it medium/low.
+        if event.get('title', '') in self.INDEPENDENT_RED_FOLDER_EVENTS:
+            return True
         impact = event.get('impact', '').lower()
         if impact == 'high':
             return True
@@ -174,6 +183,24 @@ class EconomicCalendarPipeline:
     # mechanism, so it's a manual watcher-entered value clamped to this cap.
     DOTS_SIGNAL_CAP = 0.55
 
+    # FOMC-day events treated as independently appraisable regardless of
+    # ForexFactory's own impact tag or same-day overlap with each other or
+    # with unrelated events — each is its own tradeable surprise. Consulted
+    # by is_market_moving() (force-included even if FF tags them below
+    # 'high') and _count_red_folder_days() (each contributes its own +1,
+    # never day-deduped with each other). 'FOMC Statement' deliberately
+    # absent — it's a pure restatement of Federal Funds Rate with no
+    # independent number (see SCORING_EXCLUSIONS above).
+    INDEPENDENT_RED_FOLDER_EVENTS = (
+        'Federal Funds Rate', 'FOMC Press Conference', 'FOMC Economic Projections'
+    )
+
+    # Locked reference value, not a live formula — same pattern as
+    # RATE_SURPRISE_TABLE. Manually updated each SEP cycle (next: the
+    # December 2026 SEP sets the following cycle's baseline). This value is
+    # the June 2026 SEP median for year-end 2026.
+    SEP_BASELINE = 3.8
+
     # Inflation metrics — higher = more inflation = bearish for equities
     # Beat/miss logic inverts: miss = less inflation = bullish, beat = more inflation = bearish
     INFLATION_METRICS = [
@@ -208,6 +235,13 @@ class EconomicCalendarPipeline:
         # the original bug — see the feasibility check).
         if title in self.RATE_DECISION_EVENTS:
             return self._rate_decision_implication(title, actual, priced_action)
+
+        # FOMC Economic Projections (SEP dot plot): compared against a LOCKED
+        # baseline median (SEP_BASELINE), never a forecast — same 'N/A'-forecast
+        # reasoning as the rate-decision branch above, must run before the
+        # shared value parser.
+        if title == 'FOMC Economic Projections':
+            return self._sep_implication(title, actual)
 
         try:
             actual_val = float(actual.replace('%', '').replace('K', '').replace('M', '').replace('B', '').replace('T', ''))
@@ -315,6 +349,30 @@ class EconomicCalendarPipeline:
         return result, market_impact, (
             f'{title} — action {self._format_bps(action_bps)} vs priced '
             f'{self._format_bps(priced_bps)} — {verb}'
+        )
+
+    def _sep_implication(self, title, actual):
+        """FOMC Economic Projections (SEP dot plot) — median year-end-current-
+        year Fed funds rate only (GDP/unemployment/PCE/other years/longer-run
+        ignored). Compared against SEP_BASELINE, a LOCKED reference value, not
+        a live formula (same reasoning as RATE_SURPRISE_TABLE). Neutral band
+        is ±0.1 around the baseline: dots move in eighths and the published
+        median is one decimal, so this range reflects rounding/one-or-two-vote
+        drift, not a real path change."""
+        try:
+            median = float(str(actual).replace('%', '').strip())
+        except (ValueError, TypeError):
+            return 'pending', 'unknown', f'{title} — cannot parse median ({actual!r})'
+        delta = round((median - self.SEP_BASELINE) * 10)  # tenths from baseline
+        if abs(delta) <= 1:
+            return 'inline', 'neutral', (
+                f'{title} — median {median} vs baseline {self.SEP_BASELINE} — '
+                f'within rounding/vote-drift band, no path change'
+            )
+        market_impact = 'bearish' if delta > 0 else 'bullish'
+        tone = 'hawkish' if market_impact == 'bearish' else 'dovish'
+        return 'sep_surprise', market_impact, (
+            f'{title} — median {median} vs baseline {self.SEP_BASELINE} — {tone} shift'
         )
 
     def is_speech_event(self, title):
@@ -502,27 +560,60 @@ class EconomicCalendarPipeline:
         # a bigger one.
         return 0.55 if diff < 0 else -0.55
 
+    def _sep_score(self, event):
+        """Independently re-derive the SEP score from the event's own actual
+        field — same two-step pattern as _rate_decision_score() above
+        (classification and scoring are two independent re-derivations from
+        raw fields). Locked magnitude bands, not a live formula/z-score — a
+        rounded one-decimal dot-plot median is a discrete released number,
+        not continuous data (same reasoning as RATE_SURPRISE_TABLE and the
+        Preliminary Benchmark Payrolls Revision fix). Higher median (more
+        hikes priced) = bearish; lower = bullish. Capped at ±0.55, same
+        ceiling as every other rate-related signal in this pillar."""
+        try:
+            median = float(str(event.get('actual', '')).replace('%', '').strip())
+        except (ValueError, TypeError):
+            return 0.0
+        delta = round((median - self.SEP_BASELINE) * 10)  # tenths from baseline
+        if abs(delta) <= 1:
+            return 0.0
+        magnitude = 0.55 if abs(delta) >= 5 else 0.45
+        return -magnitude if delta > 0 else magnitude
+
     def _count_red_folder_days(self, events):
-        """Count calendar days with at least one high-impact event (excluding SCORING_EXCLUSIONS).
+        """Count calendar days with at least one high-impact event (excluding
+        SCORING_EXCLUSIONS), PLUS one independent count for each occurrence of
+        an INDEPENDENT_RED_FOLDER_EVENTS title — these never day-dedupe with
+        each other or with unrelated events, and count regardless of their own
+        impact tag (see INDEPENDENT_RED_FOLDER_EVENTS for why).
 
         Canonical implementation — also used by recommendation.py's Prop Firm
         quiet/standard week determination, so both paths stay in sync instead
         of maintaining independent copies that can silently drift apart."""
         red_days = {}  # day -> [event titles], for diagnostic logging
+        independent_count = 0
+        independent_detail = []
         for e in events:
-            if e.get('title') in self.SCORING_EXCLUSIONS:
+            title = e.get('title', '')
+            if title in self.SCORING_EXCLUSIONS:
+                continue
+            if title in self.INDEPENDENT_RED_FOLDER_EVENTS:
+                independent_count += 1
+                independent_detail.append(title)
                 continue
             if e.get('impact', '').lower() == 'high':
                 time_est = e.get('time_est', '')
                 day = time_est.split(',')[0] if ',' in time_est else time_est[:10]
                 if day:
-                    red_days.setdefault(day, []).append(e.get('title', '(untitled)'))
+                    red_days.setdefault(day, []).append(title or '(untitled)')
         if red_days:
             detail = '; '.join(
                 f"{day}: {', '.join(titles)}" for day, titles in sorted(red_days.items())
             )
             pulse_logger.log(f"🔍 Red folder day breakdown — {detail}")
-        return len(red_days)
+        if independent_detail:
+            pulse_logger.log(f"🔍 Independent red-folder events — {', '.join(independent_detail)}")
+        return len(red_days) + independent_count
 
     def calculate_score(self, events):
         if not events:
@@ -542,7 +633,7 @@ class EconomicCalendarPipeline:
                 continue
             result = event.get('result', '')
             market_impact = event.get('market_impact', 'neutral')
-            if result not in ['beat', 'miss', 'inline', 'improved', 'declined', 'unchanged', 'bearish', 'bullish', 'rate_surprise']:
+            if result not in ['beat', 'miss', 'inline', 'improved', 'declined', 'unchanged', 'bearish', 'bullish', 'rate_surprise', 'sep_surprise']:
                 continue
             if market_impact not in flat_map:
                 continue
@@ -550,10 +641,13 @@ class EconomicCalendarPipeline:
             # Magnitude-weighted scoring for numerical events with actual vs forecast.
             # 'improved'/'declined'/'unchanged' compare against previous (no forecast) — flat.
             # Speech events: cap × direction × confidence (Other: flat cap, no confidence scaling).
-            # Rate decision events (Federal Funds Rate / FOMC Statement): checked FIRST,
-            # ahead of the generic beat/miss/inline dispatch, since their 'inline' result
-            # (fully-priced outcome) must route to the locked table, not _magnitude_score().
-            if event.get('title') in self.RATE_DECISION_EVENTS:
+            # Rate decision events (Federal Funds Rate) and FOMC Economic Projections
+            # (SEP): checked FIRST, ahead of the generic beat/miss/inline dispatch,
+            # since their 'inline' result (fully-priced / within-neutral-band outcome)
+            # must route to their own locked table/bands, not _magnitude_score().
+            if event.get('title') == 'FOMC Economic Projections':
+                evt_score = self._sep_score(event)
+            elif event.get('title') in self.RATE_DECISION_EVENTS:
                 evt_score = self._rate_decision_score(event)
             elif result in ('beat', 'miss', 'inline'):
                 evt_score = self._magnitude_score(event, direction)
