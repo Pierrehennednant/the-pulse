@@ -55,6 +55,20 @@ class PropFirmRecommendationEngine:
         edits (new/reclassified events), not live market movement, so
         same-day freshness is what's needed, not same-cycle (5-min) freshness.
 
+        IMPORTANT: "holds for the rest of the day" means the CLASSIFICATION
+        is held stable across cycles — it does NOT mean the persisted file is
+        trusted blindly. Whenever genuinely-live EC data is available this
+        cycle, red_folder_days is ALWAYS freshly recomputed (cheap, in-memory,
+        same cost economic_calendar.py's own weak_ec_week check already pays
+        every cycle) and compared against whatever is on disk for today. A
+        same-day cache hit is only served as-is when it still matches the
+        fresh count — otherwise the classification is recomputed and the file
+        is corrected immediately, rather than being served stale for the rest
+        of the day. This closes a real bug: a value computed and persisted
+        earlier today (e.g. under pre-fix counting logic, or before a
+        same-day calendar edit) would previously be served untouched until
+        midnight even after the underlying code or data changed.
+
         Returns dict with keys:
           bias_threshold, red_folder_days, is_new_week, is_quiet_week,
           ec_weight, total_weight, alignment_threshold
@@ -64,23 +78,16 @@ class PropFirmRecommendationEngine:
         current_week = (iso[0], iso[1])
         today_str = now.strftime('%Y-%m-%d')
 
-        prior_cached = None
+        prior_cached = None     # from a PREVIOUS calendar date — cross-day change-log baseline
+        same_day_cached = None  # from TODAY — candidate to hold, but validated against fresh data below
         try:
             if os.path.exists(PROP_FIRM_THRESHOLD_FILE):
                 with open(PROP_FIRM_THRESHOLD_FILE, 'r') as f:
                     on_disk = json.load(f)
                 if on_disk.get('date') == today_str and 'is_quiet_week' in on_disk:
-                    # Already computed today — hold for the rest of the day.
-                    return {
-                        'bias_threshold': on_disk['threshold'],
-                        'red_folder_days': on_disk['red_folder_days'],
-                        'is_new_week': False,
-                        'is_quiet_week': on_disk['is_quiet_week'],
-                        'ec_weight': on_disk['ec_weight'],
-                        'total_weight': on_disk['total_weight'],
-                        'alignment_threshold': on_disk['alignment_threshold'],
-                    }
-                prior_cached = on_disk  # from a previous day — change-log baseline
+                    same_day_cached = on_disk
+                else:
+                    prior_cached = on_disk
         except Exception as e:
             pulse_logger.log(f"⚠️ Prop Firm threshold cache read failed: {e}", level="WARNING")
 
@@ -93,17 +100,21 @@ class PropFirmRecommendationEngine:
                 f"⏳ Prop Firm weekly threshold — EC data not yet live this cycle "
                 f"(status={status!r}, {len(events)} events) — deferring today's recompute, will retry next cycle"
             )
-            if prior_cached:
-                # Hold the last computed day's value until a live cycle today
+            held = same_day_cached or prior_cached
+            if held:
+                # Hold the last computed value until a live cycle today
                 # actually succeeds — don't flicker to a fresh empty-data read.
+                # (No live events this cycle means no fresh count to validate
+                # against, so the same-day value can't be re-checked right now
+                # either — it'll be validated on the next live cycle.)
                 return {
-                    'bias_threshold': prior_cached['threshold'],
-                    'red_folder_days': prior_cached['red_folder_days'],
+                    'bias_threshold': held['threshold'],
+                    'red_folder_days': held['red_folder_days'],
                     'is_new_week': False,
-                    'is_quiet_week': prior_cached['is_quiet_week'],
-                    'ec_weight': prior_cached['ec_weight'],
-                    'total_weight': prior_cached['total_weight'],
-                    'alignment_threshold': prior_cached['alignment_threshold'],
+                    'is_quiet_week': held['is_quiet_week'],
+                    'ec_weight': held['ec_weight'],
+                    'total_weight': held['total_weight'],
+                    'alignment_threshold': held['alignment_threshold'],
                 }
             # No prior value at all — compute honestly from whatever econ_data
             # has (as before) but don't persist it.
@@ -124,26 +135,58 @@ class PropFirmRecommendationEngine:
 
         # Canonical count — shared with economic_calendar.py's weak_ec_week
         # determination so the two paths can't silently drift apart again.
-        # Genuinely live EC data — first live cycle of the new calendar day.
+        # ALWAYS live-recomputed this cycle (see docstring) — never blindly
+        # trusts same_day_cached by date alone.
         red_folder_days = economic_calendar_pipeline._count_red_folder_days(events)
         is_quiet = red_folder_days <= 1
+
+        if same_day_cached and same_day_cached['red_folder_days'] == red_folder_days:
+            # Genuinely unchanged since this morning's computation — hold
+            # exactly as designed, no rewrite, no new-week/change-log noise.
+            return {
+                'bias_threshold': same_day_cached['threshold'],
+                'red_folder_days': same_day_cached['red_folder_days'],
+                'is_new_week': False,
+                'is_quiet_week': same_day_cached['is_quiet_week'],
+                'ec_weight': same_day_cached['ec_weight'],
+                'total_weight': same_day_cached['total_weight'],
+                'alignment_threshold': same_day_cached['alignment_threshold'],
+            }
+
         threshold = 0.30 if is_quiet else 0.33
         ec_weight = 15 if is_quiet else 30
         total_weight = 85 if is_quiet else 100
         alignment_threshold = round(total_weight * 0.45, 2)  # 38.25 (quiet) or 45.0 (standard)
 
-        if prior_cached and prior_cached['is_quiet_week'] != is_quiet:
-            old_label = 'Quiet' if prior_cached['is_quiet_week'] else 'Standard'
+        # Change-log baseline: prefer today's own (now-stale) cached value if
+        # one exists, so a same-day correction is reported the same way a
+        # cross-day change already is — otherwise fall back to the previous
+        # day's value (the original cross-day behavior, unchanged).
+        baseline = same_day_cached or prior_cached
+        if baseline and baseline['is_quiet_week'] != is_quiet:
+            old_label = 'Quiet' if baseline['is_quiet_week'] else 'Standard'
             new_label = 'Quiet' if is_quiet else 'Standard'
-            direction = 'added' if red_folder_days > prior_cached['red_folder_days'] else 'removed'
+            direction = 'added' if red_folder_days > baseline['red_folder_days'] else 'removed'
             pulse_logger.log(
                 f"⚠️ Week classification changed: {old_label} → {new_label} "
-                f"(EC {prior_cached['ec_weight']}% → {ec_weight}%, bias ±{prior_cached['threshold']} → ±{threshold}) "
+                f"(EC {baseline['ec_weight']}% → {ec_weight}%, bias ±{baseline['threshold']} → ±{threshold}) "
                 f"— red folder day {direction} since last check "
-                f"({prior_cached['red_folder_days']} → {red_folder_days})"
+                f"({baseline['red_folder_days']} → {red_folder_days})"
+            )
+        elif same_day_cached and same_day_cached['red_folder_days'] != red_folder_days:
+            # Same classification, but the underlying count itself changed
+            # mid-day (e.g. a code fix landed, or a calendar edit that didn't
+            # cross the quiet/standard boundary) — logged for visibility so a
+            # correction like this is never silent.
+            pulse_logger.log(
+                f"🔄 Red folder day count corrected mid-day: "
+                f"{same_day_cached['red_folder_days']} → {red_folder_days} "
+                f"(week classification unchanged: {'Quiet' if is_quiet else 'Standard'})"
             )
 
         is_new_week = prior_cached is None or prior_cached.get('week') != list(current_week)
+        if same_day_cached:
+            is_new_week = False  # a same-day correction is never a new week
 
         try:
             atomic_write_json(PROP_FIRM_THRESHOLD_FILE, {

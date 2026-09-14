@@ -130,14 +130,21 @@ def _run_partial_refresh(label):
         'geopolitical': geo_data,
     })
 
-    try:
-        with open('/data/prop_firm_weekly_threshold.json', 'r') as f:
-            pf_week = json.load(f)
-        if pf_week.get('is_quiet_week'):
-            bias_threshold = 0.30
-        else:
-            bias_threshold = 0.33
-    except Exception:
+    # Derive bias_threshold from EC pipeline's weak_ec_week flag — same
+    # canonical source as _get_weekly_threshold(), same pattern already used
+    # in main.py's run_pulse(). Deliberately NOT reading
+    # /data/prop_firm_weekly_threshold.json directly here: that file can be
+    # briefly stale relative to THIS cycle's own live EC data (it's only
+    # corrected once compute_prop_firm() -> _get_weekly_threshold() runs,
+    # which happens after this line), whereas weak_ec_week is computed fresh,
+    # in-memory, every time economic_calendar.py's fetch() runs — no caching
+    # delay, so no staleness window at all.
+    _ec_weak = formatted_data.get('economic', {}).get('weak_ec_week')
+    if _ec_weak is True:
+        bias_threshold = 0.30
+    elif _ec_weak is False:
+        bias_threshold = 0.33
+    else:
         bias_threshold = 0.50
 
     bias_score = bias_calculator.compute(formatted_data, bias_threshold=bias_threshold)
