@@ -202,11 +202,22 @@ def manual_input():
         story_url = data.get('story_url', None)
         event_date = data.get('event_date', '')
         confidence = data.get('confidence', 0.75)
-        # Rate decision events only (Federal Funds Rate / FOMC Statement) — see
-        # pipelines/economic_calendar.py's RATE_DECISION_EVENTS. None for every
-        # other event type.
+        # Rate decision events only (Federal Funds Rate — the sole entry point,
+        # see pipelines/economic_calendar.py's RATE_DECISION_EVENTS). None for
+        # every other event type.
         priced_action = data.get('priced_action', None)
         dots_signal = data.get('dots_signal', None)
+
+        # FOMC Statement is informational-only — Federal Funds Rate is the
+        # sole entry point for Action/Priced Action (see
+        # economic_calendar.py's RATE_DECISION_EVENTS). Reject at the API
+        # level too, not just the UI, so nothing can create a second,
+        # duplicate signal by posting directly.
+        if event_title == 'FOMC Statement':
+            return jsonify({
+                'error': 'FOMC Statement is informational-only — enter '
+                         'Action / Priced Action on Federal Funds Rate instead.'
+            }), 400
 
         ok, err = _validate_manual_input(event_title, actual_value)
         if not ok:
@@ -283,6 +294,8 @@ def reset_manual_input():
             return jsonify({'error': 'Missing event_title'}), 400
         if len(event_title) > _MAX_TITLE_LEN or '\x00' in event_title:
             return jsonify({'error': 'Invalid event_title'}), 400
+        if event_title == 'FOMC Statement':
+            return jsonify({'error': 'FOMC Statement has nothing to reset — informational-only.'}), 400
 
         with open('/data/permanent_manual_inputs.json', 'r') as f:
             inputs = json.load(f)

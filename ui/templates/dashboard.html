@@ -351,11 +351,13 @@
         events.forEach(e => {
             const isPending = e.result === 'pending';
             const isSpeech = e.is_speech;
-            // Federal Funds Rate / FOMC Statement — two-field Action vs Priced
-            // Action model, not a forecast comparison (see economic_calendar.py's
-            // RATE_DECISION_EVENTS). "Expected" is meaningless for these (no point
-            // forecast exists), so it's replaced with "Priced Action" below.
-            const isRateDecision = (e.title === 'Federal Funds Rate' || e.title === 'FOMC Statement');
+            // Federal Funds Rate — two-field Action vs Priced Action model, not a
+            // forecast comparison (see economic_calendar.py's RATE_DECISION_EVENTS).
+            // "Expected" is meaningless for it (no point forecast exists), so it's
+            // replaced with "Priced Action" below. FOMC Statement is deliberately
+            // NOT included — it's Federal Funds Rate's informational-only companion
+            // row (same announcement, single entry point to avoid duplicate entry).
+            const isRateDecision = (e.title === 'Federal Funds Rate');
             const evtScore = (typeof e.evt_score === 'number') ? e.evt_score : null;
             // impliedImpact drives ALL color and label rendering — derived from evt_score
             // so inverted-polarity events (e.g. Unemployment Rate) show the correct
@@ -449,7 +451,7 @@
                     <input type="text" id="story_${eventId}" placeholder="Paste Forex Factory story URL (optional)"
                         style="width:100%;background:#0a0e1a;border:1px solid #1e2d4a;border-radius:6px;padding:6px 10px;color:#7a8fa8;font-size:11px;outline:none;box-sizing:border-box"/>
                 </div>` : ''}
-                ${!isPending && e.title ? `
+                ${!isPending && e.title && e.title !== 'FOMC Statement' ? `
 <div style="margin-top:8px">
     <button onclick="resetActual('${e.title}', this, '${e.event_date || ''}')"
         style="background:#1a0a0a;color:#e74c3c;border:1px solid #3a1a1a;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">

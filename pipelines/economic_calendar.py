@@ -93,7 +93,9 @@ class EconomicCalendarPipeline:
             return date_str
 
     # Events that are shown in the dashboard as watch events but excluded from EC scoring.
-    SCORING_EXCLUSIONS = {'FOMC Meeting Minutes'}
+    # 'FOMC Statement' added: informational-only companion to Federal Funds Rate (see
+    # RATE_DECISION_EVENTS below) — same day, same announcement, single entry point.
+    SCORING_EXCLUSIONS = {'FOMC Meeting Minutes', 'FOMC Statement'}
 
     # Explicit polarity per event — +1 means beating forecast is bullish for equities,
     # -1 means beating forecast is bearish (inflation / unemployment events).
@@ -129,11 +131,20 @@ class EconomicCalendarPipeline:
         # forecast-comparison path.
     }
 
-    # Rate decision events — Fed Funds Rate itself and the FOMC Statement that
-    # accompanies it. Not point-forecast events (no single number is priced;
-    # the market prices a probability distribution over outcomes), so they
-    # never go through POLARITY / _magnitude_score() — see RATE_SURPRISE_TABLE.
-    RATE_DECISION_EVENTS = ('Federal Funds Rate', 'FOMC Statement')
+    # Rate decision events. Not point-forecast events (no single number is
+    # priced; the market prices a probability distribution over outcomes),
+    # so they never go through POLARITY / _magnitude_score() — see
+    # RATE_SURPRISE_TABLE.
+    #
+    # Federal Funds Rate is the SOLE entry point. FOMC Statement deliberately
+    # excluded: ForexFactory lists it as a separate calendar row for the same
+    # announcement Federal Funds Rate already covers — two entry points for
+    # one signal risked duplicate data entry and double-counting by anything
+    # scanning for Action/Priced Action fields. FOMC Statement is now
+    # informational-only (see the fetch() branch and SCORING_EXCLUSIONS
+    # above) — same shape as how FOMC Press Conference already shows
+    # "No data to parse" with no entry field.
+    RATE_DECISION_EVENTS = ('Federal Funds Rate',)
 
     # Locked surprise table: Action (what they actually did) vs Priced Action
     # (market-implied, probability-weighted expectation the morning of the
@@ -593,6 +604,13 @@ class EconomicCalendarPipeline:
         manual_inputs = manual_input_pipeline.get_inputs()
         for event in events:
             title = event['title']
+            if title == 'FOMC Statement':
+                # Informational-only companion to Federal Funds Rate — never
+                # accepts manual data, even a stale pre-rework legacy entry
+                # sitting in /data/permanent_manual_inputs.json from before
+                # this event was excluded. Stays pinned to fetch()'s fixed
+                # informational state.
+                continue
             key = manual_input_pipeline.make_key(title, event.get('event_date', ''))
             # Lookup order: 1) exact compound key, 2) bare title legacy fallback.
             # Tier-3 title-prefix wildcard removed — caused cross-date contamination
@@ -691,6 +709,21 @@ class EconomicCalendarPipeline:
                     date_strs[title] = date_str
                 else:
                     event_row['is_speech'] = False
+
+                # FOMC Statement: informational-only companion to Federal Funds
+                # Rate (see RATE_DECISION_EVENTS) — fixed state so no entry form
+                # (old or new) ever renders for it. Placed after the is_speech
+                # branch so it always wins regardless of is_speech_event()'s own
+                # verdict for this title (which is already explicitly False today).
+                if title == 'FOMC Statement':
+                    event_row['result'] = 'excluded'
+                    event_row['market_impact'] = 'unknown'
+                    event_row['actual'] = 'N/A'
+                    event_row['reason'] = (
+                        f'{title} — No data to parse. Action vs Priced Action is '
+                        f'scored on Federal Funds Rate instead — see that event.'
+                    )
+
                 events.append(event_row)
 
             # Self-clean: drop blocklist entries FF no longer serves
