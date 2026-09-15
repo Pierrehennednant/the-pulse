@@ -99,20 +99,38 @@ class GeopoliticalPipeline:
             'supply chain', 'bank failure', 'bank failures',
             'default', 'defaulted', 'defaulting', 'currency crisis',
             'stock market', 'market crash', 'bear market', 'bull market',
-            # Priority tech/AI mega-cap companies + tickers
-            'nvidia', 'nvda', 'apple', 'aapl', 'microsoft', 'msft',
-            'alphabet', 'googl', 'google', 'amazon', 'amzn', 'meta',
-            'broadcom', 'avgo', 'amd', 'intel', 'intc',
-            'taiwan semiconductor', 'tsm', 'coreweave',
-            # Tech/AI mega-deal terminology
+            # Tech/AI mega-deal terminology — deliberately does NOT include
+            # bare company/ticker names (see self.company_keywords below).
+            # A priority company name alone must be paired with one of THESE
+            # words to satisfy Layer 2 — a bare mention is not enough, or
+            # every routine company story (a product launch, an earnings
+            # beat, an executive hire) would clear this gate purely by
+            # naming one of those companies, regardless of subject matter.
             'deal', 'deals', 'partnership', 'partnerships',
             'billion', 'billions', 'chip', 'chips', 'capex',
             'ai infrastructure',
+            'acquisition', 'acquisitions', 'acquire', 'acquires', 'acquired',
+            'merger', 'mergers', 'merge', 'merges', 'merged',
             # Mega-cap regulatory/legal outcome terminology
             'settlement', 'settlements', 'lawsuit', 'lawsuits',
             'verdict', 'verdicts', 'fined', 'fines',
             'judgment', 'judgments', 'judgement', 'judgements',
             'antitrust'
+        ]
+        # Priority tech/AI mega-cap companies + tickers. NOT part of
+        # market_keywords above — a bare mention of one of these alone does
+        # NOT satisfy is_market_relevant()'s Layer 2 allowlist. It must
+        # appear alongside an actual market_keyword (a deal, capex,
+        # regulatory, or macro term) in the same text. This is what let a
+        # pure product-feature story ("Apple releases test of redesigned
+        # Siri AI before iPhone 18 hits stores this week") clear Gate 1
+        # purely by naming "Apple," with no requirement that the story be
+        # about a deal, capex commitment, or regulatory action.
+        self.company_keywords = [
+            'nvidia', 'nvda', 'apple', 'aapl', 'microsoft', 'msft',
+            'alphabet', 'googl', 'google', 'amazon', 'amzn', 'meta',
+            'broadcom', 'avgo', 'amd', 'intel', 'intc',
+            'taiwan semiconductor', 'tsm', 'coreweave',
         ]
         self.ignore_keywords = [
             # CNBC investment commentary
@@ -284,6 +302,10 @@ KNOWN ARTICLE OVERRIDES — if an article matches one of these titles exactly, u
 
 TECH / AI MEGA-DEAL RULES — applies to any article centered on one of these companies: Nvidia, Apple, Microsoft, Alphabet/Google, Amazon, Meta, Broadcom, AMD, Intel, Taiwan Semiconductor (TSM), or a comparable major AI-infrastructure player (CoreWeave-scale or larger).
 
+STANDARD EXCLUSIONS — CHECK THIS FIRST, BEFORE THE DEAL GATE BELOW OR ANYTHING ELSE IN THIS SECTION. Always reject (relevant: false, no tier, no kind), regardless of company size and regardless of how prominently "AI" appears in the headline: routine product launches, feature announcements, or beta/preview rollouts (a new Siri/Assistant/Copilot feature, a redesigned app or interface, a new device going on sale, an OS update); sub-$1B customer wins; minor earnings beats/misses; and normal single-company operational noise (hiring, office moves, executive changes, minor guidance tweaks). Mentioning "AI" does not exempt a story from this exclusion — only an actual M&A/partnership/capex transaction, or a regulatory/legal outcome, can clear this section at all. If the article describes what a company's product now DOES rather than a transaction, a capex commitment, or a legal/regulatory outcome, it fails here — stop, do not proceed to the DEAL GATE below.
+
+Example — REJECT under this exclusion: "Apple releases test of redesigned Siri AI before iPhone 18 hits stores this week." A product feature rollout ahead of a device launch — no acquisition, no capex figure, no regulatory action. relevant: false, despite naming a priority company and mentioning "AI."
+
 DEAL GATE (replaces the old $2B floor for M&A/partnership/minority-stake items only — a hyperscaler's own capex/guidance print from an earnings call or investor update is a different category, still governed by the locked capex rule elsewhere, and bypasses this gate entirely):
 
 OUT — relevant: false, no tier, no kind: any M&A/partnership/minority-stake commitment under $20B (unless it's a hyperscaler capex/guidance print, which doesn't use this gate at all).
@@ -300,8 +322,6 @@ Calibration, not exact-match overrides — reason from the rule, not these speci
 
 SOURCE PRIORITY: Prefer information from a press release or SEC filing first, an earnings call or investor update second, and Tier-1 financial media (Reuters, Bloomberg, WSJ, CNBC breaking coverage) third. Discount unconfirmed reports, analyst speculation, or secondary outlets restating another outlet's story.
 
-STANDARD EXCLUSIONS (always reject): routine product launches, sub-$1B customer wins, minor earnings beats/misses, and normal single-company operational noise (hiring, office moves, executive changes, minor guidance tweaks) — none of these clear the systemic-relevance bar regardless of company size.
-
 RE-FLAGGING RULE: If this article reports on a deal, partnership, or capex commitment that has already been covered (same actors, same core terms), do not treat it as newly relevant unless it reports material new terms, a timeline acceleration, or a scope expansion beyond what was previously announced. A recap, confirmation, or analyst reaction to an already-known deal is an echo — fail it under Filter 6 (Confirmation Trap Test).
 
 TIER FOR DEALS THAT CLEAR THE GATE ABOVE (use in place of the geopolitical tier definitions in DECISION 5 for this category; a deal that fails the gate is never tiered at all — Tier 3 is not a landing spot for a gate failure. A capex beat keeps its own separate tier treatment below, not this section):
@@ -313,7 +333,7 @@ Capex beat (separate from the deal gate — evaluated on its own, not against th
 DIRECTION FOR TECH/AI MEGA-DEALS — DELIBERATELY DIFFERENT FROM THE GEOPOLITICAL CHAINS BELOW: Do not default to a confident bullish or bearish call for this category. Even a large, clearly-covered mega-deal can coincide with a same-day stock move driven by unrelated macro conditions — a confident directional call here risks being wrong for reasons that have nothing to do with the deal's actual merits (real example: the Apple-Broadcom $30B chip deal, August 2026). Default to "neutral" and use the summary/reasoning fields to surface the event, its size, and its terms factually. Only lean bullish or bearish when the article itself contains genuinely one-sided evidence:
 - Lean BEARISH only if the article contains explicit margin-pressure language or explicit no-ROI/return-timeline-risk language from the company or credible analysts.
 - Lean BULLISH only if there is a capex beat >20% over prior guidance AND an explicit strong-demand, backlog, or monetization link stated in the article (not inferred).
-- Otherwise: direction = "neutral", relevant = true, and the summary should surface the deal size/terms/actors so a trader can weigh it themselves.
+- Otherwise (the item already cleared STANDARD EXCLUSIONS and the DEAL GATE above, but the article itself contains no one-sided bullish/bearish evidence): direction = "neutral", relevant = true, and the summary should surface the deal size/terms/actors so a trader can weigh it themselves. This neutral default applies ONLY to an item that already cleared the gates above — it is never a fallback for a story that should have been rejected under STANDARD EXCLUSIONS.
 
 MEGA-CAP REGULATORY/LEGAL OUTCOME RULES — applies to any article reporting a settlement, fine, verdict, judgment, or forced product/business change resulting from a regulatory or legal proceeding against one or more priority mega-cap companies (Nvidia, Apple, Microsoft, Alphabet/Google, Amazon, Meta, Broadcom, AMD, Intel, Taiwan Semiconductor (TSM), or a comparable index-weight tech/AI-infrastructure company).
 
@@ -1256,7 +1276,11 @@ CONTEXT: {context}"""
             if self._keyword_matches(text_lower, ignore):
                 return False
 
-        # Layer 2 — allowlist: must contain at least one market keyword to proceed
+        # Layer 2 — allowlist: must contain at least one market keyword to
+        # proceed. self.company_keywords (bare mega-cap company/ticker names)
+        # is deliberately NOT included here — a company name alone is never
+        # sufficient; it must be paired with an actual market_keyword (a
+        # deal, capex, regulatory, or macro term) in the same text.
         has_market_keyword = any(self._keyword_matches(text_lower, keyword) for keyword in self.market_keywords)
         if not has_market_keyword:
             return False
