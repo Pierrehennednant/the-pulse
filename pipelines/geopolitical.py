@@ -47,6 +47,7 @@ class GeopoliticalPipeline:
         'tier_reasoning': 'haiku_tier_reasoning',
         'uncertainty_score': 'uncertainty_score',
         'kind': 'kind',
+        'gate_pass': 'haiku_gate_pass',
     }
     # Same names as the map's keys — what a pin record carries forward,
     # unrenamed, from the classification that created it.
@@ -290,7 +291,11 @@ FIRST_PRINT (48-hour clock): the article introduces a new fact — new kinetic a
 
 FOLLOW_UP (24-hour clock): the article restates an already-scored event with no new target class, no new supply-chain implication, and no new fact — "talks are close" with no third-party confirmation, an analyst note repeating a press release, a senator's comment on an already-scored story, a recap of an already-announced deal, a second strike inside an already-active 48-hour campaign with no new target class. FOLLOW_UP is still relevant: true — it is ingested and scored on the shorter clock, not rejected. Do not fail a FOLLOW_UP item under DECISION 1 or FILTER 2/6 below purely because it restates rather than introduces — that's exactly what makes it FOLLOW_UP, not grounds for rejection.
 
+CONDITION-BASED, NOT URL-BASED: you have no visibility into what this pillar has previously ingested or scored — do not classify something FIRST_PRINT merely because you personally don't recognize an earlier scored instance of it. Judge FIRST_PRINT vs FOLLOW_UP from cues WITHIN THIS ARTICLE'S OWN TEXT instead: does the article itself show it is describing an ongoing, pre-existing condition — references to "days after," "in the latest sign of," "continuing his push/pressure/campaign to," quotes attributed to remarks made earlier rather than fresh statements, or framing that assumes the reader already knows a backstory the article references but does not newly establish? If so, that is FOLLOW_UP even if you cannot identify or recall the specific earlier article — the condition being old is what matters, not whether you have a record of it. FIRST_PRINT requires the article to report a genuinely new discrete action or fact happening now, not merely a new write-up, new interview, or new analysis of a standing situation.
+
 EXAMPLE — FOLLOW_UP, not FIRST_PRINT: "Trump told Putin U.S.-Russia ties could be fully restored with a swift end to the Ukraine war, Kremlin says." This is a primary-actor readout of a call stating a desire — no signed ceasefire, no withdrawal, no treaty, no verified pause. It is the "talks are close" case above, not a new fact: kind=follow_up, 24h. Contrast FIRST_PRINT: a joint statement announcing a dated ceasefire, a signed framework, or third-party (UN/Turkey/an official ministry) confirmation that fighting has actually stopped — that is new terms, 48h.
+
+EXAMPLE — FOLLOW_UP from self-referential cues alone, no known prior article required: an article describing a President publicly pressuring a Fed chair over rate cuts, framed as a "collision course," where the piece itself references the pressure campaign as already ongoing (prior public comments, an established boxed-in dynamic) and reports no new concrete action (no firing, no resignation, no legislation, no formal directive). This is FOLLOW_UP purely from the article's own framing of an existing condition, 24h — regardless of whether an earlier instance of this pressure campaign was ever itself scored by this pillar. (Separately, see the POLITICAL PRESSURE ON THE FED — GATE below: this exact example also fails that gate.)
 
 Reject an item entirely (relevant: false, no tier, no kind) only if it neither introduces a new fact (FIRST_PRINT) nor restates an identifiable, already-scored, still-live event (FOLLOW_UP) — i.e. it has no traceable connection to anything market-moving, or it fails one of the other filters below on its own terms (source-vs-echo, actor test, market domain, etc.).
 
@@ -399,6 +404,16 @@ Does this article exist within the domain of financial markets, geopolitics affe
 FILTER 6 — CONFIRMATION TRAP TEST
 Is this article just confirming something the market already knows and has already priced in? If the macro situation is already established and this is just another data point piling on, it adds no new directional information ON ITS OWN — but per the FIRST_PRINT/FOLLOW_UP step above, that is grounds for classifying it FOLLOW_UP (relevant: true, 24-hour clock), not for failing it under this filter. Only fail it here if it also can't be tied to any identifiable already-scored event at all.
 
+POLITICAL PRESSURE ON THE FED — GATE (a special outcome, NOT a DECISION 1 rejection): applies to any article centered on a President, administration official, or member of Congress pressuring, criticizing, or being described as on a "collision course" with the Federal Reserve, its chair, or FOMC members over policy.
+
+An item needs a realistic path to moving NQ/ES risk BY ITSELF to score. Pressure and rhetoric alone are not that path — they stay on the Economic Calendar pillar's own speech card (Neutral unless they change the actual policy path), not here, unless a genuinely new concrete action is confirmed in this article.
+
+FAILS THE GATE (gate_pass: false — still relevant: true, still classify kind and clock it normally per FIRST_PRINT/FOLLOW_UP above so it stays visible on schedule, but direction must be "neutral" and tier must be omitted): renewed or continued pressure, "collision course"/"boxed in" framing, criticism of Fed independence, calls for rate cuts or a chair's removal, speculation about what the Fed chair might do — with NO new concrete action in THIS article. A new interview, a new op-ed, or a new round of the same rhetoric does not clear this on its own.
+
+CLEARS THE GATE (gate_pass: true, or omit the field — proceed to normal DECISION 2-5 scoring): a concrete institutional action has actually occurred and is confirmed in this article — the Fed chair or a governor is fired or resigns, a replacement is confirmed, legislation is introduced or passed that changes the Fed's structure or mandate, or a formal White House directive or executive order is issued to the FOMC.
+
+ANTI-RECURRENCE CHECK: do not score both "if the chair capitulates" and "if the market reads it as politicization" as bearish outcomes for the same article — that is not identifying a catalyst, it is asserting the story matters no matter what happens. If your own reasoning would call every possible outcome of a pressure story bearish, that itself is the signal that this fails the gate.
+
 DECISION 2 — MARKET DIRECTION
 If relevant, what is the directional impact on NQ and ES equity futures specifically?
 
@@ -425,13 +440,14 @@ DECISION 3 — SUMMARY
 Write a clean 3-4 sentence market-focused summary of the article. Cover: what happened, who the key actor is, what the immediate consequence is, and what it means for NQ/ES traders today. Write it as if briefing a trader in 30 seconds. Do not use jargon. Be direct and specific.
 
 Return ONLY a JSON array with no markdown, no explanation, no preamble. Exactly this format:
-[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Iran war escalation directly affects oil and risk sentiment", "summary": "Your 3-4 sentence market summary here.", "uncertainty_score": 85, "tier": 1, "kind": "first_print", "reasoning": "Active war escalation directly threatens oil supply and broad risk sentiment."}}]
+[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Iran war escalation directly affects oil and risk sentiment", "summary": "Your 3-4 sentence market summary here.", "uncertainty_score": 85, "tier": 1, "kind": "first_print", "reasoning": "Active war escalation directly threatens oil supply and broad risk sentiment."}}, {{"id": 2, "relevant": true, "confidence": 0.8, "category": "geopolitical", "direction": "neutral", "reason": "Renewed pressure on the Fed chair with no new concrete action — fails the political pressure gate.", "summary": "Your 3-4 sentence market summary here.", "uncertainty_score": 60, "kind": "follow_up", "gate_pass": false, "reasoning": "Continued rhetoric, no firing/resignation/legislation/directive — not a catalyst by itself."}}]
 
 Use only "bearish", "bullish", or "neutral" for direction.
 Use confidence between 0.0 and 1.0.
-Use tier as an integer: 1, 2, or 3.
+Use tier as an integer: 1, 2, or 3. Omit tier entirely when gate_pass is false.
 Use kind as either "first_print" or "follow_up" for every relevant item, per the FIRST_PRINT/FOLLOW_UP step above. Omit for a non-relevant item.
 If relevant is false, still provide a summary field but it can be empty string.
+Use gate_pass: false ONLY for an item that fails the POLITICAL PRESSURE ON THE FED — GATE above — it stays relevant: true (still gets a kind and clock so it stays visible), but direction must be "neutral" and tier must be omitted, so it contributes zero score. Omit gate_pass entirely (or use true) for every other item — this field exists solely to mark that one gate-failure case as visible-but-non-scoring rather than dropped.
 
 DECISION 4 — UNCERTAINTY SCORE
 Rate how much uncertainty and execution difficulty this event creates for a day trader on a scale of 0-100.
@@ -676,6 +692,13 @@ Articles to classify:
                     pin['tier'] = new_class.get('tier')
                     pin['confidence'] = new_class.get('confidence', 0)
                     pin['summary'] = new_class.get('summary', pin.get('summary', ''))
+                    # Without this, a pinned gate-failed item (see POLITICAL
+                    # PRESSURE ON THE FED — GATE) refreshed via a duplicate-
+                    # event merge would keep whatever gate_pass it had before
+                    # (or none at all) instead of the current classification's
+                    # verdict — exactly the staleness this function exists to
+                    # prevent for every other field here.
+                    pin['gate_pass'] = new_class.get('gate_pass', True)
                     self.save_pinned_stories(pinned)
                     pulse_logger.log(f"📌 Pin refreshed with updated classification: '{headline[:60]}'")
                     return
@@ -907,6 +930,14 @@ Respond with only one word: DIVERGED or UNCHANGED"""
         missing = {
             headline: entry for headline, entry in gemini_cache.items()
             if headline in active_set and entry.get('relevant') and entry.get('tier') not in (1, 2, 3)
+            # A gate-failed item (see POLITICAL PRESSURE ON THE FED — GATE)
+            # deliberately has no tier — that's a permanent, correct state,
+            # not "predates the tier field, needs backfilling." Without this
+            # exclusion, this pass would assign one via its own separate,
+            # narrower prompt (no gate awareness at all) and silently
+            # reintroduce a nonzero score for an item calculate_score() was
+            # explicitly told to zero out.
+            and entry.get('gate_pass', True) is not False
         }
         if not missing:
             return
@@ -1657,6 +1688,11 @@ CONTEXT: {context}"""
                                     'uncertainty_score': r.get('uncertainty_score', 0),
                                     'tier': tier,
                                     'kind': kind,
+                                    # False only when Haiku explicitly failed this item under the
+                                    # POLITICAL PRESSURE ON THE FED — GATE (visible/clocked, never
+                                    # scored — see calculate_score()). Defaults true/absent-key-safe
+                                    # for every other item, same as before this field existed.
+                                    'gate_pass': r.get('gate_pass', True),
                                     'tier_reasoning': r.get('reasoning', ''),
                                     'text_source': text_source,
                                     'classified_at': datetime.now(timezone.utc).isoformat()
@@ -1948,6 +1984,7 @@ CONTEXT: {context}"""
         haiku_tier_count = 0
         fallback_tier_count = 0
         pending_count = 0
+        gate_failed_count = 0
         tier_map = {1: (1.7, 4.0), 2: (0.75, 2.0), 3: (0.35, 1.0)}
         for item in items:
             # Keyword-fallback-only articles (no Haiku confirmation yet) never
@@ -1957,6 +1994,20 @@ CONTEXT: {context}"""
             # Haiku confirms or dropped entirely if Haiku rejects them.
             if item.get('keyword_fallback_only'):
                 pending_count += 1
+                continue
+            # Gate-failed items (e.g. political pressure on the Fed with no
+            # new concrete action — see the POLITICAL PRESSURE ON THE FED —
+            # GATE prompt section) are a fully Haiku-confirmed verdict, not a
+            # pending one — counted separately from pending_count so the log
+            # line doesn't misreport them as "awaiting classification." They
+            # stay visible on their normal FIRST_PRINT/FOLLOW_UP clock but
+            # NEVER contribute a score. Checked before direction/sentiment_score
+            # are even read — direction alone ("neutral") is not a safe
+            # guarantee of zero, since a missing/neutral gemini_direction falls
+            # through to the local sentiment analyzer's score on the headline,
+            # which can still be nonzero.
+            if item.get('haiku_gate_pass') is False:
+                gate_failed_count += 1
                 continue
             # Direction
             direction = item.get('gemini_direction')
@@ -2015,6 +2066,8 @@ CONTEXT: {context}"""
             )
         if pending_count:
             pulse_logger.log(f"⏳ Geo — {pending_count} article(s) excluded from score, pending Haiku classification")
+        if gate_failed_count:
+            pulse_logger.log(f"🚪 Geo — {gate_failed_count} article(s) excluded from score, failed the political pressure gate (visible, non-scoring)")
         if total_weight == 0:
             return 0.0
         return round(max(-2.0, min(2.0, weighted_sum / total_weight)), 2)
@@ -2083,6 +2136,7 @@ CONTEXT: {context}"""
                             'uncertainty_score': r.get('uncertainty_score', 0),
                             'tier': tier,
                             'kind': kind,
+                            'gate_pass': r.get('gate_pass', True),
                             'tier_reasoning': r.get('reasoning', ''),
                             'text_source': text_source,
                             'classified_at': datetime.now(timezone.utc).isoformat()
