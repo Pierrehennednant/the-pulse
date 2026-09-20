@@ -117,23 +117,21 @@ class GeopoliticalPipeline:
                 anchors.append(event_date)
         return anchors
 
-    def _check_ec_fold(self, item, ec_anchors):
-        """Section 2 app-layer fold. ALL of the following must hold:
-          (a) EVENT TYPE MATCH — mechanical, phrase-based, checked below.
-          (b)+(c) SAME MEETING WINDOW as an EC row that already has an
-              actual — mechanical, date-based, checked together against
-              ec_anchors (a date range, not an exact-day match, since a
-              recap can run a few days after the meeting itself).
-          (d) NO NEW FACT — NOT re-derived here; consumes Haiku's own kind
-              judgment already on the item (kind == 'follow_up'). A
-              first_print item never folds, regardless of (a)/(b)/(c) —
-              it may still be a genuine new-fact story EC doesn't have.
-        Never keys on a person's name alone — no names appear in either
-        phrase list this checks."""
+    def _ec_fold_matches(self, item, ec_anchors):
+        """Sections (a)-(c) of the app-layer EC fold ONLY — event-type
+        phrase match, same meeting window, EC row already has an actual.
+        No reference to kind/condition (d) here. Shared by:
+          - _check_ec_fold() (ingest-time — ALSO gates on Haiku's fresh
+            kind judgment for condition (d), see that method), and
+          - _reevaluate_pinned_ec_folds() (the pin re-evaluation pass —
+            deliberately does NOT gate on stored kind; see that method's
+            docstring for why that's not the same thing as re-deriving
+            condition (d) with a new string rule).
+        Returns the matched EC event_date string ('YYYY-MM-DD') on a
+        match, or None. Never keys on a person's name alone — no names
+        appear in either phrase list this checks."""
         if not ec_anchors:
-            return False
-        if item.get('kind') != 'follow_up':  # (d) — Haiku's own call, not re-derived here
-            return False
+            return None
         text = f"{item.get('headline', '')} {item.get('description', '')} {item.get('summary', '')}".lower()
         event_type_match = any(self._keyword_matches(text, p) for p in self.FOMC_FOLD_PRIMARY_PHRASES)
         if not event_type_match:
@@ -141,7 +139,7 @@ class GeopoliticalPipeline:
             has_action_word = any(self._keyword_matches(text, w) for w in self.FOMC_FOLD_WEEK_ACTION_WORDS)
             event_type_match = has_week_phrase and has_action_word
         if not event_type_match:  # (a)
-            return False
+            return None
         article_date_str = (
             (item.get('published_at') or '').strip()
             or (item.get('date') or '').strip()
@@ -149,15 +147,124 @@ class GeopoliticalPipeline:
         )
         parsed = self._pin_parsed_timestamp(article_date_str)
         if parsed is None:
-            return False  # fail closed — can't confirm the meeting window, no fold
+            return None  # fail closed — can't confirm the meeting window
         for event_date_str in ec_anchors:
             try:
                 event_dt = datetime.strptime(event_date_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
             except (ValueError, TypeError):
                 continue
             if event_dt <= parsed <= event_dt + timedelta(days=self.FOMC_FOLD_WINDOW_DAYS):
-                return True  # (b) + (c) together
-        return False
+                return event_date_str  # (b) + (c) together
+        return None
+
+    def _check_ec_fold(self, item, ec_anchors):
+        """Section 2 app-layer fold (ingest-time). ALL of the following
+        must hold:
+          (a)+(b)+(c) — mechanical, see _ec_fold_matches() above.
+          (d) NO NEW FACT — NOT re-derived here; consumes Haiku's own kind
+              judgment already on the item (kind == 'follow_up'). A
+              first_print item never folds, regardless of (a)/(b)/(c) —
+              it may still be a genuine new-fact story EC doesn't have.
+        """
+        if item.get('kind') != 'follow_up':  # (d) — Haiku's own call, not re-derived here
+            return False
+        return self._ec_fold_matches(item, ec_anchors) is not None
+
+    def _reevaluate_pinned_ec_folds(self):
+        """Code-only pass over currently-pinned stories, run on every
+        fetch() call regardless of whether a live TheNewsAPI fetch happens
+        this cycle. Closes the gap the ingest-time fold above doesn't
+        touch: that fold only ever runs against a NEW article's fresh
+        Haiku kind; the only thing that can change an EXISTING pin's
+        stored kind afterward is the reactive two-agreeing-merges
+        duplicate-merge path (_refresh_pin_classification()), which
+        requires a NEW matching article to show up at all. A pin sitting
+        alone with nothing new published about it never got re-evaluated
+        — exactly what happened to the Sep 18 Warsh pin and the Sep 15
+        NBC pin. No Haiku call here — never re-prompts Haiku on every pin.
+
+        CONDITION (d) FOR THIS PASS, STATED EXPLICITLY (per instruction —
+        not left to be inferred): unlike ingest-time classification, this
+        pass does NOT require the pin's own stored kind to already be
+        'follow_up' before folding it. It uses ONLY the mechanical
+        (a)-(c) match (_ec_fold_matches()) as sufficient grounds to
+        correct a pin's kind. This is a deliberate deviation from "use
+        the pin's stored kind for (d)" — reasoned as follows, not slipped
+        in quietly:
+          - Every pin currently on record was classified before this fold
+            mechanism existed at all. Its stored kind reflects Haiku's
+            judgment in a world where "does EC already own this event"
+            was never asked — unlike a freshly-classified article under
+            the CURRENT prompt, whose kind IS a meaningful signal for (d)
+            precisely because the prompt now explicitly asks Haiku to
+            weigh this exact pattern (see the FOMC / RATE-DECISION RECAP
+            RULE). A legacy pin's stored kind is not evidence either way.
+          - Requiring stored kind == 'follow_up' here would make this
+            pass a structural no-op for every pin that predates the fold
+            (i.e. every pin that exists today) — it could never correct
+            the Sep 18/Sep 15-style pins this fix exists to catch, which
+            is the literal acceptance criterion (test A: no new article,
+            pin alone must still be corrected).
+          - This is NOT a new string-based "no new fact" re-derivation —
+            no new phrase list or NLP heuristic is added beyond (a),
+            which was already approved for the ingest-time fold.
+        KNOWN LIMITATION, stated plainly: this means the pass cannot
+        distinguish "a pure recap" from "a sharp new fact that also
+        happens to name the press conference/rate decision and falls in
+        the same date window" — only a live Haiku read of the article
+        text can make that call reliably, which is exactly why ingest-
+        time classification keeps requiring kind == 'follow_up'
+        explicitly and this pass does not. FOMC_FOLD_PRIMARY_PHRASES are
+        specific enough that this is a narrow risk in practice, but it is
+        not the same guarantee ingest-time classification provides.
+
+        "Score before/after" is logged at the pinned-set level (this
+        pass's own calculate_score() over the pin list alone, before vs
+        after any corrections) — not a full pillar total, since live
+        articles for this cycle aren't fetched yet at this point in
+        fetch(), and not a per-pin score, since that would require
+        pulling calculate_score()'s inline tier/confidence/sign math out
+        into its own reusable function — a larger refactor than this fix
+        calls for. Flagging this interpretation explicitly rather than
+        letting it pass unstated.
+        """
+        try:
+            pins = self.load_pinned_stories()
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Pin EC-fold re-evaluation — failed to load pins: {e}", level="WARNING")
+            return
+        if not pins:
+            return
+        ec_anchors = self._load_ec_fomc_anchors()
+        score_before = self.calculate_score([dict(p) for p in pins], [])
+        changed = False
+        for pin in pins:
+            headline = pin.get('headline', '(untitled)')
+            old_kind = pin.get('kind', 'first_print')
+            matched_date = self._ec_fold_matches(pin, ec_anchors)
+            if matched_date is not None and old_kind != 'follow_up':
+                pin['kind'] = 'follow_up'
+                changed = True
+                pulse_logger.log(
+                    f"🔗 Pin EC-fold re-evaluation | '{headline[:60]}' | matched EC {matched_date} | "
+                    f"kind {old_kind} → follow_up (now excluded from score)"
+                )
+            elif matched_date is not None:
+                pulse_logger.log(
+                    f"🔗 Pin EC-fold re-evaluation | '{headline[:60]}' | matched EC {matched_date} | "
+                    f"kind already follow_up, no change"
+                )
+            else:
+                pulse_logger.log(
+                    f"🔗 Pin EC-fold re-evaluation | '{headline[:60]}' | no_ec_match | "
+                    f"kind unchanged ({old_kind})"
+                )
+        if changed:
+            self.save_pinned_stories(pins)
+            score_after = self.calculate_score([dict(p) for p in pins], [])
+            pulse_logger.log(
+                f"🔗 Pin EC-fold re-evaluation — pinned-set score {score_before} → {score_after}"
+            )
 
     def _apply_classification_fields(self, item, source):
         """Copy CLASSIFICATION_TO_ITEM_FIELDS from `source` (a
@@ -2451,6 +2558,14 @@ CONTEXT: {context}"""
 
     def fetch(self):
         try:
+            # Runs every fetch() call, unconditionally — before the cache-age
+            # branch below, so it applies regardless of which path executes
+            # afterward (cache-hit, live fetch, or the pinned-only fallback).
+            # Cheap: no network call, no Haiku call, just two local cache
+            # reads and mechanical matching. See its own docstring for why
+            # this is a genuinely separate pass from the ingest-time fold.
+            self._reevaluate_pinned_ec_folds()
+
             existing = cache.load(self.cache_key)
             age_minutes = cache.get_age_minutes(self.cache_key)
             if existing and age_minutes < 3:
