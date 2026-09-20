@@ -53,6 +53,112 @@ class GeopoliticalPipeline:
     # unrenamed, from the classification that created it.
     PIN_CLASSIFICATION_FIELDS = tuple(CLASSIFICATION_TO_ITEM_FIELDS.keys())
 
+    # App-layer EC fold (Sep 18 Warsh fix) — a recap/analysis article whose
+    # only substance is reaction to an event the Economic Calendar pillar
+    # ALREADY scored (this week's FOMC decision/press conference/SEP) must
+    # not also open a second Geo score for the same event. Haiku cannot see
+    # EC state, so this is a deterministic, code-side join computed fresh
+    # every calculate_score() call — never persisted onto a pin or the
+    # classification cache, since EC's own state (has an actual been
+    # entered yet?) can change from cycle to cycle. EVENT-TYPE MATCH + SAME
+    # MEETING WINDOW + EC ROW ALREADY HAS AN ACTUAL are decided mechanically
+    # by _check_ec_fold() below; NO NEW FACT is NOT re-derived here — it is
+    # Haiku's own first_print/follow_up judgment (see the FOMC /
+    # RATE-DECISION RECAP RULE in the classification prompt), already
+    # resolved onto item['kind'] by the time calculate_score() runs. Fold
+    # triggers only when the matcher AND Haiku's kind agree.
+    FOMC_FOLD_EVENT_TITLES = (
+        'Federal Funds Rate', 'FOMC Statement', 'FOMC Press Conference', 'FOMC Economic Projections',
+    )
+    # "SEP" deliberately excluded as a bare token — \bsep\b also matches the
+    # "Sep 18" date-abbreviation style common in headlines/timestamps, which
+    # would false-positive the event-type match on unrelated September news.
+    # "economic projections" below covers the legitimate case without that
+    # collision. No person's name appears in this list or the one below —
+    # a name is never sufficient on its own to trigger a fold.
+    FOMC_FOLD_PRIMARY_PHRASES = (
+        'fomc', 'fomc meeting', 'press conference', 'economic projections',
+        'federal funds', 'rate decision',
+    )
+    # "this week's hike" / "this week's rate increase" per spec, matched as
+    # two independent tokens (this week + a rate-move word) rather than one
+    # exact contiguous phrase — real headlines vary the wording in between
+    # ("this week's 25 bp hike", "this week's rate increase to 4.5%").
+    FOMC_FOLD_WEEK_PHRASE = 'this week'
+    FOMC_FOLD_WEEK_ACTION_WORDS = ('hike', 'rate increase', 'rate hike', 'rate cut')
+    FOMC_FOLD_WINDOW_DAYS = 10
+
+    def _load_ec_fomc_anchors(self):
+        """Dated EC calendar rows (this week's FOMC-day events) that already
+        have a confirmed actual — the "EC already owns this event" anchor
+        set _check_ec_fold() checks new Geo articles against. Read directly
+        from the EC pillar's own persisted cache (same low-coupling pattern
+        dashboard.py's _run_partial_refresh() already uses to read other
+        pillars' caches) rather than threading EC state through
+        fetch_news()'s call signature — Haiku never sees this, only this
+        mechanical matcher does. Returns a list of 'YYYY-MM-DD' strings."""
+        try:
+            ec_cached = cache.load('economic_calendar')
+            if not ec_cached:
+                return []
+            events = ec_cached.get('data', {}).get('events', [])
+        except Exception as e:
+            pulse_logger.log(f"⚠️ EC fold — failed to load economic_calendar cache: {e}", level="WARNING")
+            return []
+        anchors = []
+        for e in events:
+            if e.get('title') not in self.FOMC_FOLD_EVENT_TITLES:
+                continue
+            actual = e.get('actual')
+            if actual in (None, '', 'Pending', 'N/A'):
+                continue
+            event_date = e.get('event_date', '')
+            if event_date:
+                anchors.append(event_date)
+        return anchors
+
+    def _check_ec_fold(self, item, ec_anchors):
+        """Section 2 app-layer fold. ALL of the following must hold:
+          (a) EVENT TYPE MATCH — mechanical, phrase-based, checked below.
+          (b)+(c) SAME MEETING WINDOW as an EC row that already has an
+              actual — mechanical, date-based, checked together against
+              ec_anchors (a date range, not an exact-day match, since a
+              recap can run a few days after the meeting itself).
+          (d) NO NEW FACT — NOT re-derived here; consumes Haiku's own kind
+              judgment already on the item (kind == 'follow_up'). A
+              first_print item never folds, regardless of (a)/(b)/(c) —
+              it may still be a genuine new-fact story EC doesn't have.
+        Never keys on a person's name alone — no names appear in either
+        phrase list this checks."""
+        if not ec_anchors:
+            return False
+        if item.get('kind') != 'follow_up':  # (d) — Haiku's own call, not re-derived here
+            return False
+        text = f"{item.get('headline', '')} {item.get('description', '')} {item.get('summary', '')}".lower()
+        event_type_match = any(self._keyword_matches(text, p) for p in self.FOMC_FOLD_PRIMARY_PHRASES)
+        if not event_type_match:
+            has_week_phrase = self._keyword_matches(text, self.FOMC_FOLD_WEEK_PHRASE)
+            has_action_word = any(self._keyword_matches(text, w) for w in self.FOMC_FOLD_WEEK_ACTION_WORDS)
+            event_type_match = has_week_phrase and has_action_word
+        if not event_type_match:  # (a)
+            return False
+        article_date_str = (
+            (item.get('published_at') or '').strip()
+            or (item.get('date') or '').strip()
+            or (item.get('timestamp') or '').strip()
+        )
+        parsed = self._pin_parsed_timestamp(article_date_str)
+        if parsed is None:
+            return False  # fail closed — can't confirm the meeting window, no fold
+        for event_date_str in ec_anchors:
+            try:
+                event_dt = datetime.strptime(event_date_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                continue
+            if event_dt <= parsed <= event_dt + timedelta(days=self.FOMC_FOLD_WINDOW_DAYS):
+                return True  # (b) + (c) together
+        return False
+
     def _apply_classification_fields(self, item, source):
         """Copy CLASSIFICATION_TO_ITEM_FIELDS from `source` (a
         gemini_cache entry or a pin record — both use the classification's
@@ -296,6 +402,10 @@ CONDITION-BASED, NOT URL-BASED: you have no visibility into what this pillar has
 EXAMPLE — FOLLOW_UP, not FIRST_PRINT: "Trump told Putin U.S.-Russia ties could be fully restored with a swift end to the Ukraine war, Kremlin says." This is a primary-actor readout of a call stating a desire — no signed ceasefire, no withdrawal, no treaty, no verified pause. It is the "talks are close" case above, not a new fact: kind=follow_up, 24h. Contrast FIRST_PRINT: a joint statement announcing a dated ceasefire, a signed framework, or third-party (UN/Turkey/an official ministry) confirmation that fighting has actually stopped — that is new terms, 48h.
 
 EXAMPLE — FOLLOW_UP from self-referential cues alone, no known prior article required: an article describing a President publicly pressuring a Fed chair over rate cuts, framed as a "collision course," where the piece itself references the pressure campaign as already ongoing (prior public comments, an established boxed-in dynamic) and reports no new concrete action (no firing, no resignation, no legislation, no formal directive). This is FOLLOW_UP purely from the article's own framing of an existing condition, 24h — regardless of whether an earlier instance of this pressure campaign was ever itself scored by this pillar. (Separately, see the POLITICAL PRESSURE ON THE FED — GATE below: this exact example also fails that gate.)
+
+FOMC / RATE-DECISION RECAP RULE: if the article's only substance is language about or reaction to THIS WEEK'S FOMC meeting, press conference, Summary of Economic Projections, or rate decision — and it introduces no new fact (no new vote, no new number, no new date, no unscheduled statement establishing a genuinely new policy path) — classify it FOLLOW_UP, even on its first appearance in this pillar. Cue phrases suggesting this pattern: "this week's rate increase," "at the press conference," "Warsh's three words," "markets digest the hike," or any similar framing that reacts to or analyzes an already-completed meeting rather than reporting something new. Rule of thumb: if you cannot state the new fact in one sentence, it is FOLLOW_UP.
+
+EXAMPLE — FOLLOW_UP, FOMC recap pattern: "Three words from Kevin Warsh have Wall Street wondering how far the Fed will go with rate hikes," published days after this week's FOMC decision and press conference, analyzing a quote made AT that press conference. No new vote, no new number, no new date — this is analysis of an event the Economic Calendar pillar already scored: kind=follow_up, 24h. Contrast a genuine FIRST_PRINT in this category: an unscheduled interview days later where Warsh states a specific new policy path not previously disclosed (e.g. "another hike in November is likely") — that is a new fact from a primary actor, FIRST_PRINT.
 
 Reject an item entirely (relevant: false, no tier, no kind) only if it neither introduces a new fact (FIRST_PRINT) nor restates an identifiable, already-scored, still-live event (FOLLOW_UP) — i.e. it has no traceable connection to anything market-moving, or it fails one of the other filters below on its own terms (source-vs-echo, actor test, market domain, etc.).
 
@@ -699,6 +809,16 @@ Articles to classify:
                     # verdict — exactly the staleness this function exists to
                     # prevent for every other field here.
                     pin['gate_pass'] = new_class.get('gate_pass', True)
+                    # Requirement 4 (Sep 18 fix): a pin stores the STORY, not
+                    # whatever kind it was first read as, forever. Without
+                    # this, a pin created as first_print would stay
+                    # first_print (and keep its full, un-folded scoring
+                    # weight) even after a later article about the same
+                    # story is correctly reclassified follow_up under an
+                    # updated prompt/gate — locking in the wrong
+                    # classification until TTL expiry instead of the new
+                    # evidence taking effect immediately.
+                    pin['kind'] = new_class.get('kind', pin.get('kind', 'first_print'))
                     self.save_pinned_stories(pinned)
                     pulse_logger.log(f"📌 Pin refreshed with updated classification: '{headline[:60]}'")
                     return
@@ -1712,10 +1832,21 @@ CONTEXT: {context}"""
                                         )
                                     ]
                                     active_entries.sort(key=lambda hc: hc[1].get('classified_at', ''), reverse=True)
-                                    for existing_headline, _ in active_entries[:15]:
+                                    candidates = active_entries[:15]
+                                    for existing_headline, _ in candidates:
                                         if self.is_same_story(headline, existing_headline):
                                             duplicate_of = existing_headline
                                             break
+                                    # Explicit outcome every time this runs — a silent miss here is
+                                    # exactly what let the Sep 18 Warsh recap open a fresh pin
+                                    # instead of folding into anything: there was no log line either
+                                    # way, so "ran and found nothing" was indistinguishable from
+                                    # "never ran at all."
+                                    if duplicate_of is None:
+                                        pulse_logger.log(
+                                            f"🔍 is_same_story() — no match for '{headline[:60]}' "
+                                            f"against {len(candidates)} candidate(s)"
+                                        )
 
                                 if duplicate_of:
                                     existing = gemini_cache[duplicate_of]
@@ -1979,12 +2110,15 @@ CONTEXT: {context}"""
         """
         if not items:
             return 0.0
+        # Loaded once per call — see FOMC_FOLD_* / _check_ec_fold() above.
+        ec_anchors = self._load_ec_fomc_anchors()
         weighted_sum = 0.0
         total_weight = 0.0
         haiku_tier_count = 0
         fallback_tier_count = 0
         pending_count = 0
         gate_failed_count = 0
+        folded_count = 0
         tier_map = {1: (1.7, 4.0), 2: (0.75, 2.0), 3: (0.35, 1.0)}
         for item in items:
             # Keyword-fallback-only articles (no Haiku confirmation yet) never
@@ -2008,6 +2142,17 @@ CONTEXT: {context}"""
             # which can still be nonzero.
             if item.get('haiku_gate_pass') is False:
                 gate_failed_count += 1
+                continue
+            # App-layer EC fold (Sep 18 Warsh fix) — a recap/analysis article
+            # about an FOMC event the EC pillar already scored never
+            # contributes a second Geo score for that same event. Checked
+            # before direction/sentiment_score for the same reason as the
+            # gate above. See _check_ec_fold()'s docstring for the full
+            # (a)-(d) condition breakdown.
+            if self._check_ec_fold(item, ec_anchors):
+                item['kind'] = 'follow_up'  # already true by construction (condition d) — set explicitly for clarity
+                item['ec_folded'] = True
+                folded_count += 1
                 continue
             # Direction
             direction = item.get('gemini_direction')
@@ -2068,6 +2213,8 @@ CONTEXT: {context}"""
             pulse_logger.log(f"⏳ Geo — {pending_count} article(s) excluded from score, pending Haiku classification")
         if gate_failed_count:
             pulse_logger.log(f"🚪 Geo — {gate_failed_count} article(s) excluded from score, failed the political pressure gate (visible, non-scoring)")
+        if folded_count:
+            pulse_logger.log(f"🔗 Geo — {folded_count} article(s) excluded from score, folded into an existing EC event (visible, non-scoring)")
         if total_weight == 0:
             return 0.0
         return round(max(-2.0, min(2.0, weighted_sum / total_weight)), 2)
