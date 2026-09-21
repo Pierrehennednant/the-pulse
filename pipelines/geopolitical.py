@@ -90,6 +90,16 @@ class GeopoliticalPipeline:
     FOMC_FOLD_WEEK_ACTION_WORDS = ('hike', 'rate increase', 'rate hike', 'rate cut')
     FOMC_FOLD_WINDOW_DAYS = 10
 
+    # Stage 4 of the structural first_print/follow_up rewrite: price-move /
+    # pure market-tape analysis never enters Geo, decided MECHANICALLY
+    # (_code_side_bucket_override below), not by Pass A's own bucket call.
+    # Seed list, grows the same way FOMC_FOLD_PRIMARY_PHRASES/ignore_keywords
+    # already do, from real observed misses — not meant to be exhaustive on
+    # day one.
+    TAPE_PATTERN_PHRASES = (
+        'yields', 'vix', 'oil settle', 'oil settles', 'live updates',
+    )
+
     def _load_ec_fomc_anchors(self):
         """Dated EC calendar rows (this week's FOMC-day events) that already
         have a confirmed actual — the "EC already owns this event" anchor
@@ -820,6 +830,38 @@ Key rules:
 Articles to classify:
 {article_list}"""
 
+    def _code_side_bucket_override(self, article, extraction):
+        """Stage 4 of the structural rewrite: price-move / pure market-tape
+        analysis never enters Geo, decided MECHANICALLY here, never left
+        to Pass A's own bucket judgment call. Checks the article's title/
+        description/summary for TAPE_PATTERN_PHRASES (yields, VIX, oil
+        settle, "live updates" framing); if matched AND the extraction
+        does not state a genuinely new event dated TODAY, forces bucket
+        to "macro" regardless of what Pass A said. This is what kills the
+        CNBC-yields-style case as a PATTERN — any article matching this
+        shape, not a one-off headline special case.
+
+        The "no new event dated today" qualifier is the whole point: an
+        article that happens to mention yields/VIX/oil in passing while
+        reporting a genuinely new same-day event is NOT overridden — only
+        pure tape narration with nothing new stated for today is."""
+        text = f"{article.get('headline', '')} {article.get('description', '')} {article.get('summary', '')}".lower()
+        if not any(self._keyword_matches(text, p) for p in self.TAPE_PATTERN_PHRASES):
+            return extraction.get('bucket', 'drop')
+
+        today_str = datetime.now(self.timezone).strftime('%Y-%m-%d')
+        event_time = (extraction.get('event_time') or '').strip()[:10]
+        if event_time == today_str:
+            return extraction.get('bucket', 'drop')
+
+        original_bucket = extraction.get('bucket', 'drop')
+        if original_bucket != 'macro':
+            pulse_logger.log(
+                f"🔧 Code-side bucket override — {article.get('headline', '')[:60]!r} matched a "
+                f"market-tape pattern with no new event dated today, forcing bucket macro (was {original_bucket!r})"
+            )
+        return 'macro'
+
     def classify_relevance_batch_v2(self, articles):
         """Orchestration for the two-pass structural rewrite. Standalone —
         NOT called by fetch_news() yet (see the module-level comment
@@ -876,7 +918,7 @@ Articles to classify:
             place = extraction.get('place', '')
             event_time = extraction.get('event_time', '')
             new_fact = (extraction.get('new_fact') or '').strip()
-            bucket = extraction.get('bucket', 'drop')
+            bucket = self._code_side_bucket_override(article, extraction)
 
             base = {
                 'headline': article.get('headline', ''), 'actor': actor, 'action': action,
