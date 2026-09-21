@@ -484,9 +484,15 @@ class GeopoliticalPipeline:
         finally:
             executor.shutdown(wait=False)  # don't block on threads still running after timeout
 
-        # Stamp each article so callers can write text_source into gemini_cache
+        # Stamp each article so callers can write text_source into gemini_cache,
+        # and so callers (update_pinned_store(), background_classify()'s
+        # gemini_cache write) can persist the STORED full text for later
+        # forced reclassification (see force_reclassify()) — never re-fetched
+        # from story_url at reclassify time, since pages get edited,
+        # paywalled, or redirected after the fact.
         for i, article in enumerate(articles):
             article['_text_source'] = text_source_map[i]
+            article['_full_text'] = results_map[i]
 
         # Build batch input
         article_list = ""
@@ -494,7 +500,18 @@ class GeopoliticalPipeline:
             full_text = results_map[i]
             article_list += f"{i+1}. TITLE: {article['headline']}\n   FULL TEXT: {full_text}\n\n"
 
-        prompt = f"""You are assisting a professional NQ and ES futures day trader with pre-market preparation.
+        prompt = self._build_classification_prompt(article_list)
+        return self._call_haiku_classify(prompt)
+
+    def _build_classification_prompt(self, article_list):
+        """The full, current classification prompt, parameterized only by
+        the pre-built "N. TITLE: ... FULL TEXT: ..." block. Factored out of
+        classify_relevance_batch() so force_reclassify() can build the
+        IDENTICAL prompt for a single stored article — a forced
+        reclassification must judge against the exact same rules a live
+        classify() call would use, never a hand-copied second version that
+        can silently drift from this one."""
+        return f"""You are assisting a professional NQ and ES futures day trader with pre-market preparation.
 
 FALSE POSITIVES COST MORE THAN MISSES: you are classifying headlines for a Nasdaq-100/S&P 500 futures regime filter used by a low-frequency discretionary-exit system. False positives keep the operator flat or push a fake lean. When unsure whether an item reprices NQ or ES risk appetite, drop it. Do not "be complete." Completeness is how $12.9B software deals sit in the score for two days after the tape is done.
 
@@ -720,6 +737,14 @@ Key rules:
 Articles to classify:
 {article_list}"""
 
+    def _call_haiku_classify(self, prompt, article_count=None):
+        """Send a classification prompt (built by _build_classification_prompt())
+        to Haiku and return the parsed results list, or [] on exhausted
+        retries. Factored out of classify_relevance_batch() so
+        force_reclassify() shares the IDENTICAL call/retry/parse behavior,
+        not a second hand-copied version. `article_count` is cosmetic only
+        (for the success log line) — pass None to log whatever the response
+        itself contains."""
         # Retry/backoff mirrors utils.retry.fetch_with_retry's shape and defaults
         # (3 attempts, 2s/4s exponential backoff) — can't reuse that function
         # directly since it's built around requests.get()/HTTP status codes, not
@@ -746,10 +771,11 @@ Articles to classify:
                     if text.startswith('json'):
                         text = text[4:]
                 results = json.loads(text)
+                count = article_count if article_count is not None else len(results)
                 if attempt:
-                    pulse_logger.log(f"✅ Claude Haiku classified {len(results)} articles (succeeded on attempt {attempt + 1}/{RETRIES})")
+                    pulse_logger.log(f"✅ Claude Haiku classified {count} articles (succeeded on attempt {attempt + 1}/{RETRIES})")
                 else:
-                    pulse_logger.log(f"✅ Claude Haiku classified {len(results)} articles")
+                    pulse_logger.log(f"✅ Claude Haiku classified {count} articles")
                 return results
             except Exception as e:
                 last_exc = e
@@ -769,6 +795,146 @@ Articles to classify:
                     time.sleep(BACKOFF * (2 ** attempt))
         pulse_logger.log(f"⚠️ Claude Haiku classifier exhausted {RETRIES} attempts, giving up this cycle: {last_exc}", level="WARNING")
         return []
+
+    def force_reclassify(self, headline):
+        """Manual, on-demand lever: re-run the FULL current classification
+        prompt against an already-classified item's STORED source text —
+        never a live fetch of story_url, since pages get edited, paywalled,
+        or redirected after the fact (see article_text on the pin/cache
+        record). Looks for `headline` first as a pinned story, then as a
+        /data/gemini_classifications.json cache entry.
+
+        Always produces a COMPLETE new classification (relevant, direction,
+        tier, confidence, tier_reasoning, gate_pass, etc.) — there is no
+        "just check kind" mode; every classification field is refreshed
+        together, consistently, from the source text, even when only the
+        kind is what someone asked about.
+
+        Direction-dependent clock/anchor rule (classified_at):
+          - DOWNGRADE (first_print -> follow_up): classified_at is left at
+            its ORIGINAL value (pin's own classified_at, falling back to
+            pinned_at for a pin predating this field). The corrected 24h
+            follow_up window is measured from when it was ALWAYS actually
+            classified — if that means the window has already elapsed,
+            that's correct, not a bug.
+          - UPGRADE (follow_up -> first_print): classified_at is reset to
+            NOW, giving the item its full 48h window from the moment the
+            missed new fact is recognized.
+          - NO CHANGE (kind confirmed): classified_at is left completely
+            untouched — a confirming reclassify must not reset or extend
+            anything.
+        Every other classification field (tier/direction/confidence/
+        tier_reasoning/gate_pass/etc.) is refreshed regardless of which of
+        the three above applies — only the clock/anchor has direction-
+        dependent treatment.
+
+        Manual trigger only (see ui/dashboard.py's /api/geo-force-reclassify
+        route) — no scheduled/automatic version.
+
+        Returns a result dict: {'ok': True, ...details...} or
+        {'ok': False, 'error': '...'}.
+        """
+        if self.anthropic_client is None:
+            return {'ok': False, 'error': 'Haiku unavailable — ANTHROPIC_API_KEY not set'}
+
+        pins = self.load_pinned_stories()
+        pin_idx = next((i for i, p in enumerate(pins) if p.get('headline') == headline), None)
+        is_pin = pin_idx is not None
+
+        gemini_cache_file = "/data/gemini_classifications.json"
+        gemini_cache = {}
+        if not is_pin:
+            try:
+                if os.path.exists(gemini_cache_file):
+                    with open(gemini_cache_file, 'r') as f:
+                        gemini_cache = json.load(f)
+            except Exception as e:
+                return {'ok': False, 'error': f'Failed to load classification cache: {e}'}
+            if headline not in gemini_cache:
+                return {'ok': False, 'error': f'No pinned or cached item found for headline: {headline!r}'}
+
+        record = pins[pin_idx] if is_pin else gemini_cache[headline]
+
+        article_text = record.get('article_text')
+        if not article_text:
+            # Fails closed rather than silently falling back to summary/URL —
+            # an item pinned/cached before this feature shipped has no
+            # stored text to reclassify against at all.
+            return {'ok': False, 'error': 'No stored source text for this item — cannot reclassify '
+                                           '(it predates the article_text storage feature)'}
+
+        old_kind = record.get('kind') or 'first_print'
+        old_tier = record.get('tier')
+        old_direction = record.get('direction')
+        old_confidence = record.get('confidence')
+        old_classified_at = record.get('classified_at') or record.get('pinned_at', '')
+
+        article_list = f"1. TITLE: {headline}\n   FULL TEXT: {article_text}\n\n"
+        prompt = self._build_classification_prompt(article_list)
+        results = self._call_haiku_classify(prompt, article_count=1)
+        if not results:
+            return {'ok': False, 'error': 'Haiku classification failed (see logs) — record left unchanged'}
+        r = results[0]
+
+        tier = r.get('tier')
+        if tier not in (1, 2, 3):
+            tier = None
+        new_kind = r.get('kind')
+        if new_kind not in ('first_print', 'follow_up'):
+            new_kind = 'first_print'
+
+        if old_kind == new_kind:
+            direction_outcome = 'no_change'
+            new_classified_at = old_classified_at  # left completely untouched
+        elif old_kind == 'first_print' and new_kind == 'follow_up':
+            direction_outcome = 'downgrade'
+            new_classified_at = old_classified_at  # anchor stays at the ORIGINAL timestamp
+        else:  # old_kind == 'follow_up' and new_kind == 'first_print'
+            direction_outcome = 'upgrade'
+            new_classified_at = datetime.now(timezone.utc).isoformat()  # fresh window from now
+
+        record['relevant'] = r.get('relevant', record.get('relevant', True))
+        record['confidence'] = r.get('confidence', 0)
+        record['category'] = r.get('category', record.get('category', ''))
+        record['direction'] = r.get('direction')
+        record['reason'] = r.get('reason', record.get('reason', ''))
+        record['summary'] = r.get('summary', record.get('summary', ''))
+        record['uncertainty_score'] = r.get('uncertainty_score', 0)
+        record['tier'] = tier
+        record['kind'] = new_kind
+        record['gate_pass'] = r.get('gate_pass', True)
+        record['tier_reasoning'] = r.get('reasoning', '')
+        record['classified_at'] = new_classified_at
+
+        if is_pin:
+            pins[pin_idx] = record
+            self.save_pinned_stories(pins)
+        else:
+            gemini_cache[headline] = record
+            try:
+                atomic_write_json(gemini_cache_file, gemini_cache)
+            except Exception as e:
+                return {'ok': False, 'error': f'Reclassified but failed to persist: {e}'}
+
+        pulse_logger.log(
+            f"🔁 Force reclassify | {'pin' if is_pin else 'cache'} | '{headline[:60]}' | {direction_outcome} | "
+            f"kind {old_kind} → {new_kind} | tier {old_tier} → {tier} | "
+            f"direction {old_direction} → {record['direction']} | "
+            f"confidence {old_confidence} → {record['confidence']} | "
+            f"clock_anchor {old_classified_at} → {new_classified_at}"
+        )
+
+        return {
+            'ok': True,
+            'headline': headline,
+            'store': 'pin' if is_pin else 'cache',
+            'direction_outcome': direction_outcome,
+            'old_kind': old_kind, 'new_kind': new_kind,
+            'old_tier': old_tier, 'new_tier': tier,
+            'old_direction': old_direction, 'new_direction': record['direction'],
+            'old_confidence': old_confidence, 'new_confidence': record['confidence'],
+            'old_classified_at': old_classified_at, 'new_classified_at': new_classified_at,
+        }
 
     # ── Pinned Stories Store ─────────────────────────────────────────────────
 
@@ -1087,7 +1253,27 @@ Respond with only one word: DIVERGED or UNCHANGED"""
                 'timestamp': article.get('timestamp', ''),
                 'date': article.get('date', ''),
                 'link': article.get('link', ''),
-                'pinned_at': datetime.now(timezone.utc).isoformat()
+                'pinned_at': datetime.now(timezone.utc).isoformat(),
+                # STORED source text, not the summary/tier_reasoning — required
+                # for force_reclassify() to judge against the exact text Haiku
+                # originally saw, never a live re-fetch of story_url (pages get
+                # edited/paywalled/redirected). Retained for the pin's full
+                # on-disk lifetime, not gated by any TTL. Already bounded by
+                # fetch_full_article()'s existing 3000-char cap — no new size
+                # limit needed. Empty string (not omitted) when only a
+                # description-length fallback was available, so a later
+                # reclassify attempt can fail with a clear "no stored source
+                # text" error instead of silently reclassifying off a stub.
+                'article_text': article.get('_full_text', ''),
+                # NEW field (pins had no clock-anchor concept before this
+                # feature): when this pin's CURRENT kind was last set. Set
+                # here at creation; updated by force_reclassify() per its
+                # direction-dependent rule. NOT currently read by any
+                # existing pin-eviction/scoring code — pins still purge on
+                # the unchanged, flat, article-publish-date-based 48h TTL in
+                # load_pinned_stories(). This field exists solely to support
+                # accurate force_reclassify() bookkeeping/logging for now.
+                'classified_at': datetime.now(timezone.utc).isoformat(),
             }
             for field in self.PIN_CLASSIFICATION_FIELDS:
                 val = resolved.get(field)
@@ -1933,6 +2119,10 @@ CONTEXT: {context}"""
                                     'gate_pass': r.get('gate_pass', True),
                                     'tier_reasoning': r.get('reasoning', ''),
                                     'text_source': text_source,
+                                    # Stored source text for later force_reclassify() —
+                                    # see update_pinned_store()'s new_entry for the full
+                                    # rationale (never re-fetched from story_url).
+                                    'article_text': new_items[idx].get('_full_text', ''),
                                     'classified_at': datetime.now(timezone.utc).isoformat()
                                 }
 
@@ -2404,6 +2594,7 @@ CONTEXT: {context}"""
                             'gate_pass': r.get('gate_pass', True),
                             'tier_reasoning': r.get('reasoning', ''),
                             'text_source': text_source,
+                            'article_text': pending[idx].get('_full_text', ''),
                             'classified_at': datetime.now(timezone.utc).isoformat()
                         }
                         pulse_logger.log(

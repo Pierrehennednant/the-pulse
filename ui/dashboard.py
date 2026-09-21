@@ -551,6 +551,24 @@ def geo_tier_override():
     pulse_logger.log(f"🧭 Geo tier override | {title[:60]} | {old_tier} → {tier}")
     return jsonify({'status': 'updated', 'title': title, 'old_tier': old_tier, 'tier': tier, 'entry': cache[title]})
 
+@app.route('/api/geo-force-reclassify', methods=['POST'])
+@require_auth
+def geo_force_reclassify():
+    """Manual trigger for GeopoliticalPipeline.force_reclassify() — re-runs
+    the full current classification prompt against a pinned or cached
+    item's STORED source text (never a live fetch of story_url) and
+    applies the direction-dependent clock/anchor rule. No automatic/
+    scheduled version — this route is the only trigger surface."""
+    data = request.get_json()
+    headline = data.get('headline') if data else None
+    if not isinstance(headline, str) or not headline.strip():
+        return jsonify({'error': 'Missing headline'}), 400
+    from pipelines.geopolitical import geopolitical_pipeline
+    result = geopolitical_pipeline.force_reclassify(headline.strip())
+    if not result.get('ok'):
+        return jsonify({'error': result.get('error', 'Reclassification failed')}), 400
+    return jsonify(result)
+
 @app.route('/api/ai_lens')
 @require_auth
 def api_ai_lens():
