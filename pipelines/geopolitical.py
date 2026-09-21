@@ -16,6 +16,8 @@ from utils.retry import fetch_with_retry
 from utils.cache import cache
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
+from pipelines.event_canon import ACTION_CATEGORIES, compute_event_id
+from pipelines.event_store import event_store
 
 MAX_ARTICLE_AGE_HOURS = 48
 
@@ -486,18 +488,18 @@ class GeopoliticalPipeline:
 
     # ── Gemini AI Relevance Classifier ─────────────────────────────────────
 
-    def classify_relevance_batch(self, articles):
-        """Use Claude Haiku to classify articles with full article context and generate clean summaries."""
-        if not articles:
-            return []
-        if self.anthropic_client is None:
-            pulse_logger.log("⚠️ Haiku unavailable — keyword-only scoring in effect for unclassified articles", level="WARNING")
-            return []
-
+    def _fetch_and_stamp_articles(self, articles):
+        """Parallel-fetch each article's full text (15s wall-clock cap,
+        falls back to description on timeout/failure), stamping
+        `_text_source`/`_full_text` onto each article dict in place.
+        Factored out of classify_relevance_batch() so the new two-pass
+        path (classify_relevance_batch_v2) shares the IDENTICAL fetch/
+        timeout/fallback behavior instead of a second hand-copied version
+        — same reasoning as why _build_classification_prompt was
+        originally factored out for force_reclassify() to share."""
         # Fetch article URLs in parallel — sequential fetching at up to 24 s/URL
         # (fetch_with_retry default retries × 8 s timeout) accumulates to 240+ s
         # for a 10-article batch, stalling or killing the Haiku call entirely.
-        # 15-second wall-clock cap; timed-out URLs fall back to their description.
         def _fetch_one(art):
             return self.fetch_full_article(art.get('link', ''), art.get('description', ''))
 
@@ -537,14 +539,416 @@ class GeopoliticalPipeline:
             article['_text_source'] = text_source_map[i]
             article['_full_text'] = results_map[i]
 
+    def classify_relevance_batch(self, articles):
+        """Use Claude Haiku to classify articles with full article context and generate clean summaries."""
+        if not articles:
+            return []
+        if self.anthropic_client is None:
+            pulse_logger.log("⚠️ Haiku unavailable — keyword-only scoring in effect for unclassified articles", level="WARNING")
+            return []
+
+        self._fetch_and_stamp_articles(articles)
+
         # Build batch input
         article_list = ""
         for i, article in enumerate(articles):
-            full_text = results_map[i]
-            article_list += f"{i+1}. TITLE: {article['headline']}\n   FULL TEXT: {full_text}\n\n"
+            article_list += f"{i+1}. TITLE: {article['headline']}\n   FULL TEXT: {article['_full_text']}\n\n"
 
         prompt = self._build_classification_prompt(article_list)
         return self._call_haiku_classify(prompt)
+
+    # ── Two-pass classification (Stage 3 of the structural first_print/
+    # follow_up rewrite) — NOT YET WIRED INTO fetch_news(). Standalone,
+    # tested only with mocked Haiku responses (see the scope note in the
+    # accompanying handoff — extraction quality against real article text
+    # cannot be verified without live Haiku access). classify_relevance_batch()
+    # above and force_reclassify() are UNCHANGED and remain the live
+    # production path until this is deliberately cut over. ─────────────────
+
+    def _build_pass_a_prompt(self, article_list):
+        """Pass A — EXTRACTION ONLY, no kind, no tier. Coarse routing:
+        `bucket` (geo|macro|ec|drop) determines whether Pass B runs at
+        all. Pass A is NOT trying to replicate every nuance of the old
+        monolithic relevance gate set — it only needs to be roughly
+        right, since bucket="geo" items still pass through Pass B's own
+        full relevance judgment (DECISION 1, all six filters, STANDARD
+        EXCLUSIONS, DEAL GATE, gates) as a second, more careful check. A
+        false positive here (bucket="geo" for something that should be
+        dropped) costs one extra Pass B call and gets caught there. A
+        false negative (bucket="drop" for something that should be geo)
+        is the real risk this prompt has to manage — mitigated by erring
+        toward inclusion when uncertain about TOPIC; whether it actually
+        SCORES is decided by the event-store lookup and the new_fact
+        field, not by this bucket call."""
+        return f"""You are the first-pass triage step for a Nasdaq-100/S&P 500 futures pre-market macro dashboard. Your ONLY job is extraction and coarse routing — you do NOT decide tier, direction, or whether an event is a repeat of something already scored elsewhere. A separate second pass handles significance judgment, only for items you route to bucket "geo".
+
+For each article, extract:
+- actor: the primary country, institution, or person who performed the action — not a spokesperson, analyst, or critic commenting on someone else's action, the one who actually DID something.
+- action: pick exactly ONE of these categories, never freeform verb text: {', '.join(ACTION_CATEGORIES)}.
+- object: the specific target or subject of the action (a place, an agreement, a policy, a company, a weapons system), a few words.
+- place: the country, region, or specific location the action occurred in or most directly concerns.
+- event_time: the date (YYYY-MM-DD) the ACTUAL EVENT happened — not the article's publish date if they differ. An article published today about a press conference three days ago should give the press conference's date, not today's.
+- new_fact: in ONE sentence, the specific new fact this article adds beyond what was already known before this article existed. Leave this as empty string "" if the article does not report anything new — a recap, a synthesis of several already-known conditions into one narrative, or a quote/statistic tied to a specific earlier occasion are NOT new facts even when presented in the present tense ("X says," "prices are rising"). Describe specifically what is NEW, or say nothing at all — do not describe what the article is generally about.
+- bucket: exactly one of:
+    "geo" — a geopolitical event, Fed/central-bank action or commentary, government/regulatory action, major tech/AI infrastructure deal or capex commitment, mega-cap regulatory/legal outcome, energy/trade/sanctions action, or any other development that could move NQ/ES risk appetite through something real, specific, and actionable.
+    "macro" — broad market-tape commentary, price-level/yield/index-move description, or "how markets reacted" framing with no new discrete event of its own (see the PRICE-MOVE PATTERN below).
+    "ec" — the article is substantively ABOUT a regularly scheduled, calendar-tracked economic release or Fed decision (jobs report, CPI, PMI, FOMC meeting/press conference/statement) rather than an independent geopolitical development — this dashboard's Economic Calendar pillar already tracks these separately.
+    "drop" — not market-relevant at all: lifestyle, personal finance, celebrity/investor commentary, prediction-market odds, consumer shopping content, single-company HR/operational news, vibes/sentiment pieces with no specific actionable event, or a company merely reacting to (not causing) a macro event.
+
+PRICE-MOVE / MARKET-TAPE PATTERN — route to "macro", not "geo": an article primarily describing yields, VIX, oil settle prices, or other index/price levels moving, or framed as "live updates:" / "markets today:" tape coverage, with no NEW discrete event of its own stated as happening today — even if it mentions geopolitical causes in passing. If the article's real subject is how the tape moved rather than what specific new thing happened, it's macro, not geo, regardless of which words appear in it.
+
+DEAL/CAPEX SIZE GATE — applies only to M&A/partnership/capex articles about Nvidia, Apple, Microsoft, Alphabet/Google, Amazon, Meta, Broadcom, AMD, Intel, TSM, or a comparable major AI-infrastructure player: route to "drop" unless the dollar figure is confirmed by an actual press release, SEC filing, or earnings call/investor update (not merely anonymous-sourced reporting) AND either (a) the buyer is Nvidia/Microsoft/Alphabet/Amazon/Meta/Broadcom with a confirmed value of $20B or more, or (b) the transaction is a compute/foundry/networking/AI-energy/data-center deal of $50B or more regardless of buyer. A confirmed deal below these lines still routes to "drop" — it's a stock story, not a regime move.
+
+STANDARD EXCLUSIONS — always "drop" regardless of company size or how prominently "AI" appears: routine product launches/feature rollouts, sub-$1B customer wins, minor earnings beats/misses, normal single-company operational noise (hiring, office moves, executive changes, minor guidance tweaks). Describing what a product now DOES, rather than a transaction, a capex commitment, or a legal/regulatory outcome, is "drop".
+
+Articles to classify:
+{article_list}
+
+Return ONLY a JSON array, no markdown, no explanation. Exactly this format:
+[{{"id": 1, "actor": "Russia", "action": "military_action", "object": "residential building in Kyiv", "place": "Ukraine", "event_time": "2026-09-20", "new_fact": "Russia launched an overnight drone strike on a residential building in Kyiv, killing at least 4 people.", "bucket": "geo"}}, {{"id": 2, "actor": "", "action": "market_commentary", "object": "10-year Treasury yield", "place": "United States", "event_time": "", "new_fact": "", "bucket": "macro"}}]
+
+Leave actor/place/event_time as empty string "" if genuinely not determinable from the article — never guess or default to today's date."""
+
+    def _build_pass_b_prompt(self, article_list):
+        """Pass B — tier/direction/confidence. Runs ONLY for items code
+        has already resolved to kind=first_print AND bucket=geo (see
+        classify_relevance_batch_v2()). This is the existing, battle-
+        tested _build_classification_prompt() content with the
+        FIRST_PRINT/FOLLOW_UP section removed (kind is pre-resolved by
+        the time this runs — Pass B never re-derives it) and every
+        dangling reference to "kind"/"FOLLOW_UP" adjusted so the prompt
+        doesn't presuppose a section that no longer exists here.
+
+        KNOWN, DELIBERATE TRADEOFF, stated plainly rather than hidden:
+        the shared substance (gates, tiers, direction chains, examples)
+        is DUPLICATED from _build_classification_prompt() rather than
+        factored into one shared helper both functions call. This is the
+        opposite of this project's usual practice (see that method's own
+        docstring on why it was factored out for force_reclassify() to
+        avoid exactly this kind of drift) — done here only because
+        _build_classification_prompt() is still the live production
+        prompt (used by classify_relevance_batch() and force_reclassify())
+        and untouched-by-this-change was judged the lower-risk option
+        for a change this size, with zero live Haiku access to verify a
+        cleverer parameterization didn't subtly break something. If/when
+        this two-pass path replaces the single-pass one in production
+        (Stage 5+), collapsing this duplication should happen then, not
+        guessed at now."""
+        return f"""You are assisting a professional NQ and ES futures day trader with pre-market preparation. This article has already been confirmed to introduce a specific new fact not previously scored — your job is to judge its market significance, not to re-decide whether it's new.
+
+FALSE POSITIVES COST MORE THAN MISSES: you are classifying headlines for a Nasdaq-100/S&P 500 futures regime filter used by a low-frequency discretionary-exit system. False positives keep the operator flat or push a fake lean. When unsure whether an item reprices NQ or ES risk appetite, drop it. Do not "be complete."
+
+Reject an item entirely (relevant: false, no tier) only if it fails one of the filters below on its own terms (source-vs-echo, actor test, market domain, standard exclusions, deal gate, etc.) — do not reject an item merely for being a restatement or recap; that determination has already been made upstream of this pass.
+
+M&A/PARTNERSHIP/DEAL ITEMS: apply the DEAL GATE inside the TECH/AI MEGA-DEAL RULES section below FIRST, before anything else in this section. If an item fails that gate, set relevant: false and do not assign a tier.
+
+KNOWN ARTICLE OVERRIDES — if an article matches one of these titles exactly, use the specified tier, direction, and reasoning. Do not apply your normal tiering logic to these articles:
+- "U.S.-Iran negotiations postponed as Netanyahu blasts Hezbollah over apparent attacks" → Tier 1, bearish, reasoning: "Collapse of U.S.-Iran negotiations with simultaneous military escalation — direct threat to regional stability and oil supply."
+- "U.S. Navy ends blockade of Iran's ports and coastal areas" → Tier 2, bullish, reasoning: "Naval de-escalation removes energy supply disruption risk — positive for risk sentiment."
+
+TECH / AI MEGA-DEAL RULES — applies to any article centered on one of these companies: Nvidia, Apple, Microsoft, Alphabet/Google, Amazon, Meta, Broadcom, AMD, Intel, Taiwan Semiconductor (TSM), or a comparable major AI-infrastructure player (CoreWeave-scale or larger).
+
+STANDARD EXCLUSIONS — CHECK THIS FIRST, BEFORE THE DEAL GATE BELOW OR ANYTHING ELSE IN THIS SECTION. Always reject (relevant: false, no tier), regardless of company size and regardless of how prominently "AI" appears in the headline: routine product launches, feature announcements, or beta/preview rollouts (a new Siri/Assistant/Copilot feature, a redesigned app or interface, a new device going on sale, an OS update); sub-$1B customer wins; minor earnings beats/misses; and normal single-company operational noise (hiring, office moves, executive changes, minor guidance tweaks). Mentioning "AI" does not exempt a story from this exclusion — only an actual M&A/partnership/capex transaction, or a regulatory/legal outcome, can clear this section at all. If the article describes what a company's product now DOES rather than a transaction, a capex commitment, or a legal/regulatory outcome, it fails here — stop, do not proceed to the DEAL GATE below.
+
+Example — REJECT under this exclusion: "Apple releases test of redesigned Siri AI before iPhone 18 hits stores this week." A product feature rollout ahead of a device launch — no acquisition, no capex figure, no regulatory action. relevant: false, despite naming a priority company and mentioning "AI."
+
+DEAL GATE (replaces the old $2B floor for M&A/partnership/minority-stake items only — a hyperscaler's own capex/guidance print from an earnings call or investor update is a different category, still governed by the locked capex rule elsewhere, and bypasses this gate entirely):
+
+OUT — relevant: false, no tier: any M&A/partnership/minority-stake commitment under $20B (unless it's a hyperscaler capex/guidance print, which doesn't use this gate at all).
+
+LIVE (goes on to normal scoring below) requires BOTH a size test AND a confirmation test — a deal that only clears the size threshold via an unconfirmed report (anonymous sources, "people familiar with the matter," analyst speculation, or a single outlet's own reporting with no primary-source citation) does NOT clear this gate, no matter how specific or credible the dollar figure sounds. The dollar figure itself must be confirmed by an actual press release, SEC filing (e.g. an 8-K), or the company's own earnings call/investor update — not merely reported by a news outlet citing unnamed sources. A credible report that clearly identifies a specific pending deal and figure, sourced only to anonymous/unofficial channels with no company or regulatory confirmation yet, does not clear this gate — treat it as an unconfirmed rumor (reject it), regardless of size.
+
+With that confirmation requirement satisfied, LIVE if EITHER:
+(a) the buyer is Nvidia, Microsoft, Alphabet/Google, Amazon, Meta, or Broadcom AND the confirmed disclosed value is $20B or more, OR
+(b) the transaction is a compute/foundry/networking/AI-energy/data-center deal of $50B or more, regardless of buyer.
+
+AMD, TSM, Intel, and Apple do NOT get the automatic $20B line — only the $50B-any-buyer line applies to them, unless the deal changes export rules, foundry capacity, or the legal stack in a way statable as an index-level effect in one sentence.
+
+Calibration, not exact-match overrides — reason from the rule, not these specific numbers: a ~$13B software/AI-startup purchase by a single mega-cap buyer is OUT (below $20B, a stock story, not a regime move). A ~$32B or ~$20B confirmed acquisition by one of the six named buyers is LIVE. A ~$40B infrastructure consortium deal is OUT under both tests (no single buyer clears $20B, and $40B misses the $50B infrastructure line). An ~$80B confirmed infrastructure/chip-producer takeout is LIVE under the $50B-any-buyer line regardless of buyer.
+
+SOURCE PRIORITY: Prefer information from a press release or SEC filing first, an earnings call or investor update second, and Tier-1 financial media (Reuters, Bloomberg, WSJ, CNBC breaking coverage) third. Discount unconfirmed reports, analyst speculation, or secondary outlets restating another outlet's story.
+
+TIER FOR DEALS THAT CLEAR THE GATE ABOVE (use in place of the geopolitical tier definitions in DECISION 5 for this category; a deal that fails the gate is never tiered at all — Tier 3 is not a landing spot for a gate failure. A capex beat keeps its own separate tier treatment below, not this section):
+Tier 1: an immediate, clear index-level catalyst — a finalized, signed transformative takeout with a stated close path, or a comparable unambiguous done-deal.
+Tier 2: material but still contingent — announced but not yet closed, a regulator still ahead, or "getting close" language from a primary actor plus a confirming third party.
+Tier 3: the deal itself is confirmed (buyer, target, and size disclosed via a real press release/8-K/earnings call — the gate's confirmation requirement is already satisfied), but the article is otherwise thin — single-outlet coverage of that disclosure with no additional corroboration yet, or the disclosure itself is a brief/preliminary announcement without full deal terms. Tier 3 always means "confirmed but under-specified," never "unconfirmed."
+Capex beat (separate from the deal gate — evaluated on its own, not against the $20B/$50B thresholds): Tier 1 for a capex beat >20% over prior guidance paired with strong demand/backlog framing; Tier 2 for a strategic government/industrial partnership or multi-year build-out without near-term capex acceleration.
+
+DIRECTION FOR TECH/AI MEGA-DEALS — DELIBERATELY DIFFERENT FROM THE GEOPOLITICAL CHAINS BELOW: Do not default to a confident bullish or bearish call for this category. Even a large, clearly-covered mega-deal can coincide with a same-day stock move driven by unrelated macro conditions — a confident directional call here risks being wrong for reasons that have nothing to do with the deal's actual merits (real example: the Apple-Broadcom $30B chip deal, August 2026). Default to "neutral" and use the summary/reasoning fields to surface the event, its size, and its terms factually. Only lean bullish or bearish when the article itself contains genuinely one-sided evidence:
+- Lean BEARISH only if the article contains explicit margin-pressure language or explicit no-ROI/return-timeline-risk language from the company or credible analysts.
+- Lean BULLISH only if there is a capex beat >20% over prior guidance AND an explicit strong-demand, backlog, or monetization link stated in the article (not inferred).
+- Otherwise (the item already cleared STANDARD EXCLUSIONS and the DEAL GATE above, but the article itself contains no one-sided bullish/bearish evidence): direction = "neutral", relevant = true, and the summary should surface the deal size/terms/actors so a trader can weigh it themselves.
+
+MEGA-CAP REGULATORY/LEGAL OUTCOME RULES — applies to any article reporting a settlement, fine, verdict, judgment, or forced product/business change resulting from a regulatory or legal proceeding against one or more priority mega-cap companies (Nvidia, Apple, Microsoft, Alphabet/Google, Amazon, Meta, Broadcom, AMD, Intel, Taiwan Semiconductor (TSM), or a comparable index-weight tech/AI-infrastructure company).
+
+TWO SEPARATE, ALWAYS-INDEPENDENT ASSESSMENTS:
+1. COMPANY-LEVEL IMPACT — negative, neutral, or positive for the company itself.
+2. NQ/TECH-COMPLEX IMPACT — negative, neutral, or positive for broader risk appetite today.
+These can disagree — a clearly negative outcome for one company can be a non-event for the index, and vice versa. Only the NQ-level assessment sets this article's direction and tier. The company-level assessment is reported in the reason field but never overrides the NQ-level read.
+
+TIER IS DRIVEN BY MAGNITUDE OF ACTUAL NQ-LEVEL IMPACT, NOT SURFACE PATTERN-MATCHING. Do not tier by simply counting how many companies are involved — count is one input, not the rule. Weigh all of the following together for the specific headline in front of you; none of them is individually decisive:
+- Scale of the number relative to the company/companies involved — a fine that's trivial relative to one company's cash flow is not the same magnitude as one that's trivial for a smaller company but material for a larger one, or vice versa. Judge relative to what the entity(ies) involved can actually absorb, not the raw dollar figure alone.
+- How many priority mega-caps are affected, and whether the exposure is genuinely shared or coincidental — two unrelated companies fined for two unrelated things on the same day is different from two companies fined for the same underlying practice, which signals a sector-wide pattern regulators are now pursuing broadly.
+- Certainty of the number — capped/known/payable-over-time vs. open-ended/uncapped/appealable.
+- Whether the market had already priced in a worse outcome — genuine relief vs. genuine surprise.
+- Forward-looking business impact — does the remedy change how the company/sector operates going forward (product redesign, engagement limits, structural changes), or does it just resolve past liability with no operational change?
+- Confirmed market reaction, if available — did the stock/sector actually move on the print, or is that unknown/pending?
+- Whether this looks like an isolated event or part of an emerging pattern — one lawsuit is different from what looks like the third in a developing wave of similar actions against the same sector.
+
+TIER CLASSIFICATION FOR MEGA-CAP REGULATORY/LEGAL OUTCOMES (use in place of the geopolitical tier definitions in DECISION 5 for this category), defined by the combined weight of the factors above, not any single factor alone:
+Tier 3: The weighted factors suggest limited, contained NQ-level impact — no matter whether that's one company or several, and no matter the raw dollar size, if the market can plausibly absorb it without a genuine repricing of sector risk.
+Tier 2: The weighted factors suggest a real, if not extreme, shift in how the market prices sector-wide legal/regulatory risk — this can be triggered by one company (an unexpected verdict) or several (a coordinated pattern), driven by the substance of the factors above, not a headcount threshold.
+Tier 1 (rare): Structural/existential impact to a core NQ business model, or a same-day event significant enough to reprice the sector's risk premium broadly.
+
+DIRECTION FOR MEGA-CAP REGULATORY/LEGAL OUTCOMES IS NOT A LOOKUP TABLE. Do not pre-map specific factor combinations to specific directions. Weigh the factors for the specific headline and reach whatever direction genuinely fits — bearish, neutral, or bullish for NQ specifically (separate from whatever the company-level read is). A "negative for the company" outcome does not automatically mean bearish for NQ, and a "positive for the company" outcome does not automatically mean bullish for NQ — judge the NQ-level factors on their own terms.
+
+REASON FIELD FORMAT FOR THIS CATEGORY: write the reason field as three lines — company-level assessment (one line, exactly one of negative/neutral/positive with a brief cause), NQ-level assessment (one line, exactly one of negative/neutral/positive, naming which factors above weighed most), then tier. Format: "Company: [negative/neutral/positive] — [why]. NQ: [negative/neutral/positive] — [why, citing the deciding factors]. Tier: [1/2/3]." If the two levels disagree, the NQ-level read is what's scored.
+
+Your job is to read each full article, then make four decisions:
+
+DECISION 1 — RELEVANCE
+Is this genuinely market-moving information that would cause a futures trader to reconsider their directional bias for today's session?
+
+Pass if it involves: Federal Reserve policy or official commentary, geopolitical escalation or resolution affecting global risk sentiment, major economic data surprises, energy market shocks, trade policy changes with immediate impact, systemic financial risk, or significant government actions with direct market consequences, or major tech/AI infrastructure deals/capex commitments meeting the TECH/AI MEGA-DEAL RULES threshold above, or mega-cap regulatory/legal outcomes meeting the MEGA-CAP REGULATORY/LEGAL OUTCOME RULES above.
+
+Fail if it involves: opinion or commentary on past market moves, investment advice or tips, personal finance stories, single company news unless systemically important, celebrity investor quotes, lifestyle or consumer behavior stories, retail shopping guides or consumer deal/discount roundups, prediction-market or betting-market odds and probability content (e.g. Kalshi, Polymarket, or PredictIt contract prices or probability shifts on a geopolitical or economic outcome) — a market's aggregated probability estimate is not itself a new event, newsletter recap formats, or anything that on full reading turns out to carry no genuinely new, specific, actionable information despite the initial extraction.
+
+FILTER 1 — SOURCE VS ECHO
+Is this the event itself or a reaction to an event that already happened? A SOURCE event is new information the market hasn't priced in yet. It originates from a primary actor — a government, central bank, military, or natural force. An ECHO event is any person, company, or institution RESPONDING to or REPORTING ON a known macro situation.
+
+Critical rule: If a company name appears as the subject of the headline and the headline describes them REACTING to a macro event (adding fees, raising prices, cutting jobs, warning of impacts, adjusting operations) — it is ALWAYS an echo. Reject it.
+
+Exception: a company announcing, signing, or confirming its own new deal, partnership, or capex commitment is the SOURCE of that event, not an echo — they are the primary actor creating new information, not reacting to someone else's action. Reserve "echo" for a company responding to an external event (tariffs, energy prices, a war, a competitor's move, etc.).
+
+A regulatory settlement, fine, verdict, or court judgment against a company is also a SOURCE event, not an echo — the regulator or court is the primary actor delivering new information, even though the company is the named subject.
+
+The presence of macro keywords like "war", "energy", "Iran", "tariff" in a headline does NOT make it a source event. Ask: who is the ACTOR and what ACTION did they take? If the actor is a corporation reacting to an existing situation — it's an echo regardless of the macro language surrounding it.
+
+FILTER 2 — SPECIFICITY TEST
+Is this about a specific actionable event or a general mood/sentiment piece? Vibe articles, market psychology pieces, and "how to navigate" content are not tradeable information.
+
+FILTER 3 — ACTOR TEST
+Is the person or organization in this headline someone who directly moves markets through their decisions? Federal Reserve officials, heads of state, treasury secretaries, central bank chiefs, and major geopolitical actors = yes. State governors, backbench senators, corporate executives reacting to macro events, NASA, local officials = no, unless their specific action is systemically important to financial markets.
+
+FILTER 4 — MARKET DOMAIN TEST
+Does this article exist within the domain of financial markets, geopolitics affecting markets, energy, trade, or monetary policy? Articles about space missions, scientific discoveries, social policy, and non-financial government activity should be rejected even if they use financial language.
+
+POLITICAL PRESSURE ON THE FED — GATE (a special outcome, NOT a DECISION 1 rejection): applies to any article centered on a President, administration official, or member of Congress pressuring, criticizing, or being described as on a "collision course" with the Federal Reserve, its chair, or FOMC members over policy.
+
+An item needs a realistic path to moving NQ/ES risk BY ITSELF to score. Pressure and rhetoric alone are not that path — they stay on the Economic Calendar pillar's own speech card (Neutral unless they change the actual policy path), not here, unless a genuinely new concrete action is confirmed in this article.
+
+FAILS THE GATE (gate_pass: false — still relevant: true, but direction must be "neutral" and tier must be omitted): renewed or continued pressure, "collision course"/"boxed in" framing, criticism of Fed independence, calls for rate cuts or a chair's removal, speculation about what the Fed chair might do — with NO new concrete action in THIS article. A new interview, a new op-ed, or a new round of the same rhetoric does not clear this on its own.
+
+CLEARS THE GATE (gate_pass: true, or omit the field — proceed to normal scoring below): a concrete institutional action has actually occurred and is confirmed in this article — the Fed chair or a governor is fired or resigns, a replacement is confirmed, legislation is introduced or passed that changes the Fed's structure or mandate, or a formal White House directive or executive order is issued to the FOMC.
+
+ANTI-RECURRENCE CHECK: do not score both "if the chair capitulates" and "if the market reads it as politicization" as bearish outcomes for the same article — that is not identifying a catalyst, it is asserting the story matters no matter what happens. If your own reasoning would call every possible outcome of a pressure story bearish, that itself is the signal that this fails the gate.
+
+DECISION 2 — MARKET DIRECTION
+If relevant, what is the directional impact on NQ and ES equity futures specifically?
+
+Read the FULL article text carefully before deciding direction. Do not base direction on the headline alone.
+
+Consider the full chain of consequences:
+- War escalating → oil up → inflation up → Fed stays hawkish → equities down → BEARISH
+- Ceasefire → oil down → inflation eases → Fed pivots → equities up → BULLISH
+- Oil prices falling due to peace deal / ceasefire / geopolitical de-escalation → risk premium removed → inflation eases → equities up → BULLISH. CRITICAL: do NOT classify a peace-deal-driven oil price drop as Bearish. Stocks jump on this, not fall.
+- Oil prices falling due to demand destruction, recession fears, or oversupply → growth slowdown → BEARISH
+- Company adding surcharges due to war → costs rise → margins compress → BEARISH
+- Gas prices hitting new highs → consumer spending squeezed → BEARISH
+- Strong jobs data → Fed stays hawkish → rates stay high → BEARISH for growth stocks
+- Weak jobs data → Fed cuts sooner → BULLISH for equities
+- Trump hawkish on trade → tariffs → supply chain costs → BEARISH
+- Trump ceasefire deal → geopolitical risk off → BULLISH
+- Government shutdown ongoing → fiscal uncertainty → economic drag → BEARISH
+- Government shutdown resolved → fiscal clarity → BULLISH
+- Fed hawkish nominee → higher rates longer → BEARISH for NQ
+- Fed independence threatened → institutional uncertainty → BEARISH
+- Paying workers via executive order while shutdown continues → band-aid not resolution → BEARISH
+
+DECISION 3 — SUMMARY
+Write a clean 3-4 sentence market-focused summary of the article. Cover: what happened, who the key actor is, what the immediate consequence is, and what it means for NQ/ES traders today. Write it as if briefing a trader in 30 seconds. Do not use jargon. Be direct and specific.
+
+Return ONLY a JSON array with no markdown, no explanation, no preamble. Exactly this format:
+[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Iran war escalation directly affects oil and risk sentiment", "summary": "Your 3-4 sentence market summary here.", "uncertainty_score": 85, "tier": 1, "reasoning": "Active war escalation directly threatens oil supply and broad risk sentiment."}}, {{"id": 2, "relevant": true, "confidence": 0.8, "category": "geopolitical", "direction": "neutral", "reason": "Renewed pressure on the Fed chair with no new concrete action — fails the political pressure gate.", "summary": "Your 3-4 sentence market summary here.", "uncertainty_score": 60, "gate_pass": false, "reasoning": "Continued rhetoric, no firing/resignation/legislation/directive — not a catalyst by itself."}}]
+
+Use only "bearish", "bullish", or "neutral" for direction.
+Use confidence between 0.0 and 1.0.
+Use tier as an integer: 1, 2, or 3. Omit tier entirely when gate_pass is false.
+If relevant is false, still provide a summary field but it can be empty string.
+Use gate_pass: false ONLY for an item that fails the POLITICAL PRESSURE ON THE FED — GATE above — it stays relevant: true, but direction must be "neutral" and tier must be omitted, so it contributes zero score. Omit gate_pass entirely (or use true) for every other item — this field exists solely to mark that one gate-failure case as visible-but-non-scoring rather than dropped.
+
+DECISION 4 — UNCERTAINTY SCORE
+Rate how much uncertainty and execution difficulty this event creates for a day trader on a scale of 0-100.
+This is NOT about how bearish or bullish the event is. This is ONLY about whether the event creates fragmented, unpredictable price action that makes clean entries difficult.
+
+Score high (70-100) when:
+- Event is unresolved and market doesn't know which way to price it
+- Multiple conflicting actors or outcomes are possible
+- Event is rapidly evolving with new developments expected today
+- Market is in reaction mode — random spikes, no clean structure
+
+Score medium (40-69) when:
+- Event is significant but direction is becoming clearer
+- Credible threat from major actor but not yet confirmed action
+- Market has partially priced it in but uncertainty remains
+
+Score low (0-39) when:
+- Event confirms existing market direction — bearish or bullish, doesn't matter
+- Resolution or ceasefire — uncertainty is reducing
+- Market has clearly priced this in already
+- Rumor with no confirmation and no market reaction yet
+
+Key rule: A confirmed bearish event with clear direction scores LOW uncertainty even if it's very negative for markets. Uncertainty means the market doesn't know what to do — not that it's going down.
+
+DECISION 5 — TIER CLASSIFICATION
+Classify the magnitude of this event's market impact into one of three tiers, using the full article context — not headline keywords.
+
+For tech/AI mega-deal articles, use the TIER CLASSIFICATION FOR TECH/AI MEGA-DEALS section above instead of the definitions below.
+For mega-cap regulatory/legal outcome articles, use the TIER CLASSIFICATION FOR MEGA-CAP REGULATORY/LEGAL OUTCOMES section above instead of the definitions below.
+
+Tier 1 (±1.7): Active war or escalation between major powers, nuclear threats/incidents, major confirmed peace deals or ceasefires that meaningfully reduce geopolitical risk, or credible major supply disruptions (e.g. Hormuz closure threat).
+Tier 2 (±0.75): Significant troop buildups, major diplomatic breakdowns, new meaningful sanctions, or credible energy market threats that are not Tier 1 level.
+Tier 3 (±0.35): Minor diplomatic noise, corporate geopolitical news, speculative or secondary headlines with limited immediate market relevance.
+
+Key rules:
+- Prioritize actual market impact and context over headline keywords. The presence of words like "ceasefire" or "deal" does not automatically make something Tier 1 — evaluate whether a real, credible development occurred.
+- When uncertain between tiers, default to the lower tier.
+- De-escalation and peace developments are generally Bullish for US equities. Escalation and conflict are generally Bearish.
+- Oil/Energy Rule: Falling oil prices caused by geopolitical de-escalation or peace deals are Bullish for equities. Only classify oil price moves as Bearish when driven by demand destruction, recession fears, or oversupply.
+- Major Economic Data Exception — NFP / CPI / GDP only: If the article reports actual data for Non-Farm Payrolls (NFP), CPI (any variant: Core CPI, CPI m/m, CPI y/y), or GDP (any variant: GDP q/q, Final GDP), AND the deviation of actual from consensus forecast is 50% or greater in absolute relative terms (e.g. NFP 57K actual vs 114K expected = 50% miss; CPI 0.6% actual vs 0.3% expected = 100% beat), classify as Tier 1 regardless of other factors. Cite the specific actual vs. forecast figures and the % deviation as the reasoning. This exception does NOT apply to ISM, PMI, Retail Sales, ADP, or any other economic data — those continue to use standard Tier 2/3 judgment.
+
+Articles to classify:
+{article_list}"""
+
+    def classify_relevance_batch_v2(self, articles):
+        """Orchestration for the two-pass structural rewrite. Standalone —
+        NOT called by fetch_news() yet (see the module-level comment
+        above). For each article: Pass A extracts identity fields and a
+        coarse bucket; code computes the canonicalized event_id and looks
+        it up in the event store; a store HIT (or a failed/incomplete
+        extraction) resolves to kind=follow_up, score 0, no Pass B call
+        at all; a genuine MISS with bucket="geo" claims the event_id as
+        first_print and runs Pass B for tier/direction/confidence, then
+        fills in score_applied. bucket != "geo" (macro/ec/drop) never
+        reaches Pass B regardless of store outcome — this is what cuts
+        Haiku calls/cost for every recap and off-topic item per the spec.
+
+        Returns a list of dicts, one per input article, each already
+        carrying kind/bucket/event_id and — for first_print+geo items —
+        the full Pass B classification fields merged in.
+        """
+        if not articles:
+            return []
+        if self.anthropic_client is None:
+            pulse_logger.log("⚠️ Haiku unavailable — keyword-only scoring in effect for unclassified articles", level="WARNING")
+            return []
+
+        self._fetch_and_stamp_articles(articles)
+
+        pass_a_list = ""
+        for i, article in enumerate(articles):
+            pass_a_list += f"{i+1}. TITLE: {article['headline']}\n   FULL TEXT: {article['_full_text']}\n\n"
+        pass_a_prompt = self._build_pass_a_prompt(pass_a_list)
+        pass_a_results = self._call_haiku_classify(pass_a_prompt, article_count=len(articles))
+        pass_a_by_id = {r.get('id'): r for r in pass_a_results if isinstance(r, dict)}
+
+        results = []
+        pass_b_indices = []       # indices into `results` needing a Pass B call
+        pass_b_article_list = ""
+        pass_b_n = 0
+
+        for i, article in enumerate(articles):
+            extraction = pass_a_by_id.get(i + 1)
+
+            # RULE 3 — DEFAULT TO FOLLOW_UP, FIRST PRINT IS EARNED: a
+            # missing/failed extraction never defaults to first_print.
+            if not extraction:
+                results.append({
+                    'headline': article.get('headline', ''),
+                    'kind': 'follow_up', 'bucket': 'drop', 'event_id': None,
+                    'relevant': False, 'reason': 'Pass A extraction failed or missing for this item',
+                })
+                continue
+
+            actor = extraction.get('actor', '')
+            action = extraction.get('action', '')
+            obj = extraction.get('object', '')
+            place = extraction.get('place', '')
+            event_time = extraction.get('event_time', '')
+            new_fact = (extraction.get('new_fact') or '').strip()
+            bucket = extraction.get('bucket', 'drop')
+
+            base = {
+                'headline': article.get('headline', ''), 'actor': actor, 'action': action,
+                'object': obj, 'place': place, 'event_time': event_time, 'bucket': bucket,
+            }
+
+            if not new_fact:
+                # No new fact asserted — default to follow_up regardless of
+                # bucket or store state. Still compute event_id where
+                # possible so a later genuine new_fact about this same
+                # event has something to have matched against, but this
+                # item itself never claims first_print.
+                base.update({'kind': 'follow_up', 'event_id': compute_event_id(actor, action, place, event_time), 'relevant': False})
+                results.append(base)
+                continue
+
+            if bucket != 'geo':
+                # macro/ec/drop never reaches Pass B or the event store,
+                # regardless of new_fact — this is the cost-saving cut.
+                base.update({'kind': 'follow_up', 'event_id': None, 'relevant': False})
+                results.append(base)
+                continue
+
+            event_id = compute_event_id(actor, action, place, event_time)
+            if event_id is None:
+                # Missing actor/place/event_time despite a stated new_fact
+                # — cannot establish identity, fails closed to follow_up
+                # per rule 3 rather than risking a loose/no-op hash.
+                base.update({'kind': 'follow_up', 'event_id': None, 'relevant': False,
+                             'reason': 'Incomplete extraction (actor/place/event_time) — cannot establish event identity'})
+                results.append(base)
+                continue
+
+            existing = event_store.lookup(event_id)
+            if existing is not None:
+                base.update({'kind': 'follow_up', 'event_id': event_id, 'relevant': False,
+                             'reason': f'Matches already-scored event {event_id} (first seen {existing.get("first_seen", "")})'})
+                results.append(base)
+                continue
+
+            # Genuine miss, bucket=geo, real new_fact — claim the identity
+            # now (two-step write, see event_store.py) and queue for Pass B.
+            event_store.record_first_print(event_id, actor, action, place, event_time)
+            base.update({'kind': 'first_print', 'event_id': event_id})
+            results.append(base)
+            pass_b_indices.append(i)
+            pass_b_n += 1
+            pass_b_article_list += f"{pass_b_n}. TITLE: {article['headline']}\n   FULL TEXT: {article['_full_text']}\n\n"
+
+        if pass_b_indices:
+            pass_b_prompt = self._build_pass_b_prompt(pass_b_article_list)
+            pass_b_results = self._call_haiku_classify(pass_b_prompt, article_count=len(pass_b_indices))
+            pass_b_by_id = {r.get('id'): r for r in pass_b_results if isinstance(r, dict)}
+            for pos, result_idx in enumerate(pass_b_indices):
+                pb = pass_b_by_id.get(pos + 1)
+                if not pb:
+                    pulse_logger.log(
+                        f"⚠️ Pass B — no result for {results[result_idx]['headline'][:60]!r} "
+                        f"(event_id {results[result_idx]['event_id']}) — left unscored this cycle",
+                        level="WARNING"
+                    )
+                    continue
+                results[result_idx].update(pb)
+                # score_applied is bookkeeping for the store, not a re-derivation
+                # of calculate_score()'s tier-magnitude math — store the tier
+                # actually assigned (None if rejected or gated to neutral),
+                # so a later duplicate's log line can say what tier this event
+                # was scored at without duplicating the tier->magnitude table.
+                tier_applied = pb.get('tier') if pb.get('relevant') else None
+                event_store.update_score_applied(results[result_idx]['event_id'], tier_applied)
+
+        return results
 
     def _build_classification_prompt(self, article_list):
         """The full, current classification prompt, parameterized only by
