@@ -96,16 +96,33 @@ class GeopoliticalPipeline:
         dashboard.py's _run_partial_refresh() already uses to read other
         pillars' caches) rather than threading EC state through
         fetch_news()'s call signature — Haiku never sees this, only this
-        mechanical matcher does. Returns a list of 'YYYY-MM-DD' strings."""
+        mechanical matcher does. Returns a list of 'YYYY-MM-DD' strings.
+
+        SECOND SOURCE, MERGED IN — confirmed real, not fixed as a side
+        effect of any prior change: the economic_calendar cache's `events`
+        array only gains a manually-entered actual if that event row was
+        already present in the cache at the moment
+        ui/dashboard.py's manual-input-save route ran its in-place update
+        (it loops over `ec_data.get('events', [])` and mutates the
+        matching row — if the row isn't there, e.g. a genuinely quiet week
+        with 0 EC events cached, the loop finds nothing and silently
+        no-ops). The actual still lands in
+        /data/permanent_manual_inputs.json (manual_input_pipeline's own
+        permanent store) either way, but this method previously never read
+        that file — so a same-day manual FOMC actual entered while the EC
+        cache had no matching row was invisible to the fold matcher until
+        the next full economic_calendar_pipeline.fetch() happened to
+        re-run and merge it via apply_manual_inputs(). Reading
+        permanent_manual_inputs.json directly here closes that gap without
+        depending on the EC cache's row-mutation path or a fetch cycle
+        landing first."""
+        anchors = set()
         try:
             ec_cached = cache.load('economic_calendar')
-            if not ec_cached:
-                return []
-            events = ec_cached.get('data', {}).get('events', [])
+            events = ec_cached.get('data', {}).get('events', []) if ec_cached else []
         except Exception as e:
             pulse_logger.log(f"⚠️ EC fold — failed to load economic_calendar cache: {e}", level="WARNING")
-            return []
-        anchors = []
+            events = []
         for e in events:
             if e.get('title') not in self.FOMC_FOLD_EVENT_TITLES:
                 continue
@@ -114,8 +131,34 @@ class GeopoliticalPipeline:
                 continue
             event_date = e.get('event_date', '')
             if event_date:
-                anchors.append(event_date)
-        return anchors
+                anchors.add(event_date)
+
+        try:
+            from pipelines.manual_input import manual_input_pipeline
+            manual_inputs = manual_input_pipeline.get_inputs()
+        except Exception as e:
+            pulse_logger.log(f"⚠️ EC fold — failed to load permanent_manual_inputs.json: {e}", level="WARNING")
+            manual_inputs = {}
+        for key, entry in manual_inputs.items():
+            actual = entry.get('actual') if isinstance(entry, dict) else None
+            if actual in (None, '', 'Pending', 'N/A'):
+                continue
+            # Key is 'Title::YYYY-MM-DD' when saved with an event_date, or
+            # bare 'Title' (legacy / no event_date at save time) otherwise.
+            title, _, event_date = key.partition('::')
+            if title not in self.FOMC_FOLD_EVENT_TITLES:
+                continue
+            if event_date:
+                anchors.add(event_date)
+            else:
+                # No event_date on the manual entry itself — fall back to
+                # its save timestamp's date so a real entered actual still
+                # anchors the fold instead of being silently dropped.
+                ts = entry.get('timestamp', '')
+                if ts:
+                    anchors.add(ts[:10])
+
+        return sorted(anchors)
 
     def _ec_fold_matches(self, item, ec_anchors):
         """Sections (a)-(c) of the app-layer EC fold ONLY — event-type
