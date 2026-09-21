@@ -136,10 +136,19 @@ ALIASES = {
     'kremlin': 'russia', 'moscow': 'russia', 'russian government': 'russia',
     'putin': 'russia',
 
-    # Iran
-    'tehran': 'iran',
-    'irgc': 'iran_irgc', 'islamic revolutionary guard corps': 'iran_irgc',
-    'revolutionary guard': 'iran_irgc', 'revolutionary guards': 'iran_irgc',
+    # Iran — IRGC/Revolutionary Guard collapse into the same 'iran' slug as
+    # Tehran, not a separate 'iran_irgc' form. Deliberate, not an oversight:
+    # this table already collapses a state's military arm into the state
+    # itself elsewhere (see Israel below — 'idf'/'israel defense forces'
+    # both map to 'israel', not a separate slug). Splitting Iran alone
+    # into two canonical forms broke that same precedent and reproduced
+    # the exact class of bug this module exists to prevent (see the module
+    # docstring's Federal Reserve/Kevin Warsh example) — two articles
+    # about the same event, one saying "Tehran" and the other "IRGC",
+    # would canonicalize to different actors and both first_print.
+    'tehran': 'iran', 'iran': 'iran',
+    'irgc': 'iran', 'islamic revolutionary guard corps': 'iran',
+    'revolutionary guard': 'iran', 'revolutionary guards': 'iran',
 
     # Israel
     'idf': 'israel', 'israel defense forces': 'israel', 'jerusalem': 'israel',

@@ -4,9 +4,23 @@ first_print/follow_up rewrite. This is the thing Haiku never gets to see:
 a real record of what's already been scored, so the dedup decision lives
 in code against actual state instead of inside a single article's text.
 
-Schema per record, exactly as specified:
-  event_id, actor, action, place, event_time, first_seen, kind,
+Schema per record:
+  event_id, actor, action, place, event_time, first_seen, record_kind,
   score_applied
+
+NAMING NOTE, added after an audit flagged the collision: this schema's
+field was originally named plain 'kind', matching the spec's field list
+literally. Renamed to `record_kind` because pipelines/geopolitical.py has
+its own, completely different 'kind' concept (an article's first_print/
+follow_up classification, read/written in ~20 places, driving scoring and
+TTL there) — and this store's field is NOT that. record_first_print() is
+the only writer, and it always sets record_kind to the literal constant
+'first_print' (a record only ever gets created for a first_print event by
+definition); nothing anywhere reads it back to branch on. It exists
+purely to document, for a human reading a dumped record, why this entry
+exists — not as a live signal to consume. Same field name as the live
+article-kind elsewhere in the Geo pillar would have invited a future
+reader to assume they're the same thing and try to branch on it.
 
 `actor`/`action`/`place` stored here are the CANONICALIZED forms (see
 pipelines/event_canon.py) — this store is the read side of the identity
@@ -126,7 +140,7 @@ class EventStore:
             'place': place,
             'event_time': event_time,
             'first_seen': datetime.now(timezone.utc).isoformat(),
-            'kind': 'first_print',
+            'record_kind': 'first_print',
             'score_applied': None,
         }
         self._save_all(records)

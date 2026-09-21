@@ -667,7 +667,7 @@ DEAL GATE (replaces the old $2B floor for M&A/partnership/minority-stake items o
 
 OUT — relevant: false, no tier: any M&A/partnership/minority-stake commitment under $20B (unless it's a hyperscaler capex/guidance print, which doesn't use this gate at all).
 
-LIVE (goes on to normal scoring below) requires BOTH a size test AND a confirmation test — a deal that only clears the size threshold via an unconfirmed report (anonymous sources, "people familiar with the matter," analyst speculation, or a single outlet's own reporting with no primary-source citation) does NOT clear this gate, no matter how specific or credible the dollar figure sounds. The dollar figure itself must be confirmed by an actual press release, SEC filing (e.g. an 8-K), or the company's own earnings call/investor update — not merely reported by a news outlet citing unnamed sources. A credible report that clearly identifies a specific pending deal and figure, sourced only to anonymous/unofficial channels with no company or regulatory confirmation yet, does not clear this gate — treat it as an unconfirmed rumor (reject it), regardless of size.
+LIVE (goes on to normal scoring below) requires BOTH a size test AND a confirmation test — a deal that only clears the size threshold via an unconfirmed report (anonymous sources, "people familiar with the matter," analyst speculation, or a single outlet's own reporting with no primary-source citation) does NOT clear this gate, no matter how specific or credible the dollar figure sounds. The dollar figure itself must be confirmed by an actual press release, SEC filing (e.g. an 8-K), or the company's own earnings call/investor update — not merely reported by a news outlet citing unnamed sources. A credible report that clearly identifies a specific pending deal and figure, sourced only to anonymous/unofficial channels with no company or regulatory confirmation yet, does not clear this gate — treat it as an unconfirmed rumor and reject it under this gate, UNLESS the article is merely restating the terms of a deal that is independently already confirmed elsewhere (by an actual press release, SEC filing, or earnings call/investor update), in which case this clause does not apply: score it normally against the already-confirmed size and terms, regardless of this particular article's own weaker sourcing.
 
 With that confirmation requirement satisfied, LIVE if EITHER:
 (a) the buyer is Nvidia, Microsoft, Alphabet/Google, Amazon, Meta, or Broadcom AND the confirmed disclosed value is $20B or more, OR
@@ -715,14 +715,18 @@ DIRECTION FOR MEGA-CAP REGULATORY/LEGAL OUTCOMES IS NOT A LOOKUP TABLE. Do not p
 
 REASON FIELD FORMAT FOR THIS CATEGORY: write the reason field as three lines — company-level assessment (one line, exactly one of negative/neutral/positive with a brief cause), NQ-level assessment (one line, exactly one of negative/neutral/positive, naming which factors above weighed most), then tier. Format: "Company: [negative/neutral/positive] — [why]. NQ: [negative/neutral/positive] — [why, citing the deciding factors]. Tier: [1/2/3]." If the two levels disagree, the NQ-level read is what's scored.
 
-Your job is to read each full article, then make four decisions:
+Your job is to read each full article, then make five decisions:
 
 DECISION 1 — RELEVANCE
-Is this genuinely market-moving information that would cause a futures trader to reconsider their directional bias for today's session?
+Is this genuinely new, market-moving information that would cause a futures trader to reconsider their directional bias for today's session?
+
+Think like a trader sitting down at 8AM asking: "Does this change anything about how I trade today?"
 
 Pass if it involves: Federal Reserve policy or official commentary, geopolitical escalation or resolution affecting global risk sentiment, major economic data surprises, energy market shocks, trade policy changes with immediate impact, systemic financial risk, or significant government actions with direct market consequences, or major tech/AI infrastructure deals/capex commitments meeting the TECH/AI MEGA-DEAL RULES threshold above, or mega-cap regulatory/legal outcomes meeting the MEGA-CAP REGULATORY/LEGAL OUTCOME RULES above.
 
-Fail if it involves: opinion or commentary on past market moves, investment advice or tips, personal finance stories, single company news unless systemically important, celebrity investor quotes, lifestyle or consumer behavior stories, retail shopping guides or consumer deal/discount roundups, prediction-market or betting-market odds and probability content (e.g. Kalshi, Polymarket, or PredictIt contract prices or probability shifts on a geopolitical or economic outcome) — a market's aggregated probability estimate is not itself a new event, newsletter recap formats, or anything that on full reading turns out to carry no genuinely new, specific, actionable information despite the initial extraction.
+Fail if it involves: opinion or commentary on past market moves, investment advice or tips, personal finance stories, single company news unless systemically important, celebrity investor quotes, lifestyle or consumer behavior stories, retail shopping guides or consumer deal/discount roundups (e.g. "back to school savings," "extra deals," holiday shopping tips, or similar listicle-style consumer spending content — even if framed around tariffs or prices), prediction-market or betting-market odds and probability content (e.g. Kalshi, Polymarket, or PredictIt contract prices or probability shifts on a geopolitical or economic outcome) — a market's aggregated probability estimate is not itself a new event, even when the underlying outcome concerns something market-moving like a nuclear deal, election, or rate decision, newsletter recap formats, or anything that describes what already happened rather than new information and has no traceable connection to anything genuinely market-moving.
+
+Before passing any article, run it through these six filters. If it fails any one of them, reject it:
 
 FILTER 1 — SOURCE VS ECHO
 Is this the event itself or a reaction to an event that already happened? A SOURCE event is new information the market hasn't priced in yet. It originates from a primary actor — a government, central bank, military, or natural force. An ECHO event is any person, company, or institution RESPONDING to or REPORTING ON a known macro situation.
@@ -735,14 +739,20 @@ A regulatory settlement, fine, verdict, or court judgment against a company is a
 
 The presence of macro keywords like "war", "energy", "Iran", "tariff" in a headline does NOT make it a source event. Ask: who is the ACTOR and what ACTION did they take? If the actor is a corporation reacting to an existing situation — it's an echo regardless of the macro language surrounding it.
 
-FILTER 2 — SPECIFICITY TEST
+FILTER 2 — RECENCY TEST
+Is this reporting something happening now and still live and current, or something genuinely stale — a week-in-review piece, an "after X weeks of..." article, or historical context with no live connection? This article has already been confirmed upstream to introduce a specific new fact — reject it here only if, on full reading, that claimed new fact turns out to be purely historical or retrospective framing rather than something live and current today.
+
+FILTER 3 — SPECIFICITY TEST
 Is this about a specific actionable event or a general mood/sentiment piece? Vibe articles, market psychology pieces, and "how to navigate" content are not tradeable information.
 
-FILTER 3 — ACTOR TEST
+FILTER 4 — ACTOR TEST
 Is the person or organization in this headline someone who directly moves markets through their decisions? Federal Reserve officials, heads of state, treasury secretaries, central bank chiefs, and major geopolitical actors = yes. State governors, backbench senators, corporate executives reacting to macro events, NASA, local officials = no, unless their specific action is systemically important to financial markets.
 
-FILTER 4 — MARKET DOMAIN TEST
+FILTER 5 — MARKET DOMAIN TEST
 Does this article exist within the domain of financial markets, geopolitics affecting markets, energy, trade, or monetary policy? Articles about space missions, scientific discoveries, social policy, and non-financial government activity should be rejected even if they use financial language.
+
+FILTER 6 — CONFIRMATION TRAP TEST
+Is this article just confirming something the market already knows and has already priced in? This article has already been confirmed upstream to introduce a specific new fact — reject it here only if, on full reading, that claimed new fact adds no real new directional information on its own and cannot be tied to anything specific, live, and actionable beyond the already-known context. A genuine new development does not fail this filter merely because it occurs within an already-known larger situation.
 
 POLITICAL PRESSURE ON THE FED — GATE (a special outcome, NOT a DECISION 1 rejection): applies to any article centered on a President, administration official, or member of Congress pressuring, criticizing, or being described as on a "collision course" with the Federal Reserve, its chair, or FOMC members over policy.
 
@@ -983,6 +993,30 @@ Articles to classify:
                     )
                     continue
                 results[result_idx].update(pb)
+                # Route Pass B's raw Haiku-schema output through the SAME
+                # translation the legacy v1 path uses (CLASSIFICATION_TO_ITEM_FIELDS
+                # via _apply_classification_fields()) so calculate_score() actually
+                # sees it under the item-schema names it reads (haiku_tier,
+                # gemini_direction, haiku_gate_pass, haiku_confidence,
+                # haiku_tier_reasoning) — not just Pass B's raw key names
+                # ('tier', 'direction', 'gate_pass', 'confidence') sitting inert
+                # next to them. Without this, a future cutover would silently
+                # defeat gate_pass entirely (calculate_score() checks
+                # item.get('haiku_gate_pass') is False, which would never be
+                # true if that key were simply absent) and every item would
+                # fall through to the sentiment/keyword tier fallback instead
+                # of using Pass B's real tier. The raw pb.update() above is
+                # kept too — _run_shadow_classification()'s own comparison
+                # logging and this project's existing tests both read the raw
+                # key names directly, so both representations coexist on the
+                # same result dict rather than one replacing the other.
+                # _apply_classification_fields() expects 'tier_reasoning', not
+                # Pass B's raw 'reasoning' key — renamed here, the one place
+                # the two schemas actually differ in field name rather than
+                # presence, before handing off to the real shared translator.
+                translation_source = dict(pb)
+                translation_source['tier_reasoning'] = pb.get('reasoning', '')
+                self._apply_classification_fields(results[result_idx], translation_source)
                 # score_applied is bookkeeping for the store, not a re-derivation
                 # of calculate_score()'s tier-magnitude math — store the tier
                 # actually assigned (None if rejected or gated to neutral),
