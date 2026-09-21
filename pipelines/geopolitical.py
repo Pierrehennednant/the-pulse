@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 import re
@@ -991,6 +992,97 @@ Articles to classify:
                 event_store.update_score_applied(results[result_idx]['event_id'], tier_applied)
 
         return results
+
+    def _run_shadow_classification(self, new_items, real_classifications):
+        """Shadow/dry-run mode for validating Stage 3 (classify_relevance_batch_v2)
+        against real incoming articles before it is ever allowed to
+        replace the live scoring path. Comparison-logging ONLY.
+
+        ISOLATION GUARANTEES, and how each is actually true (not just
+        asserted):
+          - Operates on copy.deepcopy(new_items), never the real list —
+            classify_relevance_batch_v2() calls _fetch_and_stamp_articles()
+            internally, which mutates article dicts in place
+            (_full_text/_text_source); running it on the real objects
+            that background_classify() and update_pinned_store() go on to
+            read from would risk stamping them a second time. The deep
+            copy makes this impossible regardless of call order.
+          - Its return value (shadow_results) is only ever read by the
+            comparison/logging loop below — never passed to cache.save(),
+            update_pinned_store(), or any dict this method's own caller
+            (background_classify()) uses afterward. Grep
+            'event_store\\.|event_canon' in this repo to confirm nothing
+            outside classify_relevance_batch_v2()/this method references
+            the Stage 1-3 modules at all.
+          - Wrapped in its own try/except distinct from background_classify()'s
+            outer except — an exception here is logged under its own
+            "Shadow mode" line and returns, rather than surfacing as a
+            misleading "Background Haiku failed" (which would wrongly
+            implicate the REAL classification that, by construction, has
+            already completed and been written by the time this runs).
+        """
+        try:
+            shadow_copy = copy.deepcopy(new_items)
+            shadow_results = self.classify_relevance_batch_v2(shadow_copy)
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Shadow mode (Stage 3) — v2 classification failed, real scoring unaffected: {e}", level="WARNING")
+            return
+
+        real_by_headline = {}
+        for r in (real_classifications or []):
+            idx = r.get('id', 0) - 1
+            if 0 <= idx < len(new_items):
+                real_by_headline[new_items[idx]['headline']] = r
+
+        agree = disagree = no_comparison = 0
+        for shadow in shadow_results:
+            headline = shadow.get('headline', '')
+            real = real_by_headline.get(headline)
+            new_kind = shadow.get('kind')
+            new_tier = shadow.get('tier')
+            new_bucket = shadow.get('bucket')
+
+            if real is None:
+                no_comparison += 1
+                pulse_logger.log(
+                    f"🔬 SHADOW no-comparison — {headline[:70]!r} | real path returned no result for this "
+                    f"item this cycle | new: kind={new_kind} tier={new_tier} bucket={new_bucket}"
+                )
+                continue
+
+            old_kind = real.get('kind')
+            if old_kind not in ('first_print', 'follow_up'):
+                old_kind = 'first_print'  # mirrors background_classify()'s own malformed-kind default
+            old_tier = real.get('tier')
+            old_relevant = real.get('relevant')
+
+            kinds_match = old_kind == new_kind
+            tiers_match = True if old_kind != 'first_print' or new_kind != 'first_print' else old_tier == new_tier
+
+            if kinds_match and tiers_match:
+                agree += 1
+                continue
+
+            disagree += 1
+            if old_kind == 'first_print' and new_kind == 'follow_up':
+                direction = 'v2_deduped (old=first_print, new=follow_up) — likely a genuine dedup catch, the whole point of this rewrite'
+            elif old_kind == 'follow_up' and new_kind == 'first_print':
+                direction = 'v2_more_permissive (old=follow_up, new=first_print) — needs scrutiny, NOT assumed fine just because it is not the bug being chased'
+            elif not tiers_match:
+                direction = f'tier drift within agreeing kind={old_kind} (old_tier={old_tier}, new_tier={new_tier})'
+            else:
+                direction = f'other (old_kind={old_kind}, new_kind={new_kind})'
+
+            pulse_logger.log(
+                f"🔬 SHADOW DISAGREEMENT — {headline[:70]!r} | {direction} | "
+                f"old: kind={old_kind} tier={old_tier} relevant={old_relevant} | "
+                f"new: kind={new_kind} tier={new_tier} bucket={new_bucket} event_id={shadow.get('event_id')}"
+            )
+
+        pulse_logger.log(
+            f"🔬 Shadow mode (Stage 3) — cycle summary: {agree} agree / {disagree} disagree / "
+            f"{no_comparison} no-comparison out of {len(shadow_results)} items"
+        )
 
     def _build_classification_prompt(self, article_list):
         """The full, current classification prompt, parameterized only by
@@ -2745,6 +2837,17 @@ CONTEXT: {context}"""
                             pulse_logger.log(f"⚠️ Background classify — failed to re-merge into pillar cache: {e}", level="WARNING")
 
                         pulse_logger.log(f"✅ Haiku background done — {len(classifications)} articles classified with summaries")
+
+                    # SHADOW MODE (Stage 3 validation, not yet a scoring path)
+                    # — runs strictly AFTER the real classification's cache
+                    # writes above, on real incoming articles, gated behind an
+                    # env var defaulting off. See _run_shadow_classification()
+                    # for the isolation guarantees. Skipped entirely if the
+                    # real path above raised (this except block, not here) —
+                    # shadow data doesn't need every cycle, and a cycle where
+                    # the real path itself failed isn't a useful comparison.
+                    if os.environ.get('GEO_SHADOW_MODE') == 'true':
+                        self._run_shadow_classification(new_items, classifications)
                 except Exception as e:
                     pulse_logger.log(f"⚠️ Background Haiku failed: {e}", level="WARNING")
 
