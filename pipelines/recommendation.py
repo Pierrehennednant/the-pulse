@@ -93,7 +93,25 @@ class PropFirmRecommendationEngine:
 
         events = econ_data.get('events', []) if econ_data else []
         status = (econ_data or {}).get('status')
-        should_defer = status in ('unavailable', 'stale') or not events
+        # NOT `or not events` — a genuinely quiet week (0 red folder events)
+        # produces status='live' with events=[] from a real, fully-resolved
+        # fetch, and that must NOT defer forever (confirmed live bug: EC
+        # correctly read 0 events/weak_ec_week=true every cycle, but this
+        # check treated 0 events as "still loading" and deferred every single
+        # cycle, so the threshold file never got past yesterday's stale
+        # Standard/3-red-folder-days value). Traced status='live': it's set
+        # in exactly one place, economic_calendar.py's fetch() (terminal line
+        # of its success path, after events/red_folder_days/weak_ec_week are
+        # all computed) — but a SECOND call site, ui/dashboard.py's
+        # _run_partial_refresh(), fabricates the same status='live' string as
+        # a cold-cache placeholder (no fetch has run yet) with events=[] too.
+        # So the status string alone can't be trusted to mean "fetch
+        # resolved" — 'red_folder_days' can: it's only ever stamped by
+        # economic_calendar.py's real terminal success path, never by that
+        # placeholder or by main.py's exception-fallback {}. Its presence,
+        # not the event count, is what actually separates "confirmed empty"
+        # from "not yet resolved."
+        should_defer = status in ('unavailable', 'stale') or 'red_folder_days' not in (econ_data or {})
 
         if should_defer:
             pulse_logger.log(
