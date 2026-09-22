@@ -2551,6 +2551,20 @@ CONTEXT: {context}"""
 
         # Split into already classified vs new
         new_items = [i for i in items if i['headline'] not in gemini_cache]
+        # TEMPORARY DIAGNOSTIC (shadow-mode silence investigation,
+        # 2026-09-22) — remove once root-caused. Unconditional, every
+        # fetch_news() call that reaches this point: proves whether
+        # background_classify() (and thus the shadow-mode call inside it,
+        # gated behind `if new_items:` below) ever actually has anything
+        # to run on this cycle. gemini_classifications.json is append-only
+        # (confirmed: no code path ever deletes a key from it, only
+        # updates existing ones) — if TheNewsAPI keeps returning headlines
+        # already in that ever-growing cache, new_items can legitimately
+        # be empty cycle after cycle with no bug anywhere.
+        pulse_logger.log(
+            f"🔬 SHADOW DIAG — fetch_news() | items={len(items)} | "
+            f"gemini_cache_size={len(gemini_cache)} | new_items={len(new_items)}"
+        )
         known_relevant = []
         for i in items:
             cached = gemini_cache.get(i['headline'], {})
@@ -2880,6 +2894,17 @@ CONTEXT: {context}"""
                     # real path above raised (this except block, not here) —
                     # shadow data doesn't need every cycle, and a cycle where
                     # the real path itself failed isn't a useful comparison.
+                    #
+                    # TEMPORARY DIAGNOSTIC (shadow-mode silence investigation,
+                    # 2026-09-22) — remove once root-caused. Unconditional,
+                    # exactly as requested: proves the check itself is even
+                    # being reached and what raw value it's actually seeing,
+                    # regardless of outcome.
+                    _raw_shadow_env = os.environ.get('GEO_SHADOW_MODE')
+                    pulse_logger.log(
+                        f"🔬 SHADOW DIAG — background_classify() reached the gate | "
+                        f"raw GEO_SHADOW_MODE={_raw_shadow_env!r} | will_run={_raw_shadow_env == 'true'}"
+                    )
                     if os.environ.get('GEO_SHADOW_MODE') == 'true':
                         self._run_shadow_classification(new_items, classifications)
                 except Exception as e:
@@ -3396,6 +3421,16 @@ CONTEXT: {context}"""
 
             existing = cache.load(self.cache_key)
             age_minutes = cache.get_age_minutes(self.cache_key)
+            # TEMPORARY DIAGNOSTIC (shadow-mode silence investigation,
+            # 2026-09-22) — remove once GEO_SHADOW_MODE log silence is
+            # root-caused. Unconditional, every fetch() call: proves
+            # whether the cache-hit branch below (which skips fetch_news()
+            # entirely, and therefore skips background_classify() and the
+            # shadow-mode call inside it) is the reason no 🔬 lines appear.
+            pulse_logger.log(
+                f"🔬 SHADOW DIAG — fetch() entry | age_minutes={age_minutes:.2f} | "
+                f"cache_hit_branch={'YES (fetch_news() skipped)' if (existing and age_minutes < 3) else 'no (proceeding to fetch_news())'}"
+            )
             if existing and age_minutes < 3:
                 pulse_logger.log("↺ Geopolitical — using cache (TheNewsAPI refresh every 3min)")
                 return self._backfill_live_published_at(self._refresh_cached_data(existing['data']))
