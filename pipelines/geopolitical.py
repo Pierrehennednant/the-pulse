@@ -101,6 +101,20 @@ class GeopoliticalPipeline:
         'yields', 'vix', 'oil settle', 'oil settles', 'live updates',
     )
 
+    # Max articles per classify_relevance_batch() call before chunking
+    # (see _classify_relevance_batch_chunked() below). Confirmed live,
+    # 2026-09-23: a single 25-article batch failed all 3 retry attempts
+    # with stop_reason='max_tokens' — this schema's per-article output
+    # (summary + reason + reasoning + tier/direction/confidence/category/
+    # gate_pass) is heavy enough that 25 genuinely overflows the output
+    # budget, and _call_haiku_classify()'s retry logic cannot recover from
+    # this failure mode at all (retrying the identical oversized prompt
+    # against the identical token cap truncates the same way every time).
+    # Set well under that demonstrated-unsafe value, not empirically tuned
+    # against it — no live access to binary-search the real boundary from
+    # here, so conservative headroom over precision.
+    HAIKU_CLASSIFY_CHUNK_SIZE = 10
+
     def _load_ec_fomc_anchors(self):
         """Dated EC calendar rows (this week's FOMC-day events) that already
         have a confirmed actual — the "EC already owns this event" anchor
@@ -567,6 +581,71 @@ class GeopoliticalPipeline:
 
         prompt = self._build_classification_prompt(article_list)
         return self._call_haiku_classify(prompt)
+
+    def _classify_relevance_batch_chunked(self, articles, chunk_size=None):
+        """Chunked wrapper around classify_relevance_batch() — same output
+        contract (a list of dicts with a 1-based 'id' matching `articles`'
+        order, remapped back to global indices), safe for a live batch of
+        any size.
+
+        REAL BUG THIS FIXES, confirmed live 2026-09-23: a single
+        classify_relevance_batch() call on a 25-article batch failed all 3
+        retry attempts with stop_reason='max_tokens'. Retrying the
+        identical oversized prompt against the identical token cap
+        truncates the same way every time, so _call_haiku_classify()'s
+        existing retry logic cannot recover from this failure mode at all
+        — confirmed by the observed "failed every attempt" behavior, not
+        just reasoned about. The whole cycle's new_items then classifies
+        as [], background_classify()'s `if classifications:` gate skips
+        every write for that cycle, and since gemini_classifications.json
+        is append-only (nothing ever deletes a key), those headlines
+        simply retry as "new" again next cycle — a real, usually
+        self-healing, live-scoring DELAY on exactly the heavy-news days
+        when timely classification matters most, not a permanent loss.
+
+        Chunks never span a fetch_full_article() network fetch twice —
+        classify_relevance_batch() calls _fetch_and_stamp_articles() on
+        each chunk itself, stamping _full_text/_text_source onto the SAME
+        dict objects passed in (this method deliberately does not copy
+        `articles`), so callers holding the original list still see the
+        stamps land correctly regardless of chunking.
+
+        Shared by fetch_news()'s live path and daily_relevance_revalidation()
+        — both call this same underlying function with the same output
+        schema, so they carry the same overflow risk and now share the
+        same fix and the same chunk-size constant, instead of two
+        independent choices that could silently drift apart (this was
+        previously a real gap: daily_relevance_revalidation() already
+        hand-rolled its own chunking loop at a different, larger size —
+        same risk, just far less frequently observed there since it runs
+        once a day against shorter cached-summary context, not every 5
+        minutes against full article text)."""
+        if not articles:
+            return []
+        size = chunk_size or self.HAIKU_CLASSIFY_CHUNK_SIZE
+        chunks = [articles[i:i + size] for i in range(0, len(articles), size)]
+        if len(chunks) > 1:
+            pulse_logger.log(
+                f"🔀 Haiku classify — {len(articles)} article(s) split into {len(chunks)} chunk(s) "
+                f"of up to {size} (avoids the max_tokens truncation a single oversized batch can hit)"
+            )
+        merged = []
+        offset = 0
+        for idx, chunk in enumerate(chunks, start=1):
+            results = self.classify_relevance_batch(chunk)
+            if not results and chunk:
+                pulse_logger.log(
+                    f"⚠️ Haiku classify — chunk {idx}/{len(chunks)} ({len(chunk)} article(s)) returned "
+                    f"nothing, those article(s) stay unclassified this cycle",
+                    level="WARNING"
+                )
+            for r in results:
+                if isinstance(r, dict) and 'id' in r:
+                    r = dict(r)
+                    r['id'] = r['id'] + offset
+                merged.append(r)
+            offset += len(chunk)
+        return merged
 
     # ── Two-pass classification (Stage 3 of the structural first_print/
     # follow_up rewrite) — NOT YET WIRED INTO fetch_news(). Standalone,
@@ -1377,7 +1456,7 @@ Articles to classify:
             try:
                 response = self.anthropic_client.messages.create(
                     model="claude-haiku-4-5-20251001",
-                    max_tokens=4096,
+                    max_tokens=8192,
                     messages=[{"role": "user", "content": prompt}]
                 )
                 text = response.content[0].text.strip()
@@ -2057,14 +2136,16 @@ CONTEXT: {context}"""
         directly so there is exactly one place the relevance criteria live —
         this pass never duplicates the prompt.
 
-        Chunks the active set into groups of ~25 rather than one unbounded
-        batch — a single call covering many articles risks silent truncation
-        against classify_relevance_batch()'s 4096-token output cap, exactly
-        on the high-volume news days where revalidation matters most. Each
-        chunk is an independent Haiku call; a failure in one chunk does not
-        block the others. Logs the chunk count and verifies the total
-        articles processed matches the active count, so a partial run is
-        visible in logs rather than silently swallowed."""
+        Chunking (and its safety margin against classify_relevance_batch()'s
+        max_tokens output cap) is delegated entirely to
+        _classify_relevance_batch_chunked() — this function used to hand-roll
+        its own chunk loop at CHUNK_SIZE=25, a SEPARATE choice from the one
+        that later demonstrably failed live in fetch_news()'s path (same
+        underlying call, same schema, same risk). Two independent chunk-size
+        constants for the identical overflow risk is exactly the kind of
+        silent-drift bug this project's own audit tooling exists to catch —
+        collapsed into one shared constant/implementation instead of letting
+        it recur here too."""
         if self.anthropic_client is None:
             return
         gemini_cache_file = "/data/gemini_classifications.json"
@@ -2088,66 +2169,46 @@ CONTEXT: {context}"""
             return
 
         total_active = len(active_relevant)
-        CHUNK_SIZE = 25
         headlines = list(active_relevant.keys())
-        chunks = [headlines[i:i + CHUNK_SIZE] for i in range(0, len(headlines), CHUNK_SIZE)]
-        pulse_logger.log(
-            f"🔄 Daily re-validation — re-checking {total_active} active article(s) "
-            f"in {len(chunks)} chunk(s) of up to {CHUNK_SIZE}"
-        )
+        # Re-run using the cached summary as context — no re-fetch of the
+        # original URL, which may be paywalled, moved, or removed by now.
+        pseudo_articles = [
+            {'headline': h, 'description': active_relevant[h].get('summary') or active_relevant[h].get('reason') or '', 'link': ''}
+            for h in headlines
+        ]
+        pulse_logger.log(f"🔄 Daily re-validation — re-checking {total_active} active article(s)")
+
+        results = self._classify_relevance_batch_chunked(pseudo_articles)
 
         revoked = 0
         processed = 0
-        failed_chunks = 0
-        for chunk_idx, chunk_headlines in enumerate(chunks, start=1):
-            # Re-run using the cached summary as context — no re-fetch of the
-            # original URL, which may be paywalled, moved, or removed by now.
-            pseudo_articles = [
-                {'headline': h, 'description': active_relevant[h].get('summary') or active_relevant[h].get('reason') or '', 'link': ''}
-                for h in chunk_headlines
-            ]
-            results = self.classify_relevance_batch(pseudo_articles)
-            if not results:
-                failed_chunks += 1
-                pulse_logger.log(
-                    f"⚠️ Daily re-validation — chunk {chunk_idx}/{len(chunks)} returned nothing "
-                    f"({len(pseudo_articles)} article(s) left unrevalidated)",
-                    level="WARNING"
-                )
+        for r in results:
+            if not isinstance(r, dict) or 'id' not in r:
                 continue
-
-            for r in results:
-                idx = r['id'] - 1
-                if not (0 <= idx < len(pseudo_articles)):
-                    continue
-                headline = pseudo_articles[idx]['headline']
-                processed += 1
-                if not r.get('relevant'):
-                    gemini_cache[headline]['relevant'] = False
-                    gemini_cache[headline]['revalidated_at'] = datetime.now(timezone.utc).isoformat()
-                    gemini_cache[headline]['revalidation_reason'] = r.get('reason', '')
-                    revoked += 1
-                    pulse_logger.log(f"🔄 Daily re-validation — revoked relevance: '{headline[:60]}' | {r.get('reason', '')[:100]}")
-                else:
-                    gemini_cache[headline]['revalidated_at'] = datetime.now(timezone.utc).isoformat()
-
-            pulse_logger.log(
-                f"🔄 Daily re-validation — chunk {chunk_idx}/{len(chunks)} done: "
-                f"{len(results)}/{len(pseudo_articles)} article(s) processed"
-            )
+            idx = r['id'] - 1
+            if not (0 <= idx < len(pseudo_articles)):
+                continue
+            headline = pseudo_articles[idx]['headline']
+            processed += 1
+            if not r.get('relevant'):
+                gemini_cache[headline]['relevant'] = False
+                gemini_cache[headline]['revalidated_at'] = datetime.now(timezone.utc).isoformat()
+                gemini_cache[headline]['revalidation_reason'] = r.get('reason', '')
+                revoked += 1
+                pulse_logger.log(f"🔄 Daily re-validation — revoked relevance: '{headline[:60]}' | {r.get('reason', '')[:100]}")
+            else:
+                gemini_cache[headline]['revalidated_at'] = datetime.now(timezone.utc).isoformat()
 
         atomic_write_json(gemini_cache_file, gemini_cache)
 
         if processed == total_active:
             pulse_logger.log(
-                f"✅ Daily re-validation done — {processed}/{total_active} article(s) processed "
-                f"across {len(chunks)} chunk(s), {revoked} revoked"
+                f"✅ Daily re-validation done — {processed}/{total_active} article(s) processed, {revoked} revoked"
             )
         else:
             pulse_logger.log(
-                f"⚠️ Daily re-validation — PARTIAL run: {processed}/{total_active} article(s) processed "
-                f"({failed_chunks}/{len(chunks)} chunk(s) failed), {revoked} revoked. "
-                f"{total_active - processed} article(s) left unrevalidated this cycle.",
+                f"⚠️ Daily re-validation — PARTIAL run: {processed}/{total_active} article(s) processed, "
+                f"{revoked} revoked. {total_active - processed} article(s) left unrevalidated this cycle.",
                 level="WARNING"
             )
 
@@ -2710,7 +2771,7 @@ CONTEXT: {context}"""
             def background_classify():
                 try:
                     pulse_logger.log(f"🤖 Haiku background classifying {len(new_items)} new articles with full text...")
-                    classifications = self.classify_relevance_batch(new_items)
+                    classifications = self._classify_relevance_batch_chunked(new_items)
                     duplicate_headlines = set()
                     if classifications:
                         for r in classifications:
