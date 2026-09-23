@@ -971,28 +971,68 @@
         if (activeBtn && originalText) { activeBtn.textContent = originalText; activeBtn.style.opacity = '1'; }
     }
 
+    // Shared hardened request helper for block/unblock-style actions
+    // (2026-09-23 hardening — no confirmed root cause for the reported
+    // dropdown/X-button issue, so this closes every silent-failure path
+    // regardless of what the actual trigger turns out to be):
+    //   - explicit timeout via AbortController: a request that never
+    //     settles (dropped connection, server hang) used to leave the
+    //     button stuck on "…" indefinitely with zero feedback — now it
+    //     surfaces as a real, visible error after `timeoutMs`
+    //   - checks response.ok BEFORE assuming the body is the expected
+    //     JSON shape, so a 500/502/proxy-error page (which isn't valid
+    //     JSON) produces a clear "Server error (HTTP nnn)" message
+    //     instead of a confusing JSON-parse-error message
+    //   - always throws on any failure (network error, timeout, non-ok
+    //     status, non-'added'/'removed' status body) so every caller's
+    //     catch block is guaranteed to run — no path returns silently
+    async function _blocklistAction(url, method, title, timeoutMs) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs || 15000);
+        let response;
+        try {
+            response = await fetch(url, {
+                method: method,
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({title: title}),
+                signal: controller.signal
+            });
+        } catch(e) {
+            if (e.name === 'AbortError') {
+                throw new Error(`Request timed out after ${Math.round((timeoutMs || 15000) / 1000)}s — this may NOT have taken effect. Please check and retry.`);
+            }
+            throw new Error(e.message || 'Network error — request did not reach the server.');
+        } finally {
+            clearTimeout(timer);
+        }
+        let body = null;
+        try { body = await response.json(); } catch(parseErr) { /* handled below via !response.ok or missing status */ }
+        if (!response.ok) {
+            throw new Error((body && body.error) || `Server error (HTTP ${response.status})`);
+        }
+        if (!body || (body.status !== 'added' && body.status !== 'removed')) {
+            throw new Error((body && body.error) || 'Unexpected response from the server.');
+        }
+        return body;
+    }
+
     async function blockGeoArticle(title, btn) {
         if (!confirm('Block "' + title + '" from the Political & Geopolitical pillar?')) return;
         lockGeoActions(btn, '…');
         try {
-            const response = await fetch('/api/geo-blocklist', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({title: title})
-            });
-            const result = await response.json();
-            if (result.status === 'added') {
-                const card = btn.closest('.flag-item');
-                if (card) card.remove();
-                checkGeoBlocklistVisibility();
-                setTimeout(() => { fetchData(); scheduleRefresh(); }, 500);
-            } else {
-                unlockGeoActions(btn, '✕');
-                alert('Error: ' + (result.error || 'Unknown error'));
-            }
+            await _blocklistAction('/api/geo-blocklist', 'POST', title);
+            const card = btn.closest('.flag-item');
+            if (card) card.remove();
+            // (c) Re-fetch the blocked-list state from the server rather than
+            // trusting the optimistic card.remove() above — costs nothing,
+            // the dropdown rebuilds from a fresh fetch on every open anyway.
+            fetchGeoBlocklist();
+            checkGeoBlocklistVisibility();
+            setTimeout(() => { fetchData(); scheduleRefresh(); }, 500);
         } catch(e) {
+            alert(`Failed to block "${title}": ${e.message}\n\nThe article was NOT blocked. Please try again.`);
+        } finally {
             unlockGeoActions(btn, '✕');
-            alert('Error: ' + e.message);
         }
     }
 
@@ -1037,25 +1077,17 @@
         btn.disabled = true;
         btn.textContent = '…';
         try {
-            const response = await fetch('/api/geo-blocklist', {
-                method: 'DELETE',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({title: title})
-            });
-            const result = await response.json();
-            if (result.status === 'removed') {
-                fetchGeoBlocklist();
-                checkGeoBlocklistVisibility();
-                setTimeout(() => { fetchData(); scheduleRefresh(); }, 500);
-            } else {
-                btn.disabled = false;
-                btn.textContent = '✕';
-                alert('Error: ' + (result.error || 'Unknown error'));
-            }
+            await _blocklistAction('/api/geo-blocklist', 'DELETE', title);
+            // (c) Re-fetch the blocked-list state from the server — no
+            // client-side removal is assumed here.
+            fetchGeoBlocklist();
+            checkGeoBlocklistVisibility();
+            setTimeout(() => { fetchData(); scheduleRefresh(); }, 500);
         } catch(e) {
+            alert(`Failed to unblock "${title}": ${e.message}\n\nThe article was NOT unblocked. Please try again.`);
+        } finally {
             btn.disabled = false;
             btn.textContent = '✕';
-            alert('Error: ' + e.message);
         }
     }
 
@@ -1064,10 +1096,15 @@
         if (!section) return;
         try {
             const response = await fetch('/api/geo-blocklist');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const blocklist = await response.json();
             section.style.display = blocklist.length > 0 ? 'block' : 'none';
         } catch(e) {
-            section.style.display = 'none';
+            // Leave visibility as-is on failure — forcing it hidden here
+            // would silently make a section with real blocked articles
+            // disappear from view on a transient error, which is a worse
+            // silent failure than just not updating this one signal.
+            console.error('checkGeoBlocklistVisibility failed:', e);
         }
     }
 
@@ -1113,24 +1150,15 @@
         btn.disabled = true;
         btn.textContent = '…';
         try {
-            const response = await fetch('/api/ec-blocklist', {
-                method: 'DELETE',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({title: title})
-            });
-            const result = await response.json();
-            if (result.status === 'removed') {
-                fetchEcBlocklist();
-                setTimeout(() => { fetchData(); scheduleRefresh(); }, 500);
-            } else {
-                btn.disabled = false;
-                btn.textContent = '✕';
-                alert('Error: ' + (result.error || 'Unknown error'));
-            }
+            await _blocklistAction('/api/ec-blocklist', 'DELETE', title);
+            // (c) Re-fetch the blocked-list state from the server.
+            fetchEcBlocklist();
+            setTimeout(() => { fetchData(); scheduleRefresh(); }, 500);
         } catch(e) {
+            alert(`Failed to unblock "${title}": ${e.message}\n\nThe event was NOT unblocked. Please try again.`);
+        } finally {
             btn.disabled = false;
             btn.textContent = '✕';
-            alert('Error: ' + e.message);
         }
     }
 
