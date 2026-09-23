@@ -672,22 +672,31 @@ class GeopoliticalPipeline:
         field, not by this bucket call."""
         return f"""You are the first-pass triage step for a Nasdaq-100/S&P 500 futures pre-market macro dashboard. Your ONLY job is extraction and coarse routing — you do NOT decide tier, direction, or whether an event is a repeat of something already scored elsewhere. A separate second pass handles significance judgment, only for items you route to bucket "geo".
 
-For each article, extract:
+ONE EXTRACT PER ACTION, NOT ONE EXTRACT PER ARTICLE. A single article can report multiple separate, independent actions by different actors — extract ONE JSON object per distinct action, not one combined object per article. Give every extract belonging to the same article the same "article_id". Example: an "Oil falls as crude flows remain surprisingly strong" wrap could contain a sanctions announcement, a military deployment, and a territorial seizure, each by a different actor — that is three separate extracts (plus, if the tape-narration framing itself has no new action of its own, optionally a fourth extract with bucket "macro" for the tape framing, or simply omit a tape-only extract entirely — see PRICE-MOVE / MARKET-TAPE PATTERN below). Do not merge distinct actions by different actors into one extract just because they appear in the same article. If an article genuinely contains only one action, emit exactly one extract for it, as before — do not manufacture extra ones.
+
+For each extract, give:
+- article_id: the number of the article this extract came from, matching the numbering below. Multiple extracts may share the same article_id.
 - actor: the primary country, institution, or person who performed the action — not a spokesperson, analyst, or critic commenting on someone else's action, the one who actually DID something.
 - action: pick exactly ONE of these categories, never freeform verb text: {', '.join(ACTION_CATEGORIES)}.
 - object: the specific target or subject of the action (a place, an agreement, a policy, a company, a weapons system), a few words.
 - place: the country, region, or specific location the action occurred in or most directly concerns.
-- event_time: the date (YYYY-MM-DD) the ACTUAL EVENT happened — not the article's publish date if they differ. An article published today about a press conference three days ago should give the press conference's date, not today's.
-- new_fact: in ONE sentence, the specific new fact this article adds beyond what was already known before this article existed. Leave this as empty string "" if the article does not report anything new — a recap, a synthesis of several already-known conditions into one narrative, or a quote/statistic tied to a specific earlier occasion are NOT new facts even when presented in the present tense ("X says," "prices are rising"). Describe specifically what is NEW, or say nothing at all — do not describe what the article is generally about.
+- event_time: the date (YYYY-MM-DD) the ACTUAL EVENT happened — not the article's publish date if they differ. An article published today about a press conference three days ago should give the press conference's date, not today's. Leave empty "" if genuinely not determinable — never guess or default to today's date.
+- new_fact: in ONE sentence, the specific new fact THIS ACTION adds beyond what was already known before this article existed. Leave this as empty string "" if this specific action is not actually new — a recap, a synthesis of several already-known conditions into one narrative, or a quote/statistic tied to a specific earlier occasion are NOT new facts even when presented in the present tense ("X says," "prices are rising"). Describe specifically what is NEW about THIS action, or say nothing at all.
 - bucket: exactly one of:
-    "geo" — a geopolitical event, Fed/central-bank action or commentary, government/regulatory action, major tech/AI infrastructure deal or capex commitment, mega-cap regulatory/legal outcome, energy/trade/sanctions action, or any other development that could move NQ/ES risk appetite through something real, specific, and actionable.
+    "geo" — a geopolitical event, Fed/central-bank action or commentary, government/regulatory action, a corporate event meeting PATH 1 or PATH 2 of the CORPORATE EVENTS rule below, energy/trade/sanctions action, or any other development that could move NQ/ES risk appetite through something real, specific, and actionable.
     "macro" — broad market-tape commentary, price-level/yield/index-move description, or "how markets reacted" framing with no new discrete event of its own (see the PRICE-MOVE PATTERN below).
     "ec" — the article is substantively ABOUT a regularly scheduled, calendar-tracked economic release or Fed decision (jobs report, CPI, PMI, FOMC meeting/press conference/statement) rather than an independent geopolitical development — this dashboard's Economic Calendar pillar already tracks these separately.
-    "drop" — not market-relevant at all: lifestyle, personal finance, celebrity/investor commentary, prediction-market odds, consumer shopping content, single-company HR/operational news, vibes/sentiment pieces with no specific actionable event, or a company merely reacting to (not causing) a macro event.
+    "drop" — not market-relevant at all: lifestyle, personal finance, celebrity/investor commentary, prediction-market odds, consumer shopping content, single-company HR/operational news, vibes/sentiment pieces with no specific actionable event, a company merely reacting to (not causing) a macro event, or a corporate event that fails the CORPORATE EVENTS rule below.
 
-PRICE-MOVE / MARKET-TAPE PATTERN — route to "macro", not "geo": an article primarily describing yields, VIX, oil settle prices, or other index/price levels moving, or framed as "live updates:" / "markets today:" tape coverage, with no NEW discrete event of its own stated as happening today — even if it mentions geopolitical causes in passing. If the article's real subject is how the tape moved rather than what specific new thing happened, it's macro, not geo, regardless of which words appear in it.
+PRICE-MOVE / MARKET-TAPE PATTERN — route to "macro", not "geo": an extract primarily describing yields, VIX, oil settle prices, or other index/price levels moving, or framed as "live updates:" / "markets today:" tape coverage, with no NEW discrete event of its own stated as happening today — even if it mentions geopolitical causes in passing. If the real subject is how the tape moved rather than what specific new thing happened, it's macro, not geo, regardless of which words appear in it. This never overrides a genuine separate action extract found elsewhere in the same article — the tape framing and a real embedded action are different extracts with different buckets.
 
-DEAL/CAPEX SIZE GATE — applies only to M&A/partnership/capex articles about Nvidia, Apple, Microsoft, Alphabet/Google, Amazon, Meta, Broadcom, AMD, Intel, TSM, or a comparable major AI-infrastructure player: route to "drop" unless the dollar figure is confirmed by an actual press release, SEC filing, or earnings call/investor update (not merely anonymous-sourced reporting) AND either (a) the buyer is Nvidia/Microsoft/Alphabet/Amazon/Meta/Broadcom with a confirmed value of $20B or more, or (b) the transaction is a compute/foundry/networking/AI-energy/data-center deal of $50B or more regardless of buyer. A confirmed deal below these lines still routes to "drop" — it's a stock story, not a regime move.
+CORPORATE EVENTS — what gets a corporate item into "geo" is WHAT HAPPENED, not deal size. A dollar threshold alone is never sufficient by itself and never necessary — route to "drop" UNLESS one of these two paths applies:
+
+PATH 1 — SYSTEMIC DISTRESS, ANY SECTOR: the company is an S&P 500 or Nasdaq-100 constituent AND the event is one of: bankruptcy or Chapter 11 filing, a debt default or missed payment, a going-concern warning, accounting fraud or a major financial restatement, a bank failure or deposit run, or an emergency government rescue/bailout. Route to "geo" — these are rare and genuinely reprice risk appetite regardless of sector or deal size.
+
+PATH 2 — TECH / AI INFRASTRUCTURE (existing rule, unchanged): a hyperscaler's own capex/guidance print from an earnings call or investor update (Nvidia, Apple, Microsoft, Alphabet/Google, Amazon, Meta, Broadcom, AMD, Intel, TSM, or a comparable major AI-infrastructure player announcing its OWN spending plans) bypasses the deal-size test below entirely — route to "geo", size is not the gate for a company's own capex disclosure. For an M&A/partnership/minority-stake extract about one of those same companies (i.e. a deal with ANOTHER party, not the company's own capex), route to "drop" unless the dollar figure is confirmed by an actual press release, SEC filing, or earnings call/investor update (not merely anonymous-sourced reporting) AND either (a) the buyer is Nvidia/Microsoft/Alphabet/Amazon/Meta/Broadcom with a confirmed value of $20B or more, or (b) the transaction is a compute/foundry/networking/AI-energy/data-center deal of $50B or more regardless of buyer. A confirmed deal below these lines still routes to "drop" — it's a stock story, not a regime move.
+
+EVERYTHING ELSE CORPORATE routes to "drop", regardless of dollar size — this explicitly includes M&A, antitrust settlements, partnerships, earnings results, guidance cuts, and profit warnings outside Path 1 or Path 2. A large dollar figure alone (a media merger, an antitrust settlement, a guidance cut, a profit warning) does NOT clear this on its own — only Path 1 (systemic distress at a major index constituent) or Path 2 (the specific tech/AI infrastructure rule above) does. Never apply the Path 2 dollar thresholds to a company outside its named list, no matter how large the deal is — a large non-tech merger or settlement is "drop" even at $100B+.
 
 STANDARD EXCLUSIONS — always "drop" regardless of company size or how prominently "AI" appears: routine product launches/feature rollouts, sub-$1B customer wins, minor earnings beats/misses, normal single-company operational noise (hiring, office moves, executive changes, minor guidance tweaks). Describing what a product now DOES, rather than a transaction, a capex commitment, or a legal/regulatory outcome, is "drop".
 
@@ -695,7 +704,7 @@ Articles to classify:
 {article_list}
 
 Return ONLY a JSON array, no markdown, no explanation. Exactly this format:
-[{{"id": 1, "actor": "Russia", "action": "military_action", "object": "residential building in Kyiv", "place": "Ukraine", "event_time": "2026-09-20", "new_fact": "Russia launched an overnight drone strike on a residential building in Kyiv, killing at least 4 people.", "bucket": "geo"}}, {{"id": 2, "actor": "", "action": "market_commentary", "object": "10-year Treasury yield", "place": "United States", "event_time": "", "new_fact": "", "bucket": "macro"}}]
+[{{"article_id": 1, "actor": "Russia", "action": "military_action", "object": "residential building in Kyiv", "place": "Ukraine", "event_time": "2026-09-20", "new_fact": "Russia launched an overnight drone strike on a residential building in Kyiv, killing at least 4 people.", "bucket": "geo"}}, {{"article_id": 2, "actor": "", "action": "market_commentary", "object": "10-year Treasury yield", "place": "United States", "event_time": "", "new_fact": "", "bucket": "macro"}}, {{"article_id": 3, "actor": "United States Treasury", "action": "sanction_imposed", "object": "Iranian airlines", "place": "Iran", "event_time": "2026-09-23", "new_fact": "Treasury Secretary announced all Iranian airlines will be barred from operating starting September 23.", "bucket": "geo"}}, {{"article_id": 3, "actor": "Houthis", "action": "military_action", "object": "Perim Island", "place": "Bab el-Mandeb Strait", "event_time": "2026-09-22", "new_fact": "Houthi forces seized Perim Island, a strategic position in the Bab el-Mandeb shipping strait.", "bucket": "geo"}}]
 
 Leave actor/place/event_time as empty string "" if genuinely not determinable from the article — never guess or default to today's date."""
 
@@ -730,19 +739,23 @@ FALSE POSITIVES COST MORE THAN MISSES: you are classifying headlines for a Nasda
 
 Reject an item entirely (relevant: false, no tier) only if it fails one of the filters below on its own terms (source-vs-echo, actor test, market domain, standard exclusions, deal gate, etc.) — do not reject an item merely for being a restatement or recap; that determination has already been made upstream of this pass.
 
-M&A/PARTNERSHIP/DEAL ITEMS: apply the DEAL GATE inside the TECH/AI MEGA-DEAL RULES section below FIRST, before anything else in this section. If an item fails that gate, set relevant: false and do not assign a tier.
+CORPORATE EVENTS: apply the CORPORATE EVENTS rule below FIRST, before anything else in this section, to any item about a company (M&A, distress, capex, regulatory/legal outcome). If an item fails that rule, set relevant: false and do not assign a tier.
 
 KNOWN ARTICLE OVERRIDES — if an article matches one of these titles exactly, use the specified tier, direction, and reasoning. Do not apply your normal tiering logic to these articles:
 - "U.S.-Iran negotiations postponed as Netanyahu blasts Hezbollah over apparent attacks" → Tier 1, bearish, reasoning: "Collapse of U.S.-Iran negotiations with simultaneous military escalation — direct threat to regional stability and oil supply."
 - "U.S. Navy ends blockade of Iran's ports and coastal areas" → Tier 2, bullish, reasoning: "Naval de-escalation removes energy supply disruption risk — positive for risk sentiment."
 
-TECH / AI MEGA-DEAL RULES — applies to any article centered on one of these companies: Nvidia, Apple, Microsoft, Alphabet/Google, Amazon, Meta, Broadcom, AMD, Intel, Taiwan Semiconductor (TSM), or a comparable major AI-infrastructure player (CoreWeave-scale or larger).
+CORPORATE EVENTS — what gets a corporate item scored is WHAT HAPPENED, not deal size. A dollar threshold alone is never sufficient by itself and never necessary. Reject (relevant: false, no tier) any corporate item UNLESS one of these two paths applies:
 
-STANDARD EXCLUSIONS — CHECK THIS FIRST, BEFORE THE DEAL GATE BELOW OR ANYTHING ELSE IN THIS SECTION. Always reject (relevant: false, no tier), regardless of company size and regardless of how prominently "AI" appears in the headline: routine product launches, feature announcements, or beta/preview rollouts (a new Siri/Assistant/Copilot feature, a redesigned app or interface, a new device going on sale, an OS update); sub-$1B customer wins; minor earnings beats/misses; and normal single-company operational noise (hiring, office moves, executive changes, minor guidance tweaks). Mentioning "AI" does not exempt a story from this exclusion — only an actual M&A/partnership/capex transaction, or a regulatory/legal outcome, can clear this section at all. If the article describes what a company's product now DOES rather than a transaction, a capex commitment, or a legal/regulatory outcome, it fails here — stop, do not proceed to the DEAL GATE below.
+PATH 1 — SYSTEMIC DISTRESS, ANY SECTOR: the company is an S&P 500 or Nasdaq-100 constituent AND the event is one of: bankruptcy or Chapter 11 filing, a debt default or missed payment, a going-concern warning, accounting fraud or a major financial restatement, a bank failure or deposit run, or an emergency government rescue/bailout. These clear the gate regardless of sector or deal size — see PATH 1 TIER below for tiering.
+
+PATH 2 — TECH / AI MEGA-DEAL RULES (existing rule, unchanged) — applies to any article centered on one of these companies: Nvidia, Apple, Microsoft, Alphabet/Google, Amazon, Meta, Broadcom, AMD, Intel, Taiwan Semiconductor (TSM), or a comparable major AI-infrastructure player (CoreWeave-scale or larger).
+
+STANDARD EXCLUSIONS — CHECK THIS FIRST, BEFORE PATH 2's DEAL GATE BELOW OR ANYTHING ELSE IN THIS SECTION. Always reject (relevant: false, no tier), regardless of company size and regardless of how prominently "AI" appears in the headline: routine product launches, feature announcements, or beta/preview rollouts (a new Siri/Assistant/Copilot feature, a redesigned app or interface, a new device going on sale, an OS update); sub-$1B customer wins; minor earnings beats/misses; and normal single-company operational noise (hiring, office moves, executive changes, minor guidance tweaks). Mentioning "AI" does not exempt a story from this exclusion — only an actual M&A/partnership/capex transaction, or a regulatory/legal outcome, can clear this section at all. If the article describes what a company's product now DOES rather than a transaction, a capex commitment, or a legal/regulatory outcome, it fails here — stop, do not proceed to the DEAL GATE below.
 
 Example — REJECT under this exclusion: "Apple releases test of redesigned Siri AI before iPhone 18 hits stores this week." A product feature rollout ahead of a device launch — no acquisition, no capex figure, no regulatory action. relevant: false, despite naming a priority company and mentioning "AI."
 
-DEAL GATE (replaces the old $2B floor for M&A/partnership/minority-stake items only — a hyperscaler's own capex/guidance print from an earnings call or investor update is a different category, still governed by the locked capex rule elsewhere, and bypasses this gate entirely):
+PATH 2 DEAL GATE (replaces the old $2B floor for M&A/partnership/minority-stake items only, and ONLY for the named tech/AI-infrastructure companies above — a hyperscaler's own capex/guidance print from an earnings call or investor update is a different category, still governed by the locked capex rule elsewhere, and bypasses this gate entirely):
 
 OUT — relevant: false, no tier: any M&A/partnership/minority-stake commitment under $20B (unless it's a hyperscaler capex/guidance print, which doesn't use this gate at all).
 
@@ -756,9 +769,16 @@ AMD, TSM, Intel, and Apple do NOT get the automatic $20B line — only the $50B-
 
 Calibration, not exact-match overrides — reason from the rule, not these specific numbers: a ~$13B software/AI-startup purchase by a single mega-cap buyer is OUT (below $20B, a stock story, not a regime move). A ~$32B or ~$20B confirmed acquisition by one of the six named buyers is LIVE. A ~$40B infrastructure consortium deal is OUT under both tests (no single buyer clears $20B, and $40B misses the $50B infrastructure line). An ~$80B confirmed infrastructure/chip-producer takeout is LIVE under the $50B-any-buyer line regardless of buyer.
 
+NEVER apply this Path 2 dollar-threshold gate to a company outside its named list — a non-tech corporate item (a media merger, an antitrust settlement, a non-tech guidance cut or profit warning) is rejected under CORPORATE EVENTS above for failing BOTH paths, not tiered against these dollar figures, no matter how large. A large non-tech merger or settlement is relevant: false even at $100B+.
+
 SOURCE PRIORITY: Prefer information from a press release or SEC filing first, an earnings call or investor update second, and Tier-1 financial media (Reuters, Bloomberg, WSJ, CNBC breaking coverage) third. Discount unconfirmed reports, analyst speculation, or secondary outlets restating another outlet's story.
 
-TIER FOR DEALS THAT CLEAR THE GATE ABOVE (use in place of the geopolitical tier definitions in DECISION 5 for this category; a deal that fails the gate is never tiered at all — Tier 3 is not a landing spot for a gate failure. A capex beat keeps its own separate tier treatment below, not this section):
+PATH 1 TIER — SYSTEMIC DISTRESS (use for items clearing PATH 1 above; not the geopolitical tier definitions in DECISION 5, and not the Path 2 tier table below):
+Tier 1: a filed/confirmed bankruptcy or Chapter 11, a confirmed default or missed payment, confirmed accounting fraud, or a confirmed bank failure/deposit run at a major index constituent — the event has actually happened, not merely warned about.
+Tier 2: a going-concern warning, a credible near-term default risk not yet triggered, or an emergency government rescue that is itself still being negotiated/authorized rather than finalized.
+Tier 3: not used for Path 1 — an item this uncertain about whether real distress occurred should fail PATH 1 entirely (relevant: false) rather than land here.
+
+PATH 2 TIER — TECH/AI DEALS THAT CLEAR THE GATE ABOVE (use in place of the geopolitical tier definitions in DECISION 5 for this category; a deal that fails the gate is never tiered at all — Tier 3 is not a landing spot for a gate failure. A capex beat keeps its own separate tier treatment below, not this section):
 Tier 1: an immediate, clear index-level catalyst — a finalized, signed transformative takeout with a stated close path, or a comparable unambiguous done-deal.
 Tier 2: material but still contingent — announced but not yet closed, a regulator still ahead, or "getting close" language from a primary actor plus a confirming third party.
 Tier 3: the deal itself is confirmed (buyer, target, and size disclosed via a real press release/8-K/earnings call — the gate's confirmation requirement is already satisfied), but the article is otherwise thin — single-outlet coverage of that disclosure with no additional corroboration yet, or the disclosure itself is a brief/preliminary announcement without full deal terms. Tier 3 always means "confirmed but under-specified," never "unconfirmed."
@@ -903,7 +923,8 @@ Key rule: A confirmed bearish event with clear direction scores LOW uncertainty 
 DECISION 5 — TIER CLASSIFICATION
 Classify the magnitude of this event's market impact into one of three tiers, using the full article context — not headline keywords.
 
-For tech/AI mega-deal articles, use the TIER CLASSIFICATION FOR TECH/AI MEGA-DEALS section above instead of the definitions below.
+For a Path 1 systemic-distress corporate item, use the PATH 1 TIER — SYSTEMIC DISTRESS section above instead of the definitions below.
+For a Path 2 tech/AI mega-deal article, use the PATH 2 TIER — TECH/AI DEALS section above instead of the definitions below.
 For mega-cap regulatory/legal outcome articles, use the TIER CLASSIFICATION FOR MEGA-CAP REGULATORY/LEGAL OUTCOMES section above instead of the definitions below.
 
 Tier 1 (±1.7): Active war or escalation between major powers, nuclear threats/incidents, major confirmed peace deals or ceasefires that meaningfully reduce geopolitical risk, or credible major supply disruptions (e.g. Hormuz closure threat).
@@ -952,22 +973,75 @@ Articles to classify:
             )
         return 'macro'
 
+    # Fix C (Grok 2026-09-23 review): kind=first_print with a reason that
+    # says the event was already known/announced is a self-contradiction —
+    # caught as a post-check on the FINAL result dict, not left to the
+    # prompt alone. Seed phrase family, grows the same way other phrase
+    # lists in this project do.
+    ALREADY_KNOWN_REASON_PATTERN = re.compile(
+        r'already\s+(announced|known|confirmed|reported|scored|covered|priced\s+in|disclosed)'
+        r'|previously\s+(announced|reported|disclosed)'
+        r'|restat(e|es|ed|ing|ement)'
+        r'|recap\s+of'
+        r'|reaction\s+to\s+(an?\s+)?already',
+        re.IGNORECASE,
+    )
+
+    def _event_time_is_stale_or_invalid(self, event_time_str):
+        """Fix D (Grok 2026-09-23 review): stale/missing event_time is
+        STORE LAW, enforced here in code, not left as a prompt hint Haiku
+        can ignore. Returns True if event_time_str is unparseable OR more
+        than 48h in the past relative to now — either way the event
+        cannot claim first_print. Fails CLOSED on a bad/ambiguous date,
+        same reasoning as _pin_is_expired()/is_article_too_old() elsewhere
+        in this project: an unparseable date must never silently grant a
+        fresh 48h scoring window."""
+        date_str = (event_time_str or '').strip()[:10]
+        if not date_str:
+            return True
+        try:
+            event_dt = self.timezone.localize(datetime.strptime(date_str, '%Y-%m-%d'))
+        except Exception:
+            return True
+        now = datetime.now(self.timezone)
+        age_hours = (now - event_dt).total_seconds() / 3600
+        return age_hours > 48
+
     def classify_relevance_batch_v2(self, articles):
         """Orchestration for the two-pass structural rewrite. Standalone —
         NOT called by fetch_news() yet (see the module-level comment
-        above). For each article: Pass A extracts identity fields and a
-        coarse bucket; code computes the canonicalized event_id and looks
-        it up in the event store; a store HIT (or a failed/incomplete
-        extraction) resolves to kind=follow_up, score 0, no Pass B call
-        at all; a genuine MISS with bucket="geo" claims the event_id as
-        first_print and runs Pass B for tier/direction/confidence, then
-        fills in score_applied. bucket != "geo" (macro/ec/drop) never
-        reaches Pass B regardless of store outcome — this is what cuts
-        Haiku calls/cost for every recap and off-topic item per the spec.
+        above). Pass A extracts one or MORE identity+bucket rows per
+        article (see the ONE EXTRACT PER ACTION rule in
+        _build_pass_a_prompt() — Fix B, Grok 2026-09-23 review: a single
+        article can report several independent actions by different
+        actors, and each gets its own identity/event_id, not one merged
+        extraction for the whole article). For each extract: code
+        computes the canonicalized event_id and looks it up in the event
+        store; a store HIT, a stale/invalid event_time (Fix D), or a
+        failed/incomplete extraction resolves to kind=follow_up or drop,
+        score 0, no Pass B call; a genuine MISS with bucket="geo" and a
+        fresh event_time claims the event_id as first_print and queues
+        for Pass B (tier/direction/confidence), then fills in
+        score_applied. bucket != "geo" (macro/ec/drop) never reaches Pass
+        B regardless of store outcome — the cost-saving cut.
 
-        Returns a list of dicts, one per input article, each already
-        carrying kind/bucket/event_id and — for first_print+geo items —
-        the full Pass B classification fields merged in.
+        OUTPUT CONTRACT, enforced unconditionally on every result before
+        return (Fix A, Grok 2026-09-23 review): kind="follow_up" with a
+        null event_id is illegal — never emitted. Anything that would
+        produce that combination is forced to kind="drop" instead, logged
+        as a WARNING naming the headline. This is enforced here, on the
+        final dict leaving this function, not only inside the prompt —
+        a defensive backstop even where the branches above already avoid
+        producing it. Fix C (same review) is enforced in the same final
+        pass: kind="first_print" paired with a reason from the
+        "already known/announced" family is a contradiction — forced to
+        follow_up (if an event_id exists) or drop, logged.
+
+        Returns a list of dicts, one per EXTRACT (an article with N real
+        actions now produces up to N+ rows, not one) — each carrying
+        headline/actor/action/object/place/event_time/bucket/kind/
+        event_id and, for first_print+geo extracts, the full Pass B
+        classification fields merged in.
         """
         if not articles:
             return []
@@ -982,7 +1056,19 @@ Articles to classify:
             pass_a_list += f"{i+1}. TITLE: {article['headline']}\n   FULL TEXT: {article['_full_text']}\n\n"
         pass_a_prompt = self._build_pass_a_prompt(pass_a_list)
         pass_a_results = self._call_haiku_classify(pass_a_prompt, article_count=len(articles))
-        pass_a_by_id = {r.get('id'): r for r in pass_a_results if isinstance(r, dict)}
+
+        # Fix B — group by article_id into a LIST, not a dict keyed by id
+        # (which would silently drop every extract but the last one for a
+        # multi-action article). Falls back to the legacy 'id' key so a
+        # Pass A response that (incorrectly) still uses the old single-
+        # extract schema degrades to "one extract per article" instead of
+        # being silently discarded entirely.
+        pass_a_by_article = {}
+        for r in pass_a_results:
+            if not isinstance(r, dict):
+                continue
+            article_id = r.get('article_id', r.get('id'))
+            pass_a_by_article.setdefault(article_id, []).append(r)
 
         results = []
         pass_b_indices = []       # indices into `results` needing a Pass B call
@@ -990,73 +1076,104 @@ Articles to classify:
         pass_b_n = 0
 
         for i, article in enumerate(articles):
-            extraction = pass_a_by_id.get(i + 1)
+            extracts = pass_a_by_article.get(i + 1, [])
 
             # RULE 3 — DEFAULT TO FOLLOW_UP, FIRST PRINT IS EARNED: a
-            # missing/failed extraction never defaults to first_print.
-            if not extraction:
+            # missing/failed extraction never defaults to first_print. An
+            # article Pass A found NOTHING extractable in resolves to
+            # drop (not follow_up+null — see the OUTPUT CONTRACT above),
+            # since there is no action here to ever fold a later article
+            # into anyway.
+            if not extracts:
                 results.append({
                     'headline': article.get('headline', ''),
-                    'kind': 'follow_up', 'bucket': 'drop', 'event_id': None,
-                    'relevant': False, 'reason': 'Pass A extraction failed or missing for this item',
+                    'kind': 'drop', 'bucket': 'drop', 'event_id': None,
+                    'relevant': False, 'reason': 'Pass A extraction failed or found no extractable action for this item',
                 })
                 continue
 
-            actor = extraction.get('actor', '')
-            action = extraction.get('action', '')
-            obj = extraction.get('object', '')
-            place = extraction.get('place', '')
-            event_time = extraction.get('event_time', '')
-            new_fact = (extraction.get('new_fact') or '').strip()
-            bucket = self._code_side_bucket_override(article, extraction)
+            for extraction in extracts:
+                actor = extraction.get('actor', '')
+                action = extraction.get('action', '')
+                obj = extraction.get('object', '')
+                place = extraction.get('place', '')
+                event_time = extraction.get('event_time', '')
+                new_fact = (extraction.get('new_fact') or '').strip()
+                bucket = self._code_side_bucket_override(article, extraction)
 
-            base = {
-                'headline': article.get('headline', ''), 'actor': actor, 'action': action,
-                'object': obj, 'place': place, 'event_time': event_time, 'bucket': bucket,
-            }
+                base = {
+                    'headline': article.get('headline', ''), 'actor': actor, 'action': action,
+                    'object': obj, 'place': place, 'event_time': event_time, 'bucket': bucket,
+                }
 
-            if not new_fact:
-                # No new fact asserted — default to follow_up regardless of
-                # bucket or store state. Still compute event_id where
-                # possible so a later genuine new_fact about this same
-                # event has something to have matched against, but this
-                # item itself never claims first_print.
-                base.update({'kind': 'follow_up', 'event_id': compute_event_id(actor, action, place, event_time), 'relevant': False})
+                if not new_fact:
+                    # No new fact asserted for THIS extract — default to
+                    # follow_up if an identity is still computable (so a
+                    # later genuine new_fact about the same event has
+                    # something to match against), else drop per the
+                    # OUTPUT CONTRACT (never follow_up+null).
+                    eid = compute_event_id(actor, action, place, event_time)
+                    base.update({'kind': 'follow_up' if eid else 'drop', 'event_id': eid, 'relevant': False})
+                    results.append(base)
+                    continue
+
+                if bucket != 'geo':
+                    # macro/ec/drop never reaches Pass B or the event
+                    # store, regardless of new_fact — the cost-saving cut.
+                    # No event_id is ever computed for a non-geo bucket,
+                    # so this is drop, not follow_up (OUTPUT CONTRACT).
+                    base.update({'kind': 'drop', 'event_id': None, 'relevant': False})
+                    results.append(base)
+                    continue
+
+                event_id = compute_event_id(actor, action, place, event_time)
+                if event_id is None:
+                    # Missing actor/place/event_time despite a stated
+                    # new_fact — cannot establish identity. Drop, not
+                    # follow_up (Fix D: missing event_time is store law —
+                    # there is no id for a later article to fold into).
+                    base.update({'kind': 'drop', 'event_id': None, 'relevant': False,
+                                 'reason': 'Incomplete extraction (actor/place/event_time) — cannot establish event identity'})
+                    results.append(base)
+                    continue
+
+                # Fix D — stale/invalid event_time is store law, checked
+                # in code BEFORE any store lookup/write or Pass B call.
+                # The identity is real (event_id is non-null) so this is
+                # follow_up, not drop — just not eligible to claim a
+                # fresh first_print window.
+                if self._event_time_is_stale_or_invalid(event_time):
+                    base.update({'kind': 'follow_up', 'event_id': event_id, 'relevant': False,
+                                 'reason': f'event_time {event_time!r} is stale (>48h) or unparseable — cannot first_print'})
+                    results.append(base)
+                    continue
+
+                existing = event_store.lookup(event_id)
+                if existing is not None:
+                    base.update({'kind': 'follow_up', 'event_id': event_id, 'relevant': False,
+                                 'reason': f'Matches already-scored event {event_id} (first seen {existing.get("first_seen", "")})'})
+                    results.append(base)
+                    continue
+
+                # Genuine miss, bucket=geo, real new_fact, fresh
+                # event_time — claim the identity now (two-step write,
+                # see event_store.py) and queue for Pass B.
+                event_store.record_first_print(event_id, actor, action, place, event_time)
+                base.update({'kind': 'first_print', 'event_id': event_id})
                 results.append(base)
-                continue
-
-            if bucket != 'geo':
-                # macro/ec/drop never reaches Pass B or the event store,
-                # regardless of new_fact — this is the cost-saving cut.
-                base.update({'kind': 'follow_up', 'event_id': None, 'relevant': False})
-                results.append(base)
-                continue
-
-            event_id = compute_event_id(actor, action, place, event_time)
-            if event_id is None:
-                # Missing actor/place/event_time despite a stated new_fact
-                # — cannot establish identity, fails closed to follow_up
-                # per rule 3 rather than risking a loose/no-op hash.
-                base.update({'kind': 'follow_up', 'event_id': None, 'relevant': False,
-                             'reason': 'Incomplete extraction (actor/place/event_time) — cannot establish event identity'})
-                results.append(base)
-                continue
-
-            existing = event_store.lookup(event_id)
-            if existing is not None:
-                base.update({'kind': 'follow_up', 'event_id': event_id, 'relevant': False,
-                             'reason': f'Matches already-scored event {event_id} (first seen {existing.get("first_seen", "")})'})
-                results.append(base)
-                continue
-
-            # Genuine miss, bucket=geo, real new_fact — claim the identity
-            # now (two-step write, see event_store.py) and queue for Pass B.
-            event_store.record_first_print(event_id, actor, action, place, event_time)
-            base.update({'kind': 'first_print', 'event_id': event_id})
-            results.append(base)
-            pass_b_indices.append(i)
-            pass_b_n += 1
-            pass_b_article_list += f"{pass_b_n}. TITLE: {article['headline']}\n   FULL TEXT: {article['_full_text']}\n\n"
+                result_idx = len(results) - 1
+                pass_b_indices.append(result_idx)
+                pass_b_n += 1
+                # FOCUS line lets Pass B judge the SPECIFIC action this
+                # extract is about, not just whatever's most prominent in
+                # the shared article text — needed now that the same
+                # article can appear multiple times in this list, once
+                # per queued extract (Fix B).
+                pass_b_article_list += (
+                    f"{pass_b_n}. TITLE: {article['headline']}\n"
+                    f"   FOCUS ON THIS SPECIFIC ACTION: {new_fact}\n"
+                    f"   FULL TEXT: {article['_full_text']}\n\n"
+                )
 
         if pass_b_indices:
             pass_b_prompt = self._build_pass_b_prompt(pass_b_article_list)
@@ -1104,7 +1221,43 @@ Articles to classify:
                 tier_applied = pb.get('tier') if pb.get('relevant') else None
                 event_store.update_score_applied(results[result_idx]['event_id'], tier_applied)
 
+        self._enforce_output_contract(results)
         return results
+
+    def _enforce_output_contract(self, results):
+        """OUTPUT CONTRACT ENFORCEMENT (Fixes A and C, Grok 2026-09-23
+        review) — mutates `results` in place, runs on every result
+        unconditionally regardless of which branch produced it. This is
+        the actual backstop the spec calls for ("enforce at the output
+        contract, not only inside the prompt"), factored into its own
+        method specifically so it's independently unit-testable as a real
+        backstop — not just something the upstream branches are already
+        supposed to guarantee and that this can only be exercised
+        indirectly through them."""
+        for r in results:
+            # Fix C first: a first_print whose reason says the event was
+            # already known/announced is self-contradictory — correct the
+            # kind before Fix A evaluates it, since forcing to follow_up
+            # here can itself need Fix A's null-event_id check right after.
+            if r.get('kind') == 'first_print':
+                reason_text = r.get('reason') or ''
+                if self.ALREADY_KNOWN_REASON_PATTERN.search(reason_text):
+                    corrected = 'follow_up' if r.get('event_id') else 'drop'
+                    pulse_logger.log(
+                        f"⚠️ Kind/reason contradiction — {r.get('headline', '')[:60]!r} was first_print "
+                        f"but reason {reason_text[:100]!r} matches the already-known family — forcing {corrected}",
+                        level="WARNING"
+                    )
+                    r['kind'] = corrected
+
+            # Fix A: follow_up with a null event_id is illegal, full stop.
+            if r.get('kind') == 'follow_up' and r.get('event_id') is None:
+                pulse_logger.log(
+                    f"⚠️ Output-contract violation caught — {r.get('headline', '')[:60]!r} was "
+                    f"follow_up with a null event_id (illegal) — forcing drop",
+                    level="WARNING"
+                )
+                r['kind'] = 'drop'
 
     def _run_shadow_classification(self, new_items, real_classifications):
         """Shadow/dry-run mode for validating Stage 3 (classify_relevance_batch_v2)

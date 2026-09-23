@@ -103,6 +103,11 @@ ACTION_CATEGORIES = (
     'rate_decision',         # central bank rate decisions/announcements
     'economic_data',         # scheduled data releases (jobs, CPI, PMI, etc.)
     'market_commentary',     # feature/synthesis/analysis/price-tape framing
+    'corporate_distress',    # bankruptcy/Chapter 11, default, going-concern warning,
+                             # accounting fraud, bank failure/deposit run, emergency
+                             # government rescue — added for the corporate-events
+                             # PATH 1 policy (2026-09-23); no prior category covered
+                             # this action space at all.
     'other',
 )
 
