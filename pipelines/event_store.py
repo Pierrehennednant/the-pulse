@@ -5,8 +5,8 @@ a real record of what's already been scored, so the dedup decision lives
 in code against actual state instead of inside a single article's text.
 
 Schema per record:
-  event_id, actor, action, place, object, event_time, first_seen,
-  record_kind, score_applied
+  event_id, actor, action, place, object, object_key, event_time,
+  first_seen, record_kind, score_applied
 
 NAMING NOTE, added after an audit flagged the collision: this schema's
 field was originally named plain 'kind', matching the spec's field list
@@ -59,6 +59,7 @@ from datetime import datetime, timezone
 
 from utils.file_lock import atomic_write_json
 from utils.logger import pulse_logger
+from pipelines.event_canon import canonical_fields, is_same_event, coarse_key
 
 EVENT_STORE_FILE = '/data/geo_event_store.json'
 EVENT_TTL_HOURS = 48
@@ -121,7 +122,7 @@ class EventStore:
             return None
         return self._prune_expired().get(event_id)
 
-    def record_first_print(self, event_id, actor, action, place, event_time, obj=None):
+    def record_first_print(self, event_id, actor, action, place, event_time, obj=None, object_key=None):
         """Claim a new event identity as first_print. Called immediately
         on a store-miss, BEFORE Pass B has produced a score — see the
         module docstring's "two-step write" note. score_applied starts
@@ -143,6 +144,9 @@ class EventStore:
             # place/date. None on records claimed before this field existed
             # ("object unknown").
             'object': obj,
+            # Canonical key-noun tokens of `object` (event_canon.object_key),
+            # what the over-merge guard compares. None = object unknown.
+            'object_key': list(object_key) if object_key else None,
             'event_time': event_time,
             'first_seen': datetime.now(timezone.utc).isoformat(),
             'record_kind': 'first_print',
@@ -152,6 +156,46 @@ class EventStore:
         pulse_logger.log(
             f"📌 Event store — first_print claimed | {event_id} | {actor} / {action} / {place} @ {event_time}"
         )
+
+    @staticmethod
+    def _record_canon(record):
+        return canonical_fields(
+            record.get('actor', ''), record.get('action', ''), record.get('place', ''),
+            record.get('event_time', ''), record.get('object'), record.get('object_key'),
+        )
+
+    def find_match(self, canon):
+        """LOOKUP. Scan live (non-expired) records for one that is the same
+        event as `canon` under event_canon.is_same_event(). Linear scan —
+        the store is small. Legacy records are re-canonicalized with the
+        current rules from their raw fields. Returns the earliest-first_seen
+        match, or None. Deterministic; no model involved."""
+        matches = []
+        for record in self._prune_expired().values():
+            ok, _reason = is_same_event(canon, self._record_canon(record))
+            if ok:
+                matches.append(record)
+        if not matches:
+            return None
+        return min(matches, key=lambda r: r.get('first_seen', ''))
+
+    def mint_id(self, canon, base_id):
+        """A new event_id for a claim find_match() found no match for.
+        Normally the coarse-key hash; if that id is already taken by a
+        DIFFERENT event (same coarse key, rejected by the over-merge guard —
+        spec test 7), extend the key with the object tokens so the two stay
+        separate ids instead of overwriting each other."""
+        records = self._prune_expired()
+        if base_id not in records:
+            return base_id
+        import hashlib
+        extended = f"{coarse_key(canon)}|{'+'.join(canon['object_key'] or ())}"
+        n = 0
+        while True:
+            candidate = hashlib.sha256(f"{extended}|{n}".encode('utf-8')).hexdigest()[:24]
+            if candidate not in records:
+                return candidate
+            n += 1
 
     def update_score_applied(self, event_id, score):
         """Fill in score_applied once Pass B has actually scored the

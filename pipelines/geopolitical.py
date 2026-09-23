@@ -17,7 +17,7 @@ from utils.retry import fetch_with_retry
 from utils.cache import cache
 from utils.logger import pulse_logger
 from utils.error_handler import error_handler
-from pipelines.event_canon import ACTION_CATEGORIES, compute_event_id
+from pipelines.event_canon import ACTION_CATEGORIES, compute_event_id, canonical_fields, action_family
 from pipelines.event_store import event_store
 
 MAX_ARTICLE_AGE_HOURS = 48
@@ -689,15 +689,15 @@ For each extract, give:
     "geo" — a geopolitical event, Fed/central-bank action or commentary, government/regulatory action, a corporate event meeting PATH 1 or PATH 2 of the CORPORATE EVENTS rule below, energy/trade/sanctions action, or any other development that could move NQ/ES risk appetite through something real, specific, and actionable.
     "macro" — broad market-tape commentary, price-level/yield/index-move description, or "how markets reacted" framing with no new discrete event of its own (see the PRICE-MOVE PATTERN below).
     "ec" — the article is substantively ABOUT a regularly scheduled, calendar-tracked economic release or Fed decision (jobs report, CPI, PMI, FOMC meeting/press conference/statement) rather than an independent geopolitical development — this dashboard's Economic Calendar pillar already tracks these separately.
-    "drop" — not market-relevant at all: lifestyle, personal finance, celebrity/investor commentary, prediction-market odds, consumer shopping content, single-company HR/operational news, vibes/sentiment pieces with no specific actionable event, a company merely reacting to (not causing) a macro event, or a corporate event that fails the CORPORATE EVENTS rule below.
+    "drop" — not market-relevant at all: lifestyle, personal finance, celebrity/investor commentary, prediction-market odds, consumer shopping content, single-company HR/operational news, vibes/sentiment pieces with no specific actionable event, a company merely reacting to (not causing) a macro event, a corporate event that fails the CORPORATE EVENTS rule below, or a domestic agency's enforcement action against individual companies, hospitals, insurers or providers (e.g. a Medicare/Medicaid penalty, a state attorney general settlement) — that is regulatory enforcement, not a sanction in the geopolitical sense; "sanction_imposed" is for state-level sanctions on a country, government, or its entities.
 
 PRICE-MOVE / MARKET-TAPE PATTERN — route to "macro", not "geo": an extract primarily describing yields, VIX, oil settle prices, or other index/price levels moving, or framed as "live updates:" / "markets today:" tape coverage, with no NEW discrete event of its own stated as happening today — even if it mentions geopolitical causes in passing. If the real subject is how the tape moved rather than what specific new thing happened, it's macro, not geo, regardless of which words appear in it. This never overrides a genuine separate action extract found elsewhere in the same article — the tape framing and a real embedded action are different extracts with different buckets.
 
 CORPORATE EVENTS — what gets a corporate item into "geo" is WHAT HAPPENED, not deal size. A dollar threshold alone is never sufficient by itself and never necessary — route to "drop" UNLESS one of these two paths applies:
 
-PATH 1 — SYSTEMIC DISTRESS, ANY SECTOR: the company is an S&P 500 or Nasdaq-100 constituent AND the event is one of: bankruptcy or Chapter 11 filing, a debt default or missed payment, a going-concern warning, accounting fraud or a major financial restatement, a bank failure or deposit run, or an emergency government rescue/bailout. Route to "geo" — these are rare and genuinely reprice risk appetite regardless of sector or deal size.
+PATH 1 — SYSTEMIC DISTRESS, ANY SECTOR: the company is an S&P 500 or Nasdaq-100 constituent AND the event is one of: bankruptcy or Chapter 11 filing, a debt default or missed payment, a going-concern warning, accounting fraud or a major financial restatement, a bank failure or deposit run, or an emergency government rescue/bailout. Route to "geo" with action "corporate_distress" — these are rare and genuinely reprice risk appetite regardless of sector or deal size.
 
-PATH 2 — TECH / AI INFRASTRUCTURE (existing rule, unchanged): a hyperscaler's own capex/guidance print from an earnings call or investor update (Nvidia, Apple, Microsoft, Alphabet/Google, Amazon, Meta, Broadcom, AMD, Intel, TSM, or a comparable major AI-infrastructure player announcing its OWN spending plans) bypasses the deal-size test below entirely — route to "geo", size is not the gate for a company's own capex disclosure. For an M&A/partnership/minority-stake extract about one of those same companies (i.e. a deal with ANOTHER party, not the company's own capex), route to "drop" unless the dollar figure is confirmed by an actual press release, SEC filing, or earnings call/investor update (not merely anonymous-sourced reporting) AND either (a) the buyer is Nvidia/Microsoft/Alphabet/Amazon/Meta/Broadcom with a confirmed value of $20B or more, or (b) the transaction is a compute/foundry/networking/AI-energy/data-center deal of $50B or more regardless of buyer. A confirmed deal below these lines still routes to "drop" — it's a stock story, not a regime move.
+PATH 2 — TECH / AI INFRASTRUCTURE (existing rule, unchanged): a hyperscaler's own capex/guidance print from an earnings call or investor update (Nvidia, Apple, Microsoft, Alphabet/Google, Amazon, Meta, Broadcom, AMD, Intel, TSM, or a comparable major AI-infrastructure player announcing its OWN spending plans) bypasses the deal-size test below entirely — route to "geo" with action "corporate_deal", size is not the gate for a company's own capex disclosure. A Path 2 deal that clears the test below also uses action "corporate_deal". For an M&A/partnership/minority-stake extract about one of those same companies (i.e. a deal with ANOTHER party, not the company's own capex), route to "drop" unless the dollar figure is confirmed by an actual press release, SEC filing, or earnings call/investor update (not merely anonymous-sourced reporting) AND either (a) the buyer is Nvidia/Microsoft/Alphabet/Amazon/Meta/Broadcom with a confirmed value of $20B or more, or (b) the transaction is a compute/foundry/networking/AI-energy/data-center deal of $50B or more regardless of buyer. A confirmed deal below these lines still routes to "drop" — it's a stock story, not a regime move.
 
 EVERYTHING ELSE CORPORATE routes to "drop", regardless of dollar size — this explicitly includes M&A, antitrust settlements, partnerships, earnings results, guidance cuts, and profit warnings outside Path 1 or Path 2. A large dollar figure alone (a media merger, an antitrust settlement, a guidance cut, a profit warning) does NOT clear this on its own — only Path 1 (systemic distress at a major index constituent) or Path 2 (the specific tech/AI infrastructure rule above) does. Never apply the Path 2 dollar thresholds to a company outside its named list, no matter how large the deal is — a large non-tech merger or settlement is "drop" even at $100B+.
 
@@ -1185,13 +1185,25 @@ Articles to classify:
                     base['event_time_note'] = event_time_note
                     base['event_time_raw'] = raw_event_time
 
+                # FIELD 2 family map: market_commentary / economic_data /
+                # other are never Geo — no id, never stored, whatever
+                # bucket Pass A chose. Enforced in code, not the prompt.
+                if action_family(action) is None:
+                    base.update({'kind': 'drop', 'event_id': None, 'relevant': False,
+                                 'reason': f'action {action!r} is never Geo (family map) — not stored'})
+                    results.append(base)
+                    continue
+
+                canon = canonical_fields(actor, action, place, event_time, obj)
+                own_id = compute_event_id(actor, action, place, event_time, obj)
+
                 if not new_fact:
-                    # No new fact asserted for THIS extract — default to
-                    # follow_up if an identity is still computable (so a
-                    # later genuine new_fact about the same event has
-                    # something to match against), else drop per the
-                    # OUTPUT CONTRACT (never follow_up+null).
-                    eid = compute_event_id(actor, action, place, event_time)
+                    # No new fact for THIS extract — follow_up to the event
+                    # it restates if the store has it, else to its own
+                    # identity; drop if no identity can be formed (OUTPUT
+                    # CONTRACT: never follow_up+null).
+                    match = event_store.find_match(canon) if own_id else None
+                    eid = match['event_id'] if match else own_id
                     base.update({'kind': 'follow_up' if eid else 'drop', 'event_id': eid, 'relevant': False})
                     results.append(base)
                     continue
@@ -1205,8 +1217,7 @@ Articles to classify:
                     results.append(base)
                     continue
 
-                event_id = compute_event_id(actor, action, place, event_time)
-                if event_id is None:
+                if own_id is None:
                     # Missing actor/place/event_time despite a stated
                     # new_fact — cannot establish identity. Drop, not
                     # follow_up (Fix D: missing event_time is store law —
@@ -1216,28 +1227,34 @@ Articles to classify:
                     results.append(base)
                     continue
 
+                # LOOKUP before minting (four-field canon): tolerant scan
+                # of the store — actor subset, +/-1 day, venue vs home
+                # place, and the over-merge guard on the object. Runs
+                # BEFORE the staleness check so a late recap folds into
+                # the original event's id rather than getting its own.
+                match = event_store.find_match(canon)
+                if match is not None:
+                    base.update({'kind': 'follow_up', 'event_id': match['event_id'], 'relevant': False,
+                                 'reason': f"Matches already-scored event {match['event_id']} (first seen {match.get('first_seen', '')})"})
+                    results.append(base)
+                    continue
+
                 # Fix D — stale/invalid event_time is store law, checked
-                # in code BEFORE any store lookup/write or Pass B call.
-                # The identity is real (event_id is non-null) so this is
-                # follow_up, not drop — just not eligible to claim a
-                # fresh first_print window.
+                # in code before any store write or Pass B call. The
+                # identity is real so this is follow_up, not drop — just
+                # not eligible to claim a fresh first_print window.
                 if self._event_time_is_stale_or_invalid(event_time):
-                    base.update({'kind': 'follow_up', 'event_id': event_id, 'relevant': False,
+                    base.update({'kind': 'follow_up', 'event_id': own_id, 'relevant': False,
                                  'reason': f'event_time {event_time!r} is stale (>48h) or unparseable — cannot first_print'})
                     results.append(base)
                     continue
 
-                existing = event_store.lookup(event_id)
-                if existing is not None:
-                    base.update({'kind': 'follow_up', 'event_id': event_id, 'relevant': False,
-                                 'reason': f'Matches already-scored event {event_id} (first seen {existing.get("first_seen", "")})'})
-                    results.append(base)
-                    continue
-
                 # Genuine miss, bucket=geo, real new_fact, fresh
-                # event_time — claim the identity now (two-step write,
-                # see event_store.py) and queue for Pass B.
-                event_store.record_first_print(event_id, actor, action, place, event_time, obj=obj)
+                # event_time — mint (collision-safe, see mint_id) and claim
+                # the identity now (two-step write), then queue for Pass B.
+                event_id = event_store.mint_id(canon, own_id)
+                event_store.record_first_print(event_id, actor, action, place, event_time,
+                                               obj=obj, object_key=canon['object_key'])
                 base.update({'kind': 'first_print', 'event_id': event_id})
                 results.append(base)
                 result_idx = len(results) - 1

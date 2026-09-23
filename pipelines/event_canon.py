@@ -103,6 +103,9 @@ ACTION_CATEGORIES = (
     'rate_decision',         # central bank rate decisions/announcements
     'economic_data',         # scheduled data releases (jobs, CPI, PMI, etc.)
     'market_commentary',     # feature/synthesis/analysis/price-tape framing
+    'corporate_deal',        # Path 2 only: tech/AI-infrastructure M&A, partnership,
+                             # or a hyperscaler's own capex commitment. Needed because
+                             # 'other' is never stored as Geo under the family map.
     'corporate_distress',    # bankruptcy/Chapter 11, default, going-concern warning,
                              # accounting fraud, bank failure/deposit run, emergency
                              # government rescue — added for the corporate-events
@@ -134,6 +137,8 @@ ALIASES = {
     # United States
     'white house': 'united_states', 'washington': 'united_states',
     'trump administration': 'united_states', 'trump': 'united_states',
+    'donald trump': 'united_states', 'donald trump administration': 'united_states',
+    'donald j trump': 'united_states',
     'u.s.': 'united_states', 'us': 'united_states', 'usa': 'united_states',
     'united states': 'united_states', 'america': 'united_states',
 
@@ -219,26 +224,222 @@ def normalize_action(raw_category):
     return 'other'
 
 
-def compute_event_id(actor, action_category, place, event_date_iso):
-    """event_id = hash(canonical_actor + action_category + canonical_place
-    + UTC date of event_time). Never the URL, never the headline.
+# =====================================================================
+# FOUR-FIELD CANON (cc_v2_four_field_canon, 2026-09-23)
+# Coarse key in the hash, tolerance at lookup. The hash is exact-match
+# only, so it takes coarse canonical fields; is_same_event() below does the
+# tolerant matching (actor subset, +/-1 day, venue vs home place, object
+# overlap) that a hash can't.
+# =====================================================================
 
-    Returns None if actor, place, or event_date_iso canonicalizes to
-    nothing — callers must treat that as "cannot establish identity" and
-    apply the "default to follow_up, first print is earned" rule rather
-    than hashing an incomplete key (an incomplete key is exactly the
-    "hash too loose" failure mode: two unrelated articles with the same
-    missing fields would otherwise collide)."""
-    canon_actor = normalize_entity(actor)
-    canon_place = normalize_entity(place)
-    canon_action = normalize_action(action_category)
-    date_str = (event_date_iso or '').strip()[:10]  # YYYY-MM-DD only
+# FIELD 2 — action family. The fine action stays on the record; the family
+# goes in the hash. None = never hashed as Geo, never stored.
+ACTION_FAMILIES = {
+    'military_action': 'kinetic', 'missile_test': 'kinetic', 'troop_movement': 'kinetic',
+    'strike': 'kinetic', 'seizure': 'kinetic',
+    'diplomatic_statement': 'diplomacy', 'ceasefire_or_deal': 'diplomacy', 'talks': 'diplomacy',
+    'sanction_imposed': 'sanction', 'export_control': 'sanction',
+    'trade_policy': 'trade',
+    'rate_decision': 'monetary',
+    'corporate_distress': 'distress',
+    'corporate_deal': 'corporate',
+    'market_commentary': None, 'economic_data': None, 'other': None,
+}
 
-    if not canon_actor or not canon_place or not date_str:
+# FIELD 3 — venue/byline places. A place made only of these has no
+# country and keys as VENUE_ONLY, never folded into a country.
+VENUE_ONLY = '__venue_only__'
+VENUES = frozenset({
+    'united_nations', 'un', 'united_nations_general_assembly', 'un_general_assembly',
+    'unga', 'un_security_council', 'united_nations_security_council',
+    'new_york', 'geneva', 'davos',
+})
+
+OBJECT_STOPWORDS = frozenset({
+    'a', 'an', 'the', 'of', 'on', 'in', 'to', 'for', 'with', 'and', 'or', 'at', 'by',
+    'from', 'its', 'their', 'his', 'her', 'over', 'about', 'into', 'new', 'amid',
+    'after', 'before', 'between', 'against', 'as', 'is', 'are', 'was', 'be',
+})
+_DEMONYMS = {
+    'iranian': 'iran', 'russian': 'russia', 'israeli': 'israel', 'chinese': 'china',
+    'ukrainian': 'ukraine', 'american': 'united_states', 'us': 'united_states',
+    'danish': 'denmark', 'greenlandic': 'greenland', 'saudi': 'saudi_arabia',
+    'houthi': 'houthis', 'korean': 'korea',
+}
+OBJECT_MATCH_THRESHOLD = 0.5
+DATE_TOLERANCE_DAYS = 1
+
+_SPLIT_RE = re.compile(r',|&|\band\b', re.IGNORECASE)
+
+
+def _canon_token(raw):
+    """normalize_entity() without the miss log — lookup re-canonicalizes
+    every stored record on every scan, which would otherwise flood logs."""
+    cleaned = _clean(raw)
+    if not cleaned:
+        return ''
+    for prefix in _HONORIFIC_PREFIXES:
+        if cleaned.startswith(prefix):
+            cleaned = cleaned[len(prefix):].strip()
+            break
+    return ALIASES.get(cleaned, cleaned.replace(' ', '_'))
+
+
+def action_family(action):
+    """FIELD 2. Family for an action, or None if it is never Geo."""
+    cleaned = (action or '').strip().lower().replace(' ', '_')
+    return ACTION_FAMILIES.get(cleaned)
+
+
+def actor_set(actor):
+    """FIELD 1. (sorted tuple of canonical actor slugs, primary actor).
+    Split on commas / 'and' / '&', alias each token, dedupe, sort. Primary
+    is the first-listed actor, kept for the lookup's shared-primary rule."""
+    tokens = [_canon_token(t) for t in _SPLIT_RE.split(actor or '')]
+    tokens = [t for t in tokens if t]
+    if not tokens:
+        return (), ''
+    return tuple(sorted(set(tokens))), tokens[0]
+
+
+def place_key(place):
+    """FIELD 3. Country key(s) for a place, VENUE_ONLY if every part is a
+    venue/byline, '' if empty. Raw place stays on the record."""
+    parts = [_canon_token(t) for t in _SPLIT_RE.split(place or '')]
+    parts = [t for t in parts if t]
+    if not parts:
+        return ''
+    countries = sorted({t for t in parts if t not in VENUES})
+    return '+'.join(countries) if countries else VENUE_ONLY
+
+
+def object_key(obj):
+    """Canonical key-noun tokens of the object (what the action is
+    about): lowercase, drop stopwords, map demonyms, crude singular.
+    Returns a sorted tuple, or None when the object is unknown/empty."""
+    cleaned = _clean(obj)
+    if not cleaned:
         return None
+    toks = set()
+    for t in cleaned.split():
+        if t in OBJECT_STOPWORDS:
+            continue
+        t = _DEMONYMS.get(t, t)
+        if len(t) > 3 and t.endswith('s') and not t.endswith('ss'):
+            t = t[:-1]
+        toks.add(t)
+    return tuple(sorted(toks)) or None
 
-    key = f"{canon_actor}|{canon_action}|{canon_place}|{date_str}"
+
+def object_overlap(a, b):
+    """Overlap coefficient |A∩B| / min(|A|,|B|) on object key tokens."""
+    if not a or not b:
+        return 0.0
+    a, b = set(a), set(b)
+    return len(a & b) / min(len(a), len(b))
+
+
+def canonical_fields(actor, action, place, event_time, obj=None, stored_object_key=None):
+    """All four coarse fields plus the object key, as one dict. Works the
+    same for a fresh Pass A extract and for a stored (possibly legacy)
+    record, so lookup can re-canonicalize old records with current rules."""
+    actors, primary = actor_set(actor)
+    pk = place_key(place)
+    ok = tuple(stored_object_key) if stored_object_key else object_key(obj)
+    return {
+        'actors': actors,
+        'primary': primary,
+        'family': action_family(action),
+        'place_key': pk,
+        # The place tells you nothing about WHICH event when it is a venue
+        # or just the (primary) actor's own country.
+        'uninformative_place': pk == VENUE_ONLY or (bool(pk) and pk == primary),
+        'date': (event_time or '').strip()[:10],
+        'object_key': ok,
+    }
+
+
+def coarse_key(c):
+    """The hashed key: actor set | family | place key | date."""
+    if not c['actors'] or not c['family'] or not c['place_key'] or not c['date']:
+        return None
+    return f"{'+'.join(c['actors'])}|{c['family']}|{c['place_key']}|{c['date']}"
+
+
+def compute_event_id(actor, action_category, place, event_date_iso, obj=None):
+    """event_id = hash(actor set | action family | place key | event_time
+    date). Never the URL, the headline, or first_seen; the object is NOT in
+    the hash (it's checked at lookup by the over-merge guard).
+
+    Returns None when the key can't be formed — a missing actor/place/date,
+    or an action whose family is never Geo (market_commentary,
+    economic_data, other). Callers treat None as "no identity": drop."""
+    key = coarse_key(canonical_fields(actor, action_category, place, event_date_iso, obj))
+    if key is None:
+        return None
     return hashlib.sha256(key.encode('utf-8')).hexdigest()[:24]
+
+
+def _key_discriminates(c):
+    """Without an object, can the coarse key tell events apart on its own?
+    Not for diplomacy keyed on a venue or the actor's own country — that is
+    the spec's own over-merge case ("Trump / diplomacy / united_states /
+    Sep 21" would swallow every Trump statement that day)."""
+    return not (c['family'] == 'diplomacy' and c['uninformative_place'])
+
+
+def _dates_within(d1, d2, days):
+    from datetime import date
+    try:
+        a, b = date.fromisoformat(d1), date.fromisoformat(d2)
+    except ValueError:
+        return False
+    return abs((a - b).days) <= days
+
+
+def is_same_event(new, old):
+    """LOOKUP RULE. Is `new` (canonical fields) the same event as the
+    stored `old`? Returns (bool, reason).
+
+    Always required: same family, dates within +/-1 day, and actor sets
+    compatible (one a subset of the other, or a shared primary actor).
+
+    Both objects known -> places equal, or both uninformative (venue vs the
+    actor's home datelines, spec test 4); then the OVER-MERGE GUARD: object
+    key overlap must reach OBJECT_MATCH_THRESHOLD.
+
+    Either object unknown (legacy record) -> the guard can't run, so:
+    places must be equal and the key must discriminate on its own (see
+    _key_discriminates). A new known-object claim merging into an
+    unknown-object legacy record additionally needs an EXACT match on actor
+    set and date (addendum item 2)."""
+    if not new['family'] or new['family'] != old['family']:
+        return False, 'family differs'
+    if not _dates_within(new['date'], old['date'], DATE_TOLERANCE_DAYS):
+        return False, 'date outside +/-1 day'
+    na, oa = set(new['actors']), set(old['actors'])
+    if not (na and oa and (na <= oa or oa <= na or new['primary'] == old['primary'])):
+        return False, 'actors not compatible'
+
+    new_known = new['object_key'] is not None
+    old_known = old['object_key'] is not None
+    places_equal = new['place_key'] == old['place_key']
+
+    if new_known and old_known:
+        if not (places_equal or (new['uninformative_place'] and old['uninformative_place'])):
+            return False, 'place differs'
+        overlap = object_overlap(new['object_key'], old['object_key'])
+        if overlap < OBJECT_MATCH_THRESHOLD:
+            return False, f'over-merge guard: object overlap {overlap:.2f}'
+        return True, f'object overlap {overlap:.2f}'
+
+    if not places_equal:
+        return False, 'place differs (object unknown)'
+    if not _key_discriminates(new):
+        return False, 'object unknown and key does not discriminate (diplomacy at venue/home)'
+    if new_known != old_known and (na != oa or new['date'] != old['date']):
+        return False, 'known object vs legacy record needs exact actor+date match'
+    return True, 'coarse match, object unknown, discriminating key'
 
 
 def log_canonicalization_miss(raw, cleaned):
