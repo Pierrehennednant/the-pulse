@@ -1024,10 +1024,11 @@ Articles to classify:
                 return dt.astimezone(self.timezone).strftime('%Y-%m-%d')
         return ''
 
-    def _sanitize_event_time(self, event_time, publish_date, headline=''):
+    def _sanitize_event_time(self, event_time, publish_date, headline='', article_id=None):
         """Code-side sanity check on Pass A's event_time, relative to the
         article's publish date. Returns (event_time, note) where note is
-        None, 'year_corrected', 'clamped_to_publish', or 'background_date'.
+        None, 'year_corrected', 'clamped_to_publish', 'background_date', or
+        'publish_date_fallback'.
 
         Live store dump showed Pass A guessing the YEAR when an article
         says "Tuesday" / "Sept. 23" with none (2024-09-24 / 2025-09-23 on
@@ -1041,8 +1042,40 @@ Articles to classify:
             article can't report an action from its own future).
           - more than BACKGROUND_DATE_DAYS before publish -> kept as-is
             (real recaps exist) and flagged; Fix D keeps it from ever
-            first-printing."""
-        if not event_time or not publish_date:
+            first-printing.
+
+        REAL-HAIKU VALIDATION FINDING (2026-09-23, real-Haiku CLI-engine
+        test): Pass A's own event_time extraction is not reliable run-to-
+        run on identical input — a plainly Tier-1 kinetic escalation
+        ("authorized strike ... Tuesday at 12:00 p.m. ET") left event_time
+        blank on one real run and populated on another. Previously, a
+        blank event_time was passed through unchanged here, which made
+        classify_relevance_batch_v2 treat the extraction as incomplete and
+        drop it with ZERO log trace — a real, newsworthy first_print could
+        silently vanish depending on Haiku's mood that call. Fixed: a
+        blank event_time now falls back to the article's own publish_date
+        (known independently of Pass A) instead of passing the blank
+        through to that drop path. Only a genuinely missing publish_date
+        still returns blank -> drop, same as before. Every fallback logs a
+        WARNING (previously nothing was logged on this path at all).
+        _event_time_is_stale_or_invalid() (Fix D, the >48h gate) is
+        untouched — it compares whatever event_time it's given against
+        now(), so a same-day publish_date clears it naturally; an
+        already-stale publish_date (article itself published >48h ago)
+        correctly still fails staleness after the fallback too, exactly as
+        it would for any other >48h-old event_time — that's intended, not
+        a gap this fallback needs to route around."""
+        if not event_time:
+            if publish_date:
+                pulse_logger.log(
+                    f"⚠️ event_time fallback (publish_date_fallback) — {headline[:60]!r} "
+                    f"(article_id={article_id!r}) Pass A left event_time blank, using this "
+                    f"article's publish_date {publish_date!r} instead",
+                    level="WARNING"
+                )
+                return publish_date, 'publish_date_fallback'
+            return event_time, None
+        if not publish_date:
             return event_time, None
         try:
             ev = datetime.strptime(event_time.strip()[:10], '%Y-%m-%d').date()
@@ -1171,7 +1204,8 @@ Articles to classify:
                 place = extraction.get('place', '')
                 raw_event_time = extraction.get('event_time', '')
                 event_time, event_time_note = self._sanitize_event_time(
-                    raw_event_time, self._article_publish_date(article), article.get('headline', '')
+                    raw_event_time, self._article_publish_date(article), article.get('headline', ''),
+                    article_id=extraction.get('article_id')
                 )
                 extraction = dict(extraction, event_time=event_time)
                 new_fact = (extraction.get('new_fact') or '').strip()
