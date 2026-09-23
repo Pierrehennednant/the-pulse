@@ -5,8 +5,8 @@ a real record of what's already been scored, so the dedup decision lives
 in code against actual state instead of inside a single article's text.
 
 Schema per record:
-  event_id, actor, action, place, event_time, first_seen, record_kind,
-  score_applied
+  event_id, actor, action, place, object, event_time, first_seen,
+  record_kind, score_applied
 
 NAMING NOTE, added after an audit flagged the collision: this schema's
 field was originally named plain 'kind', matching the spec's field list
@@ -121,7 +121,7 @@ class EventStore:
             return None
         return self._prune_expired().get(event_id)
 
-    def record_first_print(self, event_id, actor, action, place, event_time):
+    def record_first_print(self, event_id, actor, action, place, event_time, obj=None):
         """Claim a new event identity as first_print. Called immediately
         on a store-miss, BEFORE Pass B has produced a score — see the
         module docstring's "two-step write" note. score_applied starts
@@ -138,6 +138,11 @@ class EventStore:
             'actor': actor,
             'action': action,
             'place': place,
+            # Raw object as Pass A extracted it — the over-merge guard needs
+            # it to tell apart different events that share actor/action/
+            # place/date. None on records claimed before this field existed
+            # ("object unknown").
+            'object': obj,
             'event_time': event_time,
             'first_seen': datetime.now(timezone.utc).isoformat(),
             'record_kind': 'first_print',

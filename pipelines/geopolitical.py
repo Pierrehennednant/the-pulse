@@ -655,7 +655,7 @@ class GeopoliticalPipeline:
     # above and force_reclassify() are UNCHANGED and remain the live
     # production path until this is deliberately cut over. ─────────────────
 
-    def _build_pass_a_prompt(self, article_list):
+    def _build_pass_a_prompt(self, article_list, run_date=None):
         """Pass A — EXTRACTION ONLY, no kind, no tier. Coarse routing:
         `bucket` (geo|macro|ec|drop) determines whether Pass B runs at
         all. Pass A is NOT trying to replicate every nuance of the old
@@ -670,7 +670,10 @@ class GeopoliticalPipeline:
         toward inclusion when uncertain about TOPIC; whether it actually
         SCORES is decided by the event-store lookup and the new_fact
         field, not by this bucket call."""
-        return f"""You are the first-pass triage step for a Nasdaq-100/S&P 500 futures pre-market macro dashboard. Your ONLY job is extraction and coarse routing — you do NOT decide tier, direction, or whether an event is a repeat of something already scored elsewhere. A separate second pass handles significance judgment, only for items you route to bucket "geo".
+        run_date = run_date or datetime.now(self.timezone).strftime('%Y-%m-%d')
+        return f"""TODAY'S DATE (run date): {run_date}
+
+You are the first-pass triage step for a Nasdaq-100/S&P 500 futures pre-market macro dashboard. Your ONLY job is extraction and coarse routing — you do NOT decide tier, direction, or whether an event is a repeat of something already scored elsewhere. A separate second pass handles significance judgment, only for items you route to bucket "geo".
 
 ONE EXTRACT PER ACTION, NOT ONE EXTRACT PER ARTICLE. A single article can report multiple separate, independent actions by different actors — extract ONE JSON object per distinct action, not one combined object per article. Give every extract belonging to the same article the same "article_id". Example: an "Oil falls as crude flows remain surprisingly strong" wrap could contain a sanctions announcement, a military deployment, and a territorial seizure, each by a different actor — that is three separate extracts (plus, if the tape-narration framing itself has no new action of its own, optionally a fourth extract with bucket "macro" for the tape framing, or simply omit a tape-only extract entirely — see PRICE-MOVE / MARKET-TAPE PATTERN below). Do not merge distinct actions by different actors into one extract just because they appear in the same article. If an article genuinely contains only one action, emit exactly one extract for it, as before — do not manufacture extra ones.
 
@@ -680,7 +683,7 @@ For each extract, give:
 - action: pick exactly ONE of these categories, never freeform verb text: {', '.join(ACTION_CATEGORIES)}.
 - object: the specific target or subject of the action (a place, an agreement, a policy, a company, a weapons system), a few words.
 - place: the country, region, or specific location the action occurred in or most directly concerns.
-- event_time: the date (YYYY-MM-DD) the ACTUAL EVENT happened — not the article's publish date if they differ. An article published today about a press conference three days ago should give the press conference's date, not today's. Leave empty "" if genuinely not determinable — never guess or default to today's date.
+- event_time: the date (YYYY-MM-DD) of the action THIS ARTICLE REPORTS — not the article's publish date if they differ, and not a background date the article mentions for context (an earlier inauguration, an earlier threat, an earlier meeting). An article published today about a press conference three days ago should give the press conference's date, not today's. Each article below carries a PUBLISHED date: if the article gives a day or month-day with no year ("Tuesday", "Sept. 23"), use the PUBLISHED year — never guess a year. Never output an event_time later than that article's PUBLISHED date. Leave empty "" if genuinely not determinable — never default to today's date.
 - new_fact: in ONE sentence, the specific new fact THIS ACTION adds beyond what was already known before this article existed. Leave this as empty string "" if this specific action is not actually new — a recap, a synthesis of several already-known conditions into one narrative, or a quote/statistic tied to a specific earlier occasion are NOT new facts even when presented in the present tense ("X says," "prices are rising"). Describe specifically what is NEW about THIS action, or say nothing at all.
 - bucket: exactly one of:
     "geo" — a geopolitical event, Fed/central-bank action or commentary, government/regulatory action, a corporate event meeting PATH 1 or PATH 2 of the CORPORATE EVENTS rule below, energy/trade/sanctions action, or any other development that could move NQ/ES risk appetite through something real, specific, and actionable.
@@ -1007,6 +1010,74 @@ Articles to classify:
         age_hours = (now - event_dt).total_seconds() / 3600
         return age_hours > 48
 
+    BACKGROUND_DATE_DAYS = 30
+
+    def _article_publish_date(self, article):
+        """The article's own publish date as 'YYYY-MM-DD', or '' if none
+        is parseable. Same field precedence as _pin_ttl_timestamp()."""
+        for field in ('published_at', 'date', 'timestamp'):
+            raw = (article.get(field) or '').strip()
+            if not raw:
+                continue
+            dt = self._pin_parsed_timestamp(raw)
+            if dt is not None:
+                return dt.astimezone(self.timezone).strftime('%Y-%m-%d')
+        return ''
+
+    def _sanitize_event_time(self, event_time, publish_date, headline=''):
+        """Code-side sanity check on Pass A's event_time, relative to the
+        article's publish date. Returns (event_time, note) where note is
+        None, 'year_corrected', 'clamped_to_publish', or 'background_date'.
+
+        Live store dump showed Pass A guessing the YEAR when an article
+        says "Tuesday" / "Sept. 23" with none (2024-09-24 / 2025-09-23 on
+        2026-09-23 news), and picking up background dates the article
+        mentions instead of the new action's date. Fix D alone would block
+        both — right for real recaps, wrong for current news with a
+        mangled year — so the year is repaired here first:
+          - month-day within 3 days of publish but wrong year -> use the
+            publish year; if that lands after publish -> use publish date.
+          - any event_time after the publish date -> publish date (an
+            article can't report an action from its own future).
+          - more than BACKGROUND_DATE_DAYS before publish -> kept as-is
+            (real recaps exist) and flagged; Fix D keeps it from ever
+            first-printing."""
+        if not event_time or not publish_date:
+            return event_time, None
+        try:
+            ev = datetime.strptime(event_time.strip()[:10], '%Y-%m-%d').date()
+            pub = datetime.strptime(publish_date, '%Y-%m-%d').date()
+        except ValueError:
+            return event_time, None  # Fix D fails an unparseable date closed
+
+        note = None
+        if ev.year != pub.year:
+            try:
+                candidate = ev.replace(year=pub.year)
+            except ValueError:  # Feb 29 into a non-leap year
+                candidate = None
+            if candidate is not None and abs((candidate - pub).days) <= 3:
+                ev, note = candidate, 'year_corrected'
+
+        if ev > pub:
+            ev, note = pub, 'clamped_to_publish'
+
+        if note is None and (pub - ev).days > self.BACKGROUND_DATE_DAYS:
+            note = 'background_date'
+
+        corrected = ev.strftime('%Y-%m-%d')
+        if note == 'background_date':
+            pulse_logger.log(
+                f"📅 Background-date extraction — {headline[:60]!r} event_time {corrected} is "
+                f"{(pub - ev).days} days before publish {publish_date} — kept, cannot first_print"
+            )
+        elif note:
+            pulse_logger.log(
+                f"📅 event_time corrected ({note}) — {headline[:60]!r} {event_time!r} -> {corrected} "
+                f"(published {publish_date})"
+            )
+        return corrected, note
+
     def classify_relevance_batch_v2(self, articles):
         """Orchestration for the two-pass structural rewrite. Standalone —
         NOT called by fetch_news() yet (see the module-level comment
@@ -1053,7 +1124,8 @@ Articles to classify:
 
         pass_a_list = ""
         for i, article in enumerate(articles):
-            pass_a_list += f"{i+1}. TITLE: {article['headline']}\n   FULL TEXT: {article['_full_text']}\n\n"
+            published = self._article_publish_date(article) or "unknown"
+            pass_a_list += f"{i+1}. TITLE: {article['headline']}\n   PUBLISHED: {published}\n   FULL TEXT: {article['_full_text']}\n\n"
         pass_a_prompt = self._build_pass_a_prompt(pass_a_list)
         pass_a_results = self._call_haiku_classify(pass_a_prompt, article_count=len(articles))
 
@@ -1097,7 +1169,11 @@ Articles to classify:
                 action = extraction.get('action', '')
                 obj = extraction.get('object', '')
                 place = extraction.get('place', '')
-                event_time = extraction.get('event_time', '')
+                raw_event_time = extraction.get('event_time', '')
+                event_time, event_time_note = self._sanitize_event_time(
+                    raw_event_time, self._article_publish_date(article), article.get('headline', '')
+                )
+                extraction = dict(extraction, event_time=event_time)
                 new_fact = (extraction.get('new_fact') or '').strip()
                 bucket = self._code_side_bucket_override(article, extraction)
 
@@ -1105,6 +1181,9 @@ Articles to classify:
                     'headline': article.get('headline', ''), 'actor': actor, 'action': action,
                     'object': obj, 'place': place, 'event_time': event_time, 'bucket': bucket,
                 }
+                if event_time_note:
+                    base['event_time_note'] = event_time_note
+                    base['event_time_raw'] = raw_event_time
 
                 if not new_fact:
                     # No new fact asserted for THIS extract — default to
@@ -1158,7 +1237,7 @@ Articles to classify:
                 # Genuine miss, bucket=geo, real new_fact, fresh
                 # event_time — claim the identity now (two-step write,
                 # see event_store.py) and queue for Pass B.
-                event_store.record_first_print(event_id, actor, action, place, event_time)
+                event_store.record_first_print(event_id, actor, action, place, event_time, obj=obj)
                 base.update({'kind': 'first_print', 'event_id': event_id})
                 results.append(base)
                 result_idx = len(results) - 1
