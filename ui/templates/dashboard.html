@@ -571,15 +571,32 @@
             });
         }
 
-        html += `<div id="geo-blocklist-section" style="margin-top:8px;border-top:1px solid #1e2d4a;padding-top:10px;display:none">
-            <div style="font-size:11px;color:#4a9eff;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer" onclick="toggleGeoBlocklist()">🚫 Blocked Articles <span id="geo-bl-toggle" style="font-size:9px">▶</span></div>
-            <div id="geo-blocklist-items" style="display:none"></div>
+        // _geoBlVisible/_geoBlOpen (declared below, near _snapshot) persist
+        // the section's show/hide and expand/collapse state ACROSS re-renders.
+        // Previously this was hardcoded display:none on both — harmless for
+        // a first render, but every subsequent renderGeopolitical() call
+        // (every 5-minute auto-refresh, and every block/unblock's own
+        // 500ms-delayed fetchData()) rebuilds this whole block from scratch,
+        // silently re-collapsing/re-hiding it even if the user had it open
+        // a moment earlier. Read from state here instead, so a re-render
+        // reproduces whatever state the user actually left it in.
+        html += `<div id="geo-blocklist-section" style="margin-top:8px;border-top:1px solid #1e2d4a;padding-top:10px;display:${_geoBlVisible ? 'block' : 'none'}">
+            <div style="font-size:11px;color:#4a9eff;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer" onclick="toggleGeoBlocklist()">🚫 Blocked Articles <span id="geo-bl-toggle" style="font-size:9px">${_geoBlOpen ? '▼' : '▶'}</span></div>
+            <div id="geo-blocklist-items" style="display:${_geoBlOpen ? 'block' : 'none'}"></div>
         </div>`;
 
         return html;
     }
 
     let _snapshot = null;
+    // Persisted across renderGeopolitical() re-renders — see the comment
+    // above where they're read. _geoBlVisible: is there at least one
+    // blocked article right now (kept hidden entirely when empty, by
+    // design — not touched by this fix). _geoBlOpen: did the user
+    // deliberately expand the list (kept open across refreshes now,
+    // instead of being silently re-collapsed).
+    let _geoBlVisible = false;
+    let _geoBlOpen = false;
 
     // Tier 1 active definition:
     // Any article in pillars.geopolitical.news_items where haiku_tier === 1.
@@ -1043,10 +1060,12 @@
         if (items.style.display === 'none') {
             items.style.display = 'block';
             toggle.textContent = '▼';
+            _geoBlOpen = true;
             fetchGeoBlocklist();
         } else {
             items.style.display = 'none';
             toggle.textContent = '▶';
+            _geoBlOpen = false;
         }
     }
 
@@ -1098,12 +1117,25 @@
             const response = await fetch('/api/geo-blocklist');
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const blocklist = await response.json();
-            section.style.display = blocklist.length > 0 ? 'block' : 'none';
+            // Update the persisted flag (so the NEXT renderGeopolitical()
+            // re-render reproduces this correctly) as well as the current
+            // DOM node (so this takes effect immediately, without waiting
+            // for a full refresh).
+            _geoBlVisible = Array.isArray(blocklist) && blocklist.length > 0;
+            section.style.display = _geoBlVisible ? 'block' : 'none';
+            // renderGeopolitical() just rebuilt #geo-blocklist-items from
+            // scratch (empty) on every call to updateDashboard() — if the
+            // user had it open, refill it now instead of leaving an open
+            // but blank list until they manually toggle it again.
+            if (_geoBlOpen) {
+                fetchGeoBlocklist();
+            }
         } catch(e) {
-            // Leave visibility as-is on failure — forcing it hidden here
-            // would silently make a section with real blocked articles
-            // disappear from view on a transient error, which is a worse
-            // silent failure than just not updating this one signal.
+            // Leave visibility (and _geoBlVisible) as-is on failure —
+            // forcing it hidden here would silently make a section with
+            // real blocked articles disappear from view on a transient
+            // error, which is a worse silent failure than just not
+            // updating this one signal.
             console.error('checkGeoBlocklistVisibility failed:', e);
         }
     }
