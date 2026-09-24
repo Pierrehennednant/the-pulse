@@ -547,7 +547,7 @@
                             <span class="flag-status status-developing">${item.status}</span>
                             <span class="flag-source">${item.source}</span>
                             <span class="flag-source">${item.timestamp}</span>
-                            <button onclick="blockGeoArticle('${item.title.replace(/'/g, "\\'")}', this)" style="margin-left:auto;background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
+                            <button class="geo-block-btn" data-title="${encodeURIComponent(item.title)}" style="margin-left:auto;background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
                         </div>
                         <div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${valClass(item.predicted_impact)}">${(item.predicted_impact || '').toUpperCase()}</span></div>
                         ${item.context ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${item.context}</div>` : ''}
@@ -561,7 +561,7 @@
                         <div class="flag-meta">
                             <span class="flag-source">${item.source}</span>
                             <span class="flag-source">${item.timestamp}</span>
-                            <button onclick="blockGeoArticle('${item.headline.replace(/'/g, "\\'")}', this)" style="margin-left:auto;background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
+                            <button class="geo-block-btn" data-title="${encodeURIComponent(item.headline)}" style="margin-left:auto;background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
                         </div>
                         ${dirLabel ? `<div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${dirClass}">${dirLabel}</span></div>` : ''}
                         ${item.description ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${item.description}</div>` : ''}
@@ -1207,6 +1207,32 @@
     function scheduleRefresh() {
         clearInterval(refreshTimer);
         refreshTimer = setInterval(fetchData, 5 * 60 * 1000);
+    }
+
+    // Delegated click handler for the Geo pillar's block (X) buttons —
+    // bound ONCE here, not inside renderGeopolitical(), since #card-geo
+    // itself is static markup that survives every re-render (only its
+    // innerHTML content is replaced). Root cause of the dead X button:
+    // the previous inline onclick="blockGeoArticle('${title}', this)"
+    // put the raw article title straight into an HTML attribute. A title
+    // containing a double quote (the live Kim Jong Un headline: ...calls
+    // it "incurable headache"...) closes the onclick="..." attribute
+    // early, corrupting the markup — the click became a no-op with no
+    // error, because the button's onclick attribute was silently split
+    // into garbage rather than the intended function call. Fixed by never
+    // putting the raw title in an attribute at all: the title now travels
+    // as a data-title attribute, always run through encodeURIComponent()
+    // (safe in any attribute regardless of quotes), and this single
+    // delegated listener reads it back out with decodeURIComponent() at
+    // click time instead of relying on inline onclick markup.
+    const _cardGeo = document.getElementById('card-geo');
+    if (_cardGeo) {
+        _cardGeo.addEventListener('click', (e) => {
+            const btn = e.target.closest('.geo-block-btn');
+            if (!btn) return;
+            const title = decodeURIComponent(btn.getAttribute('data-title') || '');
+            if (title) blockGeoArticle(title, btn);
+        });
     }
 
     fetchData();

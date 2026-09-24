@@ -1,6 +1,7 @@
 import hmac
 import json
 import os
+import threading
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -442,6 +443,65 @@ def _load_geo_manual_blocklist():
 def get_geo_blocklist():
     return jsonify(_load_geo_manual_blocklist())
 
+def _finish_geo_blocklist_post_actions(label):
+    """Runs AFTER the blocklist file write and AFTER the HTTP response has
+    already been sent (called from a background thread, never inline in
+    the request handler). Live reproduction (2026-09-23) found
+    `from pipelines.geopolitical import geopolitical_pipeline` can stall
+    ~23s in this environment when its own dependency (the sentiment-
+    analysis model) fails to load — running that import, the cache sync,
+    the pin-store scrub, and _run_partial_refresh() synchronously in the
+    request path meant a slow/failed import could make the whole
+    block/unblock request take longer than _blocklistAction()'s 15s
+    client-side timeout, so the UI reported a failure even though the
+    actual blocklist file write (the part that matters for correctness)
+    had already succeeded before this function was ever called.
+
+    Import-scoping note (same as the earlier fix this replaces): import
+    once, bind the name (None on failure) — never inside just the first
+    try block — since `from pipelines.geopolitical import
+    geopolitical_pipeline` anywhere in a function makes that name
+    function-local for the WHOLE function per Python's scoping rules,
+    and a later block using it after a failed import would otherwise
+    raise UnboundLocalError instead of a clear message.
+    """
+    try:
+        from pipelines.geopolitical import geopolitical_pipeline
+    except Exception as import_err:
+        geopolitical_pipeline = None
+        pulse_logger.log(f"⚠️ {label} — could not import geopolitical_pipeline: {import_err}", level="WARNING")
+    # Sync the geo pillar cache — _run_partial_refresh() below reads this
+    # cache raw, with no blocklist filtering of its own. Without this, the
+    # freshly-(un)blocked article (and the score it contributes) stays in
+    # the cache until the next scheduled fetch() cycle, up to 5 minutes
+    # later, even though the blocklist file itself is already updated.
+    if geopolitical_pipeline is not None:
+        try:
+            from utils.cache import cache as _cache
+            geo_cached = _cache.load('geopolitical')
+            if geo_cached:
+                refreshed = geopolitical_pipeline._refresh_cached_data(geo_cached['data'])
+                _cache.save('geopolitical', refreshed)
+        except Exception as cache_err:
+            pulse_logger.log(f"⚠️ {label} cache sync failed: {cache_err}", level="WARNING")
+        # Also scrub the persisted pin store — _refresh_cached_data() above
+        # only touches this cycle's cached all_items, it never looks at
+        # pinned_stories.json. Without this, a blocked PINNED article stays
+        # in the pin file untouched, and only gets purged whenever the next
+        # genuine live fetch_news() cycle happens to run
+        # load_pinned_stories() — which can be delayed indefinitely during
+        # a TheNewsAPI outage stretch, since every cache-fallback cycle in
+        # between skips this function entirely.
+        try:
+            geopolitical_pipeline.load_pinned_stories()
+        except Exception as pin_err:
+            pulse_logger.log(f"⚠️ {label} pin scrub failed: {pin_err}", level="WARNING")
+    try:
+        _run_partial_refresh(label)
+    except Exception as refresh_err:
+        pulse_logger.log(f"⚠️ {label} partial refresh failed: {refresh_err}", level="WARNING")
+
+
 @app.route('/api/geo-blocklist', methods=['POST'])
 @require_auth
 def add_geo_blocklist():
@@ -460,58 +520,19 @@ def add_geo_blocklist():
         })
         atomic_write_json(GEO_MANUAL_BLOCKLIST_FILE, blocklist)
     pulse_logger.log(f"🚫 Geo manual blocklist — added: {title[:60]}")
-    # Import ONCE, before either try block below, and always bind the name
-    # (None on failure) — NOT inside the cache-sync try block only. That used
-    # to be the bug: `from pipelines.geopolitical import geopolitical_pipeline`
-    # makes `geopolitical_pipeline` a function-local name the moment it
-    # appears ANYWHERE in this function, in Python's scoping rules, regardless
-    # of the try/except around it. So when that import failed (a slow/broken
-    # dependency inside pipelines.geopolitical's own module-level init — e.g.
-    # its sentiment-analysis model failing to load — is enough), the pin-scrub
-    # block below, which reads the SAME name, didn't see a clear import error;
-    # it raised UnboundLocalError instead ("cannot access local variable
-    # 'geopolitical_pipeline' where it is not associated with a value"),
-    # logged as a confusing, misleading "pin scrub failed" line that gave no
-    # hint the real problem was the import itself. Found via live reproduction
-    # 2026-09-23 while investigating an unrelated dropdown bug report — this
-    # import failure was never the actual cause of that report (confirmed:
-    # the dropdown/unblock/block code itself reproduces correctly with this
-    # dependency healthy), but it's a real, independent defect worth fixing
-    # since it surfaced during that investigation.
-    try:
-        from pipelines.geopolitical import geopolitical_pipeline
-    except Exception as import_err:
-        geopolitical_pipeline = None
-        pulse_logger.log(f"⚠️ geo-blocklist — could not import geopolitical_pipeline: {import_err}", level="WARNING")
-    # Sync the geo pillar cache immediately — _run_partial_refresh() below reads
-    # this cache raw, with no blocklist filtering of its own. Without this, the
-    # freshly-blocked article (and the score it just contributed) stays in the
-    # cache until the next scheduled fetch() cycle, up to 5 minutes later, even
-    # though the blocklist file itself is already updated.
-    if geopolitical_pipeline is not None:
-        try:
-            from utils.cache import cache as _cache
-            geo_cached = _cache.load('geopolitical')
-            if geo_cached:
-                refreshed = geopolitical_pipeline._refresh_cached_data(geo_cached['data'])
-                _cache.save('geopolitical', refreshed)
-        except Exception as cache_err:
-            pulse_logger.log(f"⚠️ geo-blocklist cache sync failed: {cache_err}", level="WARNING")
-        # Also scrub the persisted pin store immediately — _refresh_cached_data()
-        # above only touches this cycle's cached all_items, it never looks at
-        # pinned_stories.json. Without this, a blocked PINNED article stays in
-        # the pin file untouched, and only gets purged whenever the next genuine
-        # live fetch_news() cycle happens to run load_pinned_stories() — which
-        # can be delayed indefinitely during a TheNewsAPI outage stretch, since
-        # every cache-fallback cycle in between skips this function entirely.
-        try:
-            geopolitical_pipeline.load_pinned_stories()
-        except Exception as pin_err:
-            pulse_logger.log(f"⚠️ geo-blocklist pin scrub failed: {pin_err}", level="WARNING")
-    try:
-        _run_partial_refresh(f"geo-blocklist | {title[:40]}")
-    except Exception as refresh_err:
-        pulse_logger.log(f"⚠️ geo-blocklist partial refresh failed: {refresh_err}", level="WARNING")
+    # The write above is the only part that matters for correctness, and
+    # it's already durable at this point. Cache sync / pin scrub / partial
+    # refresh are best-effort freshness, not correctness — self-heal on
+    # the next cycle regardless — so they run in the background AFTER this
+    # response goes out, not before it (see _finish_geo_blocklist_post_actions
+    # for why: they can stall for many seconds on a slow/broken
+    # dependency, and the frontend must see 'added' well under its own
+    # 15s timeout since the file write it cares about already happened).
+    threading.Thread(
+        target=_finish_geo_blocklist_post_actions,
+        args=(f"geo-blocklist | {title[:40]}",),
+        daemon=True
+    ).start()
     return jsonify({'status': 'added', 'title': title, 'blocklist': blocklist})
 
 @app.route('/api/geo-blocklist', methods=['DELETE'])
@@ -528,32 +549,16 @@ def remove_geo_blocklist():
         return jsonify({'error': 'Title not found in blocklist'}), 404
     atomic_write_json(GEO_MANUAL_BLOCKLIST_FILE, new_blocklist)
     pulse_logger.log(f"🚫 Geo manual blocklist — removed: {title[:60]}")
-    # Same import-once-before-either-try-block fix as add_geo_blocklist() —
-    # see the comment there for why. Keep the two symmetric.
-    try:
-        from pipelines.geopolitical import geopolitical_pipeline
-    except Exception as import_err:
-        geopolitical_pipeline = None
-        pulse_logger.log(f"⚠️ geo-unblock — could not import geopolitical_pipeline: {import_err}", level="WARNING")
-    # Same sync as add_geo_blocklist() — keep the two symmetric.
-    if geopolitical_pipeline is not None:
-        try:
-            from utils.cache import cache as _cache
-            geo_cached = _cache.load('geopolitical')
-            if geo_cached:
-                refreshed = geopolitical_pipeline._refresh_cached_data(geo_cached['data'])
-                _cache.save('geopolitical', refreshed)
-        except Exception as cache_err:
-            pulse_logger.log(f"⚠️ geo-unblock cache sync failed: {cache_err}", level="WARNING")
-        # Same pin-store scrub as add_geo_blocklist() — keep the two symmetric.
-        try:
-            geopolitical_pipeline.load_pinned_stories()
-        except Exception as pin_err:
-            pulse_logger.log(f"⚠️ geo-unblock pin scrub failed: {pin_err}", level="WARNING")
-    try:
-        _run_partial_refresh(f"geo-unblock | {title[:40]}")
-    except Exception as refresh_err:
-        pulse_logger.log(f"⚠️ geo-unblock partial refresh failed: {refresh_err}", level="WARNING")
+    # Same reasoning as add_geo_blocklist() — keep the two symmetric, as
+    # the rest of this codebase already insists they should be. The
+    # original bug report that started this whole investigation was about
+    # UNBLOCK hanging on exactly this same stall, so this side needs the
+    # same fix at least as much as add does.
+    threading.Thread(
+        target=_finish_geo_blocklist_post_actions,
+        args=(f"geo-unblock | {title[:40]}",),
+        daemon=True
+    ).start()
     return jsonify({'status': 'removed', 'title': title, 'blocklist': new_blocklist})
 
 @app.route('/api/geo-tier-override', methods=['PATCH'])
