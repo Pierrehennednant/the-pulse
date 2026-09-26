@@ -1083,7 +1083,7 @@
                 const title = entry.title || '';
                 return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #1e2d4a">
                     <span style="flex:1;font-size:12px;color:#7a8fa8">${title}</span>
-                    <button onclick="unblockGeoArticle('${title.replace(/'/g, "\\'")}', this)" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Unblock this article">✕</button>
+                    <button class="geo-unblock-btn" data-title="${encodeURIComponent(title)}" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Unblock this article">✕</button>
                 </div>`;
             }).join('');
         } catch(e) {
@@ -1169,7 +1169,7 @@
                 const title = k.split('::')[0];
                 return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #1e2d4a">
                     <span style="flex:1;font-size:12px;color:#7a8fa8">${title}</span>
-                    <button onclick="unblockEcEvent('${title.replace(/'/g, "\\'")}', this)" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Unblock this event">✕</button>
+                    <button class="ec-unblock-btn" data-title="${encodeURIComponent(title)}" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Unblock this event">✕</button>
                 </div>`;
             }).join('');
         } catch(e) {
@@ -1228,10 +1228,36 @@
     const _cardGeo = document.getElementById('card-geo');
     if (_cardGeo) {
         _cardGeo.addEventListener('click', (e) => {
-            const btn = e.target.closest('.geo-block-btn');
+            // Same delegated handler also covers the Blocked Articles
+            // dropdown's unblock (X) buttons (rendered by fetchGeoBlocklist()
+            // inside #geo-blocklist-items, a descendant of #card-geo), which
+            // had the identical quote-breaking inline onclick bug.
+            const blockBtn = e.target.closest('.geo-block-btn');
+            if (blockBtn) {
+                const title = decodeURIComponent(blockBtn.getAttribute('data-title') || '');
+                if (title) blockGeoArticle(title, blockBtn);
+                return;
+            }
+            const unblockBtn = e.target.closest('.geo-unblock-btn');
+            if (unblockBtn) {
+                const title = decodeURIComponent(unblockBtn.getAttribute('data-title') || '');
+                if (title) unblockGeoArticle(title, unblockBtn);
+            }
+        });
+    }
+
+    // Delegated click handler for the EC Blocked Events dropdown's unblock
+    // (X) buttons — same fix as Geo: fetchEcBlocklist() renders them inside
+    // #ec-blocklist-items (a descendant of the static #card-economic) with
+    // an encodeURIComponent()'d data-title instead of an inline onclick.
+    // Bound ONCE here at script init, never inside a render/fetch function.
+    const _cardEcon = document.getElementById('card-economic');
+    if (_cardEcon) {
+        _cardEcon.addEventListener('click', (e) => {
+            const btn = e.target.closest('.ec-unblock-btn');
             if (!btn) return;
             const title = decodeURIComponent(btn.getAttribute('data-title') || '');
-            if (title) blockGeoArticle(title, btn);
+            if (title) unblockEcEvent(title, btn);
         });
     }
 
