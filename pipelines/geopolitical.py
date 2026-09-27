@@ -1754,7 +1754,45 @@ Articles to classify:
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to save pinned stories: {e}", level="WARNING")
 
-    def _refresh_pin_classification(self, headline, new_class):
+    # Fields a same-story merge never copies from an incoming follow_up onto
+    # an original first_print survivor (see _guarded_duplicate_merge()):
+    # kind and classified_at drive the survivor's 48h clock (classified_at is
+    # what known_relevant/is_article_too_old age a cache entry from), and the
+    # event-rule audit fields describe the echo, not the original.
+    MERGE_KIND_GUARD_KEEP_FIELDS = ('kind', 'classified_at', 'event_rule', 'pre_rule_kind', 'pre_rule_tier')
+
+    @staticmethod
+    def _merge_kind_guard_applies(existing_kind, incoming_kind):
+        """True when an original first_print (missing kind counts as
+        first_print — the default everywhere else in this pipeline) would be
+        overwritten by an incoming follow_up. Both-follow_up and any
+        incoming first_print merge exactly as before."""
+        return (existing_kind or 'first_print') == 'first_print' and incoming_kind == 'follow_up'
+
+    def _log_merge_kind_guard(self, original_headline, incoming_headline=''):
+        line = f"MERGE KIND GUARD | original kept first_print | incoming follow_up | headline={original_headline[:90]}"
+        if incoming_headline:
+            line += f" | incoming_headline={incoming_headline[:90]}"
+        pulse_logger.log(line)
+
+    def _guarded_duplicate_merge(self, existing, new_class, original_headline, incoming_headline):
+        """Value to write over a same-story survivor's gemini_cache entry.
+        Unchanged behavior (return new_class) unless the survivor is
+        first_print and the incoming read is follow_up: then every field is
+        merged EXCEPT kind/classified_at (and the echo's event-rule audit
+        fields), so the original keeps first_print and its clock start.
+        Not used by the EC fold, which is a separate rule."""
+        if not self._merge_kind_guard_applies(existing.get('kind'), new_class.get('kind')):
+            return new_class
+        merged = {k: v for k, v in new_class.items() if k not in self.MERGE_KIND_GUARD_KEEP_FIELDS}
+        for k in self.MERGE_KIND_GUARD_KEEP_FIELDS:
+            if k in existing:
+                merged[k] = existing[k]
+        merged['kind'] = 'first_print'
+        self._log_merge_kind_guard(original_headline, incoming_headline)
+        return merged
+
+    def _refresh_pin_classification(self, headline, new_class, incoming_headline=''):
         """If `headline` currently exists as an active pin, refresh its cached
         direction/tier/confidence/summary in place. Called when a duplicate-event
         merge updates gemini_cache, so the pin never scores off a stale copy
@@ -1783,7 +1821,16 @@ Articles to classify:
                     # updated prompt/gate — locking in the wrong
                     # classification until TTL expiry instead of the new
                     # evidence taking effect immediately.
-                    pin['kind'] = new_class.get('kind', pin.get('kind', 'first_print'))
+                    # EXCEPTION (merge kind guard): a same-story echo read as
+                    # follow_up (including one forced by event memory) must
+                    # not turn the original first_print pin into follow_up —
+                    # the pin keeps first_print and its 48h clock (pin TTL is
+                    # published_at/timestamp/date + kind; none of those
+                    # timestamps are touched here).
+                    if self._merge_kind_guard_applies(pin.get('kind'), new_class.get('kind')):
+                        self._log_merge_kind_guard(headline, incoming_headline)
+                    else:
+                        pin['kind'] = new_class.get('kind', pin.get('kind', 'first_print'))
                     self.save_pinned_stories(pinned)
                     pulse_logger.log(f"📌 Pin refreshed with updated classification: '{headline[:60]}'")
                     return
@@ -3163,19 +3210,21 @@ CONTEXT: {context}"""
                                                 and pending.get('direction') == new_class['direction']
                                                 and pending.get('tier') == new_class['tier']
                                             ):
-                                                gemini_cache[duplicate_of] = new_class
+                                                merged_class = self._guarded_duplicate_merge(existing, new_class, duplicate_of, headline)
+                                                gemini_cache[duplicate_of] = merged_class
                                                 gemini_cache[duplicate_of].pop('pending_merge', None)
                                                 pulse_logger.log(f"🔁 Pinned entry updated after 2 agreeing merges: '{headline[:60]}' → '{duplicate_of[:60]}'")
-                                                self._refresh_pin_classification(duplicate_of, new_class)
+                                                self._refresh_pin_classification(duplicate_of, merged_class, incoming_headline=headline)
                                             else:
                                                 if pending:
                                                     pulse_logger.log(f"🔁 Pinned entry staged candidate cleared by disagreeing merge: '{duplicate_of[:60]}'")
                                                 gemini_cache[duplicate_of]['pending_merge'] = new_class
                                                 pulse_logger.log(f"🔁 Pinned entry candidate staged, awaiting confirmation: '{headline[:60]}' → '{duplicate_of[:60]}'")
                                         else:
-                                            gemini_cache[duplicate_of] = new_class
+                                            merged_class = self._guarded_duplicate_merge(existing, new_class, duplicate_of, headline)
+                                            gemini_cache[duplicate_of] = merged_class
                                             pulse_logger.log(f"🔁 Duplicate event — updated existing entry in place: '{headline[:60]}' → merged into '{duplicate_of[:60]}'")
-                                            self._refresh_pin_classification(duplicate_of, new_class)
+                                            self._refresh_pin_classification(duplicate_of, merged_class, incoming_headline=headline)
                                     else:
                                         pulse_logger.log(f"🔁 Duplicate event — no material change, skipped: '{headline[:60]}' (same as '{duplicate_of[:60]}')")
                                     gemini_cache[headline] = {
