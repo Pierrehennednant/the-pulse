@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import re
@@ -18,6 +19,553 @@ from utils.logger import pulse_logger
 from utils.error_handler import error_handler
 
 MAX_ARTICLE_AGE_HOURS = 48
+
+
+# ── Geo event memory (7-day echo guard) + 14-day after-action cap ─────────
+# Deterministic, code-side overrides applied AFTER Haiku proposes kind/tier
+# and BEFORE anything persists kind (gemini_classifications.json,
+# pinned_stories.json) or scores it (calculate_score()). Not a second
+# classifier: no model call, just a small explicit normalizer that turns an
+# article into an event key (actor|action|object|time_bucket) plus an
+# event-date resolver. See GeopoliticalPipeline._apply_event_rules().
+GEO_EVENT_MEMORY_FILE = "/data/geo_event_memory.json"
+EVENT_MEMORY_TTL_DAYS = 7
+AGE_CAP_DAYS = 14
+EVENT_FALLBACK_SPAN_TOKENS = 8
+EVENT_MAX_IDENTITIES = 25
+_EVENT_TZ = pytz.timezone(TIMEZONE)
+
+_EVENT_OUTLETS = (
+    'bloomberg news', 'bloomberg', 'cnbc', 'reuters', 'the associated press', 'associated press',
+    'ap news', 'ap', 'the wall street journal', 'wall street journal', 'wsj', 'financial times', 'ft',
+    'marketwatch', 'fox business', 'politico', 'axios', 'the hill', 'cbs news', 'nbc news',
+    'abc news', 'the washington post', 'washington post', 'the new york times', 'new york times',
+    'nyt', 'yahoo finance', 'cnn', 'bbc news', 'bbc',
+)
+_EVENT_OUTLET_ALT = '|'.join(re.escape(o) for o in sorted(_EVENT_OUTLETS, key=len, reverse=True))
+# " - CNBC", " | Bloomberg", " — Reuters" (optionally ".com") at the very end of a headline.
+_EVENT_OUTLET_SUFFIX_RE = re.compile(
+    r'(?:\s+[-\u2013\u2014]\s+|\s*\|\s*)(?:' + _EVENT_OUTLET_ALT + r')(?:\.com)?\s*$', re.I)
+_EVENT_OUTLET_WORD_RE = re.compile(r'\b(?:' + _EVENT_OUTLET_ALT + r')(?:\.com)?\b')
+_EVENT_HEADLINE_PREFIX_RE = re.compile(
+    r'^(?:live updates?|live|breaking|exclusive|update|analysis)\s*:\s*'
+    r'|^(?:(?:mon|tues|wednes|thurs|fri|satur|sun)day|'
+    r'(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:,\s*\d{4})?|'
+    r'\d{4}-\d{2}-\d{2})\s*[:\-\u2013\u2014|]\s*')
+
+# Obvious synonyms only (spec): exports/shipments, rescission/claw back/
+# pocket rescission, intelligence warns/intelligence assessment.
+_EVENT_SYNONYMS = (
+    (r'\bdanish defen[cs]e intelligence service\b', 'ddis'),
+    (r'\b(?:crude|oil) shipments?\b', lambda m: m.group(0).split()[0] + ' exports'),
+    (r'\bshipments?\b', 'exports'),
+    (r'\bexport(?:ed|ing)\b', 'exports'),
+    (r'\bpocket rescissions?\b', 'rescission'),
+    (r'\bclaw(?:s|ed|ing)?[\s-]?backs?\b', 'rescission'),
+    (r'\brescissions?\b|\brescind(?:s|ed|ing)?\b', 'rescission'),
+    (r'\bintelligence (?:agency |service |officials? )?(?:warns|warned|warning|warnings|says|said|assessment|assesses|assessed|reports?|estimates?)\b',
+     'intelligence assessment'),
+    (r'\bthreat assessment\b', 'intelligence assessment'),
+    (r'\bwar-time\b|\bwar time\b', 'wartime'),
+    (r'\bair ?strikes?\b', 'strike'),
+)
+
+# Canonical actor -> surface forms (applied to normalized, lowercased text;
+# "U.S."/"US" are rewritten to united_states case-sensitively beforehand).
+_EVENT_ACTORS = (
+    ('us', r'united_states|\bamerican?s?\b|\bwhite house\b|\bpentagon\b|\btrump(?:\'s)?\b|\bomb\b|\bstate department\b'),
+    ('saudi', r'\bsaudis?\b|\briyadh\b|\baramco\b'),
+    ('iran', r'\biran(?:ian)?s?\b|\btehran\b|\birgc\b'),
+    ('russia', r'\brussian?s?\b|\bkremlin\b|\bmoscow\b|\bputin\b'),
+    ('ukraine', r'\bukrain(?:e|ian)s?\b|\bkyiv\b|\bzelensk(?:y|yy)\b'),
+    ('china', r'\bchin(?:a|ese)\b|\bbeijing\b|\bxi jinping\b'),
+    ('israel', r'\bisraeli?s?\b|\bidf\b|\bnetanyahu\b'),
+    ('denmark', r'\bdenmark\b|\bdanish\b|\bddis\b'),
+    ('nato', r'\bnato\b'),
+    ('cuba', r'\bcuban?s?\b|\bhavana\b'),
+    ('venezuela', r'\bvenezuelan?s?\b|\bcaracas\b|\bmaduro\b'),
+    ('kuwait', r'\bkuwait(?:i|is)?\b'),
+    ('iraq', r'\biraqi?s?\b|\bbaghdad\b'),
+    ('syria', r'\bsyrian?s?\b|\bdamascus\b'),
+    ('lebanon', r'\blebanon\b|\blebanese\b|\bhezbollah\b'),
+    ('yemen', r'\byemen(?:i)?\b|\bhouthis?\b'),
+    ('qatar', r'\bqatar(?:i)?\b'),
+    ('uae', r'\buae\b|\bemirat(?:es|i)\b'),
+    ('taiwan', r'\btaiwan(?:ese)?\b'),
+    ('north_korea', r'\bnorth korean?\b|\bpyongyang\b'),
+    ('japan', r'\bjapan(?:ese)?\b'),
+    ('india', r'\bindian?\b'),
+    ('pakistan', r'\bpakistan(?:i)?\b'),
+    ('eu', r'\beuropean union\b|\beu\b|\bbrussels\b'),
+    ('uk', r'united_kingdom|\bbritain\b|\bbritish\b'),
+    ('germany', r'\bgerman(?:y)?\b|\bberlin\b'),
+    ('france', r'\bfrance\b|\bfrench\b|\bparis\b'),
+    ('poland', r'\bpoland\b|\bpolish\b|\bwarsaw\b'),
+    ('mexico', r'\bmexic(?:o|an)\b'),
+    ('canada', r'\bcanad(?:a|ian)\b'),
+    ('turkey', r'\bturkey\b|\bturkish\b|\bankara\b'),
+)
+_EVENT_ACTOR_RES = tuple((name, re.compile(pat)) for name, pat in _EVENT_ACTORS)
+_EVENT_STRIKE_ADJ = {
+    'iranian': 'iran', 'israeli': 'israel', 'russian': 'russia', 'ukrainian': 'ukraine',
+    'american': 'us', 'united_states': 'us', 'houthi': 'yemen', 'chinese': 'china',
+    'hezbollah': 'lebanon', 'pakistani': 'pakistan', 'indian': 'india', 'saudi': 'saudi',
+}
+_EVENT_STRIKE_ADJ_RE = re.compile(
+    r'\b(' + '|'.join(_EVENT_STRIKE_ADJ) + r')\s+(?:[\w-]+\s+){0,2}?(?:drone |missile |rocket )?(?:strikes?|bombing|attack)\b')
+
+# Recognized actions, in priority order. First action found in the
+# headline wins; otherwise first found in the subject sentences (headline +
+# first sentence of summary/description). Anything else -> weak_key.
+#   actor:  'first' | 'fixed:<x>' | 'strike'
+#   bucket: 'month' (ongoing tallies / disclosed assessments) | 'date'
+#   obj:    'intel' | 'amount' | 'exports_level' | 'target' | 'strike_target' | 'fixed:<x>'
+_EVENT_ACTIONS = (
+    {'action': 'ddis', 'trig': r'\bddis\b|\bdanish (?:military |defen[cs]e )?intelligence\b',
+     'actor': 'fixed:denmark', 'bucket': 'month', 'obj': 'intel'},
+    {'action': 'intel_assessment', 'trig': r'\bintelligence assessment\b',
+     'actor': 'first', 'bucket': 'month', 'obj': 'intel'},
+    {'action': 'pocket_rescission', 'trig': r'\brescission\b',
+     'ctx': r'spending|funding|funds|appropriat|congress|\bomb\b|budget|\baid\b|impound',
+     'actor': 'fixed:us', 'bucket': 'date', 'obj': 'amount'},
+    {'action': 'crude_exports', 'trig': r'\b(?:crude|oil)(?: oil)? exports\b|\bexports of (?:crude|oil)\b',
+     'actor': 'first', 'bucket': 'month', 'obj': 'exports_level'},
+    {'action': 'hormuz_reopen_signed', 'trig': r'\bhormuz\b',
+     'need': r'\bsign(?:s|ed)?\b|\bagreement reached\b|\bdeal reached\b|\breopen(?:s|ed)\b',
+     'veto': r'close to|near(?:ing)? (?:a )?deal|\bcould\b|\bwould\b|\bmay\b|expected to|poised to|\bpitch\b|\bproposal\b',
+     'actor': 'fixed:iran', 'bucket': 'date', 'obj': 'fixed:hormuz'},
+    {'action': 'hormuz_talks', 'trig': r'\bhormuz\b',
+     'need': r'\btalks?\b|negotiat|\bpitch\b|\bproposal\b|\boffer\b|close to (?:a )?deal|near(?:ing)? (?:a )?deal|deal to (?:re)?open',
+     'actor': 'fixed:iran', 'bucket': 'date', 'obj': 'fixed:hormuz'},
+    {'action': 'deployment_order', 'trig': r'\bdeployment orders?\b|\border(?:s|ed)? (?:the )?deployment\b|\border(?:s|ed)? (?:[\w-]+ ){0,2}troops\b|\bdeploy(?:s|ed)? (?:[\w-]+ ){0,2}troops\b',
+     'veto': r'\bno (?:indication|deployment)|\bnot (?:yet )?(?:been )?(?:issued|received)|\bhas not\b|\bhave not\b|\bno units\b',
+     'actor': 'first', 'bucket': 'date', 'obj': 'target'},
+    {'action': 'military_planning', 'trig': r'\bgroundwork\b|\bcontingency plan|\bplanning memo\b|\binternal (?:army |military |pentagon )?(?:memo|message|document)|\bmilitary planning\b|\bsets? up for (?:potential|possible) (?:military )?action\b',
+     'actor': 'first', 'bucket': 'month', 'obj': 'target'},
+    {'action': 'strike', 'trig': r'\b(?:drone |missile |rocket )?strikes?\b|\bstruck\b|\bbomb(?:ed|ing|ings)\b',
+     'actor': 'strike', 'bucket': 'date', 'obj': 'strike_target', 'headline_only': True},
+)
+for _a in _EVENT_ACTIONS:
+    for _f in ('trig', 'ctx', 'need', 'veto'):
+        if _f in _a:
+            _a[_f + '_re'] = re.compile(_a[_f])
+del _a, _f
+
+_EVENT_MONTHS = {'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6, 'jul': 7, 'aug': 8,
+                 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12}
+_EVENT_DATE_RE = re.compile(
+    r'\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|'
+    r'oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b(?:,?\s+(\d{4})\b)?'
+    r'|\b(\d{4})-(\d{2})-(\d{2})\b')
+_EVENT_ACTION_NOUN_RE = re.compile(
+    r'\b(?:strikes?|attacks?|bombings?|raids?|drones?|missiles?|killed|reports?|assessments?|orders?|deals?|'
+    r'agreements?|announcements?|announced|rescission|invasion|incidents?|explosions?|shootings?|sanctions|'
+    r'tariffs|memo|ceasefire|offensive|assault|ambush|ddis|signed|launched)\b')
+_EVENT_DEADLINE_BEFORE_RE = re.compile(
+    r'\b(?:by|until|till|through|thru|no later than|deadline(?: of)?|due(?: on| by)?|scheduled for|'
+    r'expected (?:on|by)|slated for|starting|beginning|next)\s*(?:the\s+)?$')
+_EVENT_WEEKDAYS = ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')
+_EVENT_WEEKDAY_RE = re.compile(r'\b(' + '|'.join(_EVENT_WEEKDAYS) + r')\b')
+_EVENT_RELATIVE_OLD_RE = re.compile(
+    r"\blast (?:spring|summer|fall|autumn|winter|year)'?s?\s+(?:[\w$.\-]+\s+){0,3}?"
+    r"(?:strikes?|attacks?|bombing|raid|invasion|rescission|deal|agreement|order|memo|incident|shooting|explosion|crash)\b"
+    r"|\b(?:\w+|\d+) (?:months?|years?) (?:after|since) (?:the|a|an|that) (?:[\w\-]+\s+){0,2}?"
+    r"(?:strike|attack|bombing|raid|invasion|incident|shooting|explosion|crash)\b"
+    r"|\b(?:investigation|probe|inquiry|review) into (?:last|the) (?:spring|summer|fall|autumn|winter|year)'?s?\s+"
+    r"(?:[\w\-]+\s+){0,2}?(?:strike|attack|bombing|raid|incident)\b"
+    r"|\banniversary of (?:the )?(?:[\w\-]+\s+){0,2}?(?:strike|attack|bombing|raid|invasion|war)\b")
+_EVENT_WHEN_NOW = r'(?:today|tonight|overnight|this morning|this week|on (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))'
+_EVENT_NEW_VERB = r'(?:launched|launches|struck|strikes|ordered|orders|signed|signs|announced|announces|imposed|imposes|deployed|deploys|fired|attacked|bombed)'
+_EVENT_NEW_ACTION_RE = re.compile(
+    r'\bnew (?:wave of |round of |series of )?(?:strikes?|attacks?|drone strikes?|missile strikes?|deployment orders?|'
+    r'deployments?|orders?|sanctions|restrictions|tariffs|package|aid package|offensive|assault)\b'
+    r'|\b' + _EVENT_WHEN_NOW + r'\b[^.;]{0,60}\b' + _EVENT_NEW_VERB + r'\b'
+    r'|\b' + _EVENT_NEW_VERB + r'\b[^.;]{0,40}\b' + _EVENT_WHEN_NOW + r'\b'
+    r'|\b(?:is|are) (?:now )?(?:canceling|cancelling|freezing|deploying|imposing|launching|striking|ordering|blocking|bombing)\b')
+_EVENT_NOW_CUE_RE = re.compile(
+    r'\b(?:today|tonight|overnight|this (?:week|morning|afternoon|evening|month)|yesterday|now|currently|latest|'
+    r'new|breaking|just|announced|announces|says|said|warns|warned|reports?|reported|hits?|surged?|surges|'
+    r'is|are|has|have|will|' + '|'.join(_EVENT_WEEKDAYS) + r')\b')
+_EVENT_AMOUNT_RE = re.compile(r'\$\s?(\d+(?:\.\d+)?)\s?(trillion|billion|million|tn|bn|mn|t|b|m)\b')
+_EVENT_STOPWORDS = frozenset((
+    'the', 'a', 'an', 'of', 'to', 'in', 'on', 'for', 'and', 'or', 'as', 'at', 'by', 'with', 'from', 'is',
+    'are', 'was', 'were', 'be', 'been', 'its', 'it', 'that', 'this', 'after', 'over', 'says', 'say', 'said',
+    'amid', 'into', 'than', 'but', 'not', 'has', 'have', 'had', 'will', 'would', 'could', 'can', 'may',
+    'his', 'her', 'their', 'our', 'we', 'he', 'she', 'they', 'sources', 'report', 'reports',
+))
+_EVENT_ABBREV_END_RE = re.compile(
+    r'\b(?:jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|mr|mrs|ms|dr|gen|sen|rep|gov|lt|col|st|no|vs|inc|corp|co|jr|sr|u\.s|u\.k)\.$',
+    re.I)
+
+
+def _event_headline_norm(headline):
+    """Identity form of a headline: lowercase, outlet suffix stripped
+    (" - CNBC", " | Bloomberg"), whitespace collapsed."""
+    h = ' '.join((headline or '').split()).lower()
+    prev = None
+    while prev != h:
+        prev = h
+        h = _EVENT_OUTLET_SUFFIX_RE.sub('', h).strip()
+    return h
+
+
+def _event_norm_text(text):
+    """Key-builder normalization: US forms -> united_states (case-sensitive,
+    so the pronoun "us" never becomes an actor), lowercase, curly quotes
+    flattened, outlet names stripped, obvious synonyms mapped."""
+    t = text or ''
+    t = re.sub(r'\bU\.S\.(?:A\.)?|\bUSA\b|\bUS\b', ' united_states ', t)
+    t = re.sub(r'\bU\.K\.|\bUK\b', ' united_kingdom ', t)
+    t = (t.replace('\u2019', "'").replace('\u2018', "'")
+          .replace('\u201c', '"').replace('\u201d', '"'))
+    t = t.lower()
+    t = _EVENT_OUTLET_WORD_RE.sub(' ', t)
+    for pat, rep in _EVENT_SYNONYMS:
+        t = re.sub(pat, rep, t)
+    return ' '.join(t.split())
+
+
+def _event_first_sentence(text):
+    """First sentence of a summary/description (abbreviation-aware, so
+    "Sept. 24" or "Gen. Barnes" don't end it)."""
+    text = ' '.join((text or '').split())
+    if not text:
+        return ''
+    parts = re.split(r'(?<=[.!?;])\s+', text)
+    out = parts[0]
+    i = 1
+    while i < len(parts) and _EVENT_ABBREV_END_RE.search(out):
+        out = out + ' ' + parts[i]
+        i += 1
+    return out
+
+
+def _event_published_date(date_str='', *timestamps):
+    """Article publish date as an ET calendar date, or None."""
+    ds = (date_str or '').strip()
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', ds):
+        try:
+            return datetime.strptime(ds, '%Y-%m-%d').date()
+        except Exception:
+            pass
+    for ts in timestamps:
+        ts = (ts or '').strip()
+        if not ts:
+            continue
+        try:
+            dt = dateutil_parser.parse(ts, default=datetime.now(timezone.utc),
+                                       tzinfos={"EST": -18000, "EDT": -14400})
+            # Display strings ("Sep 25, 01:43 PM EST") are already ET wall time.
+            if re.search(r'\b(?:EST|EDT)\b', ts) or dt.tzinfo is None:
+                return dt.date()
+            return dt.astimezone(_EVENT_TZ).date()
+        except Exception:
+            continue
+    return None
+
+
+def _event_parse_iso(ts):
+    try:
+        dt = datetime.fromisoformat(str(ts).replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
+def _event_resolve_md(month, day, year, ref):
+    """Calendar date for a month/day (year optional, inferred as the most
+    recent occurrence not more than 2 days after `ref`)."""
+    try:
+        if year:
+            return datetime(int(year), month, day).date()
+        d = datetime(ref.year, month, day).date()
+        if d > ref + timedelta(days=2):
+            d = datetime(ref.year - 1, month, day).date()
+        return d
+    except Exception:
+        return None
+
+
+def _event_action_dates(text, ref):
+    """Explicit calendar dates in `text` that read as an ACTION date: an
+    action noun within ~50 chars, not a deadline ("by Sept. 25"), not in
+    the future relative to the article. Returned in text order."""
+    out = []
+    for m in _EVENT_DATE_RE.finditer(text or ''):
+        if m.group(1):
+            d = _event_resolve_md(_EVENT_MONTHS[m.group(1)[:3]], int(m.group(2)), m.group(3), ref)
+        else:
+            try:
+                d = datetime(int(m.group(4)), int(m.group(5)), int(m.group(6))).date()
+            except Exception:
+                d = None
+        if d is None or d > ref + timedelta(days=1):
+            continue
+        if _EVENT_DEADLINE_BEFORE_RE.search(text[max(0, m.start() - 30):m.start()]):
+            continue
+        window = text[max(0, m.start() - 50):m.end() + 50]
+        if not _EVENT_ACTION_NOUN_RE.search(window):
+            continue
+        out.append(d)
+    return out
+
+
+def _event_age_texts(ctx):
+    """(subject, full) normalized texts for Rule B. Haiku's reason /
+    tier_reasoning are commentary about the article, not the article, so
+    they're excluded from event-date resolution."""
+    subject = ' '.join([ctx.get('headline') or '',
+                        _event_first_sentence(ctx.get('summary')),
+                        _event_first_sentence(ctx.get('description'))])
+    full = ' '.join([ctx.get('headline') or '', ctx.get('summary') or '', ctx.get('description') or ''])
+    return _event_norm_text(subject), _event_norm_text(full)
+
+
+def _event_has_new_action(full, ref, today, old_date=None):
+    """Rule B exception: the article ALSO reports a new action now, dated
+    within AGE_CAP_DAYS. A named general, leaked memo, survivors or "how
+    the attack unfolded" match none of these."""
+    for d in _event_action_dates(full, ref):
+        if d != old_date and 0 <= (today - d).days <= AGE_CAP_DAYS:
+            return True
+    return bool(_EVENT_NEW_ACTION_RE.search(full))
+
+
+def _event_resolve_age(ctx, today):
+    """Rule B event-date resolution. Returns dict(status=old|recent|none,
+    event_date=str, age_days=int|None, exception=bool)."""
+    pub = ctx.get('published_date')
+    ref = pub or today
+    subject, full = _event_age_texts(ctx)
+    dates = _event_action_dates(subject, ref) or _event_action_dates(full, ref)
+    if dates:
+        ev = dates[0]
+        age = (today - ev).days
+        if age > AGE_CAP_DAYS:
+            if _event_has_new_action(full, ref, today, old_date=ev):
+                return {'status': 'recent', 'event_date': ev.isoformat(), 'age_days': age, 'exception': True}
+            return {'status': 'old', 'event_date': ev.isoformat(), 'age_days': age, 'exception': False}
+        return {'status': 'recent', 'event_date': ev.isoformat(), 'age_days': age, 'exception': False}
+    m = _EVENT_RELATIVE_OLD_RE.search(full)
+    if m:
+        if _event_has_new_action(full, ref, today):
+            return {'status': 'recent', 'event_date': 'relative', 'age_days': None, 'exception': True}
+        return {'status': 'old', 'event_date': f'relative:"{m.group(0)}"', 'age_days': None, 'exception': False}
+    if pub and _EVENT_NOW_CUE_RE.search(full):
+        return {'status': 'recent', 'event_date': pub.isoformat(), 'age_days': (today - pub).days, 'exception': False}
+    return {'status': 'none', 'event_date': None, 'age_days': None, 'exception': False}
+
+
+def _event_actor_hits(text):
+    hits = []
+    for name, rx in _EVENT_ACTOR_RES:
+        m = rx.search(text)
+        if m:
+            hits.append((m.start(), name))
+    hits.sort()
+    return [n for _, n in hits]
+
+
+def _event_amount(text):
+    m = _EVENT_AMOUNT_RE.search(text or '')
+    if not m:
+        return None
+    val = float(m.group(1))
+    unit = m.group(2)[0]
+    millions = val * {'t': 1_000_000, 'b': 1000, 'm': 1}[unit]
+    if millions >= 1000:
+        return f"{round(millions / 1000, 2):g}b"
+    return f"{round(millions, 1):g}m"
+
+
+def _event_amount_millions(obj):
+    m = re.match(r'^(\d+(?:\.\d+)?)(m|b)$', obj or '')
+    if not m:
+        return None
+    return float(m.group(1)) * (1000 if m.group(2) == 'b' else 1)
+
+
+def _event_time_bucket(spec_bucket, full, subject, pub, today):
+    ref = pub or today
+    if spec_bucket == 'month':
+        d = (_event_action_dates(subject, ref) or [ref])[0]
+        return d.strftime('%Y-%m')
+    dates = _event_action_dates(subject, ref) or _event_action_dates(full, ref)
+    if dates:
+        return dates[0].isoformat()
+    if re.search(r'\byesterday\b', subject):
+        return (ref - timedelta(days=1)).isoformat()
+    wm = _EVENT_WEEKDAY_RE.search(subject) or _EVENT_WEEKDAY_RE.search(full)
+    if wm:
+        back = (ref.weekday() - _EVENT_WEEKDAYS.index(wm.group(1))) % 7
+        return (ref - timedelta(days=back)).isoformat()
+    return ref.isoformat()
+
+
+def _event_build_key(ctx, today):
+    """actor|action|object|time_bucket, or (None, reason) when at least
+    actor + action can't be built. Deterministic; no model call. There is
+    deliberately no generic "war" action, so a broad Iran-war piece comes
+    back weak_key instead of a fat iran|war key that swallows the war."""
+    pub = ctx.get('published_date')
+    headline = _EVENT_HEADLINE_PREFIX_RE.sub('', ' '.join((ctx.get('headline') or '').split()))
+    h = _event_norm_text(headline)
+    subject = _event_norm_text(' '.join([headline, _event_first_sentence(ctx.get('summary')),
+                                         _event_first_sentence(ctx.get('description'))]))
+    full = _event_norm_text(' '.join([headline, ctx.get('summary') or '', ctx.get('description') or '',
+                                      ctx.get('reason') or '', ctx.get('tier_reasoning') or '']))
+
+    def _matches(spec, text):
+        if not spec['trig_re'].search(text):
+            return False
+        if 'ctx_re' in spec and not spec['ctx_re'].search(full):
+            return False
+        if 'need_re' in spec and not spec['need_re'].search(text):
+            return False
+        if 'veto_re' in spec and spec['veto_re'].search(text):
+            return False
+        return True
+
+    spec, where = None, None
+    for s in _EVENT_ACTIONS:
+        if _matches(s, h):
+            spec, where = s, h
+            break
+    if spec is None:
+        for s in _EVENT_ACTIONS:
+            if not s.get('headline_only') and _matches(s, subject):
+                spec, where = s, subject
+                break
+    if spec is None:
+        return None, 'weak_key'
+
+    # Actor
+    actor = None
+    rule = spec['actor']
+    if rule.startswith('fixed:'):
+        actor = rule[6:]
+    elif rule == 'strike':
+        m = _EVENT_STRIKE_ADJ_RE.search(subject) or _EVENT_STRIKE_ADJ_RE.search(full)
+        if m:
+            actor = _EVENT_STRIKE_ADJ[m.group(1)]
+        else:
+            sm = spec['trig_re'].search(h)
+            before = _event_actor_hits(h[:sm.start()]) if sm else []
+            actor = (before or _event_actor_hits(h) or [None])[0]
+    else:
+        hits = _event_actor_hits(h) or _event_actor_hits(subject)
+        actor = hits[0] if hits else None
+    if not actor:
+        return None, 'weak_key'
+
+    # Object
+    obj = '-'
+    orule = spec['obj']
+    if orule.startswith('fixed:'):
+        obj = orule[6:]
+    elif orule == 'amount':
+        obj = _event_amount(h) or _event_amount(subject) or _event_amount(full) or '-'
+    elif orule == 'exports_level':
+        for txt in (h, subject):
+            if re.search(r'highest (?:level )?since (?:the )?(?:[\w-]+ ){0,2}war|wartime (?:peak|high|record)|'
+                         r'(?:peak|high) since (?:the )?(?:[\w-]+ ){0,2}war', txt):
+                obj = 'war_high'
+                break
+            if re.search(r'\brecord\b|\bhighest\b|\bpeak\b', txt):
+                obj = 'record_high'
+                break
+            if re.search(r'\blowest\b|\bplunge|\bslump|\bcollapse', txt):
+                obj = 'low'
+                break
+    elif orule == 'intel':
+        if re.search(r'\bnato\b', subject) and re.search(r'\battack|\bstrike', subject):
+            obj = 'nato_limited_attack'
+        else:
+            others = [a for a in _event_actor_hits(subject) if a != actor]
+            obj = f"{others[0]}_threat" if others else '-'
+    elif orule == 'target':
+        others = [a for a in _event_actor_hits(where) if a != actor]
+        if not others:
+            others = [a for a in _event_actor_hits(subject) if a != actor]
+        obj = others[0] if others else '-'
+    elif orule == 'strike_target':
+        for txt in (subject, full):
+            for sm in spec['trig_re'].finditer(txt):
+                # Target = first actor in a prepositional phrase right after
+                # the strike word ("strike on March 1 at Kuwaiti port").
+                win = re.split(r'[.;]', txt[sm.end():sm.end() + 60])[0]
+                if not re.match(r'\s*(?:on|at|in|against|near|targeting|hit|hits|that hit)\b', win):
+                    continue
+                others = [a for a in _event_actor_hits(win) if a != actor]
+                if others:
+                    obj = others[0]
+                    break
+            if obj != '-':
+                break
+
+    bucket = _event_time_bucket(spec['bucket'], full, subject, pub, today)
+    return f"{actor}|{spec['action']}|{obj}|{bucket}", None
+
+
+def _event_keys_compatible(a, b):
+    """Same event under the key's own normalization: identical actor and
+    action; object equal, missing on one side, or two amounts within 25%
+    ("nearly $1B" vs "$810M"); date buckets within 1 day (ET/UTC edge,
+    Friday announcement reported Saturday)."""
+    pa, pb = a.split('|'), b.split('|')
+    if len(pa) != 4 or len(pb) != 4 or pa[0] != pb[0] or pa[1] != pb[1]:
+        return False
+    oa, ob = pa[2], pb[2]
+    if not (oa == ob or oa == '-' or ob == '-'):
+        ma, mb = _event_amount_millions(oa), _event_amount_millions(ob)
+        if ma is None or mb is None or min(ma, mb) / max(ma, mb) < 0.75:
+            return False
+    ba, bb = pa[3], pb[3]
+    if ba == bb:
+        return True
+    if len(ba) == 10 and len(bb) == 10:
+        try:
+            da = datetime.strptime(ba, '%Y-%m-%d').date()
+            db = datetime.strptime(bb, '%Y-%m-%d').date()
+            return abs((da - db).days) <= 1
+        except Exception:
+            return False
+    return False
+
+
+def _event_meaningful_tokens(headline_norm):
+    toks = re.findall(r"[a-z0-9$][a-z0-9$.'\-]*", headline_norm or '')
+    return [t.strip(".'-") for t in toks if t.strip(".'-") and t.strip(".'-") not in _EVENT_STOPWORDS]
+
+
+def _event_longest_shared_span(a_tokens, b_tokens):
+    best = 0
+    prev = [0] * (len(b_tokens) + 1)
+    for i in range(1, len(a_tokens) + 1):
+        cur = [0] * (len(b_tokens) + 1)
+        for j in range(1, len(b_tokens) + 1):
+            if a_tokens[i - 1] == b_tokens[j - 1]:
+                cur[j] = prev[j - 1] + 1
+                if cur[j] > best:
+                    best = cur[j]
+        prev = cur
+    return best
+
+
+def _event_is_same_article(row, identity):
+    """Same article = headline_norm equals any stored identity's
+    headline_norm, OR non-empty story_url equals any stored non-empty
+    story_url (exact)."""
+    hl = identity.get('headline_norm') or ''
+    url = identity.get('story_url') or ''
+    for ident in row.get('identities') or []:
+        if hl and ident.get('headline_norm') == hl:
+            return True
+        if url and (ident.get('story_url') or '') == url:
+            return True
+    return False
 
 
 class GeopoliticalPipeline:
@@ -336,6 +884,12 @@ class GeopoliticalPipeline:
                 item[item_field] = val
 
     def __init__(self):
+        # Event memory (see _apply_event_rules()) — one lock serializes the
+        # fetch_news() pass and background classify threads on
+        # /data/geo_event_memory.json; _event_logged dedupes the per-article
+        # skip lines so they print once per process, not every cycle.
+        self._event_memory_lock = threading.Lock()
+        self._event_logged = set()
         self.timezone = pytz.timezone(TIMEZONE)
         self.cache_key = "geopolitical"
         api_key = os.environ.get('ANTHROPIC_API_KEY', '')
@@ -644,7 +1198,7 @@ FALSE POSITIVES COST MORE THAN MISSES: you are classifying headlines for a Nasda
 
 FIRST_PRINT vs FOLLOW_UP — classify every relevant item as one of these before anything else below. This determines how long the item can live in the score, not whether it's interesting enough to include.
 
-FIRST_PRINT (48-hour clock): the article introduces a new fact — new kinetic action, new official restriction, new signed agreement, new disclosed size/terms, or first confirmation from a primary actor. A new kinetic act after silence of 5+ trading days is FIRST_PRINT even if it's the same war or the same underlying conflict.
+FIRST_PRINT (48-hour clock): the article introduces a new fact — new kinetic action, new official restriction, new signed agreement, new disclosed size/terms, or first confirmation from a primary actor. A new kinetic act after silence of 5+ trading days is FIRST_PRINT even if it's the same war or the same underlying conflict. A named person, leaked memo, survivor quote, or second-outlet rewrite of an event that already happened is FOLLOW_UP, not a new event.
 
 FOLLOW_UP (24-hour clock): the article restates an already-scored event with no new target class, no new supply-chain implication, and no new fact — "talks are close" with no third-party confirmation, an analyst note repeating a press release, a senator's comment on an already-scored story, a recap of an already-announced deal, a second strike inside an already-active 48-hour campaign with no new target class. FOLLOW_UP is still relevant: true — it is ingested and scored on the shorter clock, not rejected. Do not fail a FOLLOW_UP item under DECISION 1 or FILTER 2/6 below purely because it restates rather than introduces — that's exactly what makes it FOLLOW_UP, not grounds for rejection.
 
@@ -1880,6 +2434,286 @@ CONTEXT: {context}"""
         except Exception:
             return fallback_description
 
+    # ── Event memory + 14-day after-action cap (see module-level helpers) ──
+
+    def _load_event_memory(self):
+        """Load /data/geo_event_memory.json, dropping rows whose first_seen
+        is older than EVENT_MEMORY_TTL_DAYS. Missing file -> {}. Never
+        raises. This file is NOT the classification cache and is never
+        touched by _purge_blocked_from_cache()."""
+        now = datetime.now(timezone.utc)
+        mem, dropped = {}, 0
+        try:
+            if os.path.exists(GEO_EVENT_MEMORY_FILE):
+                with open(GEO_EVENT_MEMORY_FILE, 'r') as f:
+                    raw = json.load(f)
+                if isinstance(raw, dict):
+                    for key, row in raw.items():
+                        first_seen = _event_parse_iso(row.get('first_seen')) if isinstance(row, dict) else None
+                        if first_seen is None or now - first_seen > timedelta(days=EVENT_MEMORY_TTL_DAYS):
+                            dropped += 1
+                            continue
+                        mem[key] = row
+        except Exception as e:
+            pulse_logger.log(f"⚠️ EVENT MEMORY load failed, starting empty: {e}", level="WARNING")
+            mem = {}
+        return mem, dropped
+
+    def _event_ctx(self, headline, summary, description, reason, tier_reasoning, story_url, dated):
+        return {
+            'headline': headline or '',
+            'summary': summary or '',
+            'description': description or '',
+            'reason': reason or '',
+            'tier_reasoning': tier_reasoning or '',
+            'story_url': (story_url or '').strip(),
+            'published_date': _event_published_date(
+                dated.get('date', ''), dated.get('published_at', ''), dated.get('timestamp', '')),
+        }
+
+    def _event_log_once(self, tag, headline_norm, line):
+        key = (tag, headline_norm)
+        if key in self._event_logged:
+            return
+        self._event_logged.add(key)
+        pulse_logger.log(line)
+
+    def _event_decide(self, entry, mem, now, today):
+        """Rule B then Rule A for one classification. Mutates `mem` only;
+        returns a decision dict (or None when nothing changes) that
+        _apply_event_rules() applies to the classification afterwards."""
+        ctx = entry['ctx']
+        target = entry['target']
+        now_iso = now.isoformat()
+        haiku_kind = target.get('kind') if target.get('kind') in ('first_print', 'follow_up') else 'first_print'
+        haiku_tier = target.get('tier')
+        kind, tier = haiku_kind, haiku_tier
+        headline = ctx['headline']
+        identity = {'headline_norm': _event_headline_norm(headline), 'story_url': ctx.get('story_url') or ''}
+        short = headline[:90]
+        logs, rules = [], []
+
+        # Rule B — 14-day after-action cap (independent of memory).
+        age = _event_resolve_age(ctx, today)
+        if age['status'] == 'old':
+            kind = 'follow_up'
+            if tier in (1, 2):
+                tier = 3
+            if (kind, tier) != (haiku_kind, haiku_tier):
+                rules.append('age_cap')
+                age_days = age['age_days'] if age['age_days'] is not None else f'>{AGE_CAP_DAYS}'
+                logs.append(
+                    f"AGE CAP | event_date={age['event_date']} | age_days={age_days} | "
+                    f"haiku_kind={haiku_kind} haiku_tier={haiku_tier} -> kind={kind} tier={tier} | headline={short}"
+                )
+        elif age['status'] == 'none':
+            self._event_log_once('age_skip', identity['headline_norm'],
+                                 f"AGE CAP skip | reason=no_event_date | headline={short}")
+
+        # Rule A — 7-day event memory.
+        key, weak = _event_build_key(ctx, today)
+        touched = False
+        if key is None:
+            self._event_log_once('weak', identity['headline_norm'],
+                                 f"EVENT MEMORY skip | reason={weak} | headline={short}")
+            # Fallback only for weak keys: long shared headline span.
+            my_tokens = _event_meaningful_tokens(identity['headline_norm'])
+            same_row, match_row = None, None
+            for rkey, row in mem.items():
+                if _event_is_same_article(row, identity):
+                    same_row = rkey
+                    break
+            if same_row is None and len(my_tokens) >= EVENT_FALLBACK_SPAN_TOKENS:
+                for rkey, row in sorted(mem.items(), key=lambda kv: kv[1].get('first_seen', '')):
+                    for ident in row.get('identities') or []:
+                        span = _event_longest_shared_span(
+                            my_tokens, _event_meaningful_tokens(ident.get('headline_norm', '')))
+                        if span >= EVENT_FALLBACK_SPAN_TOKENS:
+                            match_row = rkey
+                            break
+                    if match_row:
+                        break
+            if same_row is not None:
+                mem[same_row]['last_seen'] = now_iso
+                touched = True
+            elif match_row is not None:
+                row = mem[match_row]
+                row['last_seen'] = now_iso
+                idents = row.setdefault('identities', [])
+                idents.append(identity)
+                if len(idents) > EVENT_MAX_IDENTITIES:
+                    del idents[1:len(idents) - EVENT_MAX_IDENTITIES + 1]
+                touched = True
+                if kind != 'follow_up':
+                    kind = 'follow_up'
+                    row['forced_follow_up_count'] = int(row.get('forced_follow_up_count', 0)) + 1
+                    rules.append('event_memory_headline_fallback')
+                    logs.append(
+                        f"FORCE FOLLOW_UP (headline fallback) | key={match_row} | haiku_kind={haiku_kind} | "
+                        f"matched=\"{row.get('sample_headline', '')[:90]}\" | headline={short}"
+                    )
+            else:
+                fb_key = f"~headline|{hashlib.sha1(identity['headline_norm'].encode('utf-8')).hexdigest()[:12]}"
+                mem[fb_key] = {
+                    'first_seen': now_iso, 'last_seen': now_iso, 'sample_headline': headline,
+                    'haiku_kind_on_first_seen': haiku_kind, 'forced_follow_up_count': 0,
+                    'identities': [identity],
+                }
+                touched = True
+        else:
+            row_key = key if key in mem else None
+            if row_key is None:
+                compatible = [k for k in mem if not k.startswith('~') and _event_keys_compatible(key, k)]
+                if compatible:
+                    row_key = min(compatible, key=lambda k: mem[k].get('first_seen', ''))
+            if row_key is None:
+                mem[key] = {
+                    'first_seen': now_iso, 'last_seen': now_iso, 'sample_headline': headline,
+                    'haiku_kind_on_first_seen': haiku_kind, 'forced_follow_up_count': 0,
+                    'identities': [identity],
+                }
+                touched = True
+            else:
+                row = mem[row_key]
+                row['last_seen'] = now_iso
+                touched = True
+                if not _event_is_same_article(row, identity):
+                    idents = row.setdefault('identities', [])
+                    idents.append(identity)
+                    if len(idents) > EVENT_MAX_IDENTITIES:
+                        del idents[1:len(idents) - EVENT_MAX_IDENTITIES + 1]
+                    if kind != 'follow_up':
+                        kind = 'follow_up'
+                        row['forced_follow_up_count'] = int(row.get('forced_follow_up_count', 0)) + 1
+                        rules.append('event_memory')
+                        key_part = f"key={key}" + (f" | matched_key={row_key}" if row_key != key else '')
+                        logs.append(
+                            f"FORCE FOLLOW_UP | {key_part} | haiku_kind={haiku_kind} | "
+                            f"matched=\"{row.get('sample_headline', '')[:90]}\" | headline={short}"
+                        )
+
+        decision = None
+        if (kind, tier) != (haiku_kind, haiku_tier):
+            decision = {'kind': kind, 'tier': tier, 'haiku_kind': haiku_kind, 'haiku_tier': haiku_tier,
+                        'rules': rules, 'logs': logs}
+        return decision, touched
+
+    def _apply_event_rules(self, entries, log_loaded=False):
+        """Rule B (14-day after-action cap) then Rule A (7-day event memory)
+        for each entry {'ctx': ..., 'target': classification dict,
+        'store': tag}. Mutates target['kind'] (and target['tier'] only when
+        the age cap fires) in place, so the forced values are what get
+        persisted/pinned/scored downstream. Any failure is logged and the
+        classification keeps Haiku's original kind/tier. Returns the set of
+        store tags whose target dicts changed."""
+        changed_stores = set()
+        try:
+            decisions = []
+            with self._event_memory_lock:
+                mem, dropped = self._load_event_memory()
+                if log_loaded:
+                    pulse_logger.log(f"EVENT MEMORY loaded | keys={len(mem)} | dropped_expired={dropped}")
+                dirty = dropped > 0
+                now = datetime.now(timezone.utc)
+                today = now.astimezone(_EVENT_TZ).date()
+                for entry in entries:
+                    try:
+                        decision, touched = self._event_decide(entry, mem, now, today)
+                        dirty = dirty or touched
+                        if decision:
+                            decisions.append((entry, decision))
+                    except Exception as e:
+                        pulse_logger.log(
+                            f"⚠️ Event rules failed for '{(entry.get('ctx') or {}).get('headline', '')[:60]}' — "
+                            f"keeping Haiku kind/tier: {e}", level="WARNING")
+                if dirty:
+                    try:
+                        atomic_write_json(GEO_EVENT_MEMORY_FILE, mem)
+                    except Exception as e:
+                        pulse_logger.log(f"⚠️ EVENT MEMORY save failed: {e}", level="WARNING")
+            emitted = set()
+            for entry, d in decisions:
+                target = entry['target']
+                target['kind'] = d['kind']
+                target['tier'] = d['tier']
+                target['event_rule'] = '+'.join(d['rules'])
+                target['pre_rule_kind'] = d['haiku_kind']
+                target['pre_rule_tier'] = d['haiku_tier']
+                changed_stores.add(entry.get('store', ''))
+                for line in d['logs']:
+                    # A pin and its own cache entry are the same article; if
+                    # both change in one pass, log the identical line once.
+                    if line not in emitted:
+                        emitted.add(line)
+                        pulse_logger.log(line)
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Event memory rules failed — keeping Haiku kind/tier: {e}", level="WARNING")
+            return set()
+        return changed_stores
+
+    def _event_rule_entries_for_fresh(self, source_items, classifications):
+        """Entries for freshly returned Haiku results (background_classify(),
+        _reclassify_cached_pending()). Only scoring-eligible items
+        (relevant, confidence >= 0.75) — the same bar known_relevant and
+        update_pinned_store() use."""
+        entries = []
+        for r in classifications or []:
+            if not isinstance(r, dict) or 'id' not in r:
+                continue
+            idx = r['id'] - 1
+            if not (0 <= idx < len(source_items)):
+                continue
+            if not r.get('relevant') or (r.get('confidence') or 0) < 0.75:
+                continue
+            art = source_items[idx]
+            entries.append({
+                'ctx': self._event_ctx(art.get('headline', ''), r.get('summary'), art.get('description'),
+                                       r.get('reason'), r.get('reasoning'), art.get('link'), art),
+                'target': r,
+                'store': 'fresh',
+            })
+        return entries
+
+    def _apply_event_rules_to_known(self, items, gemini_cache, gemini_cache_file, pinned_stories):
+        """Every fetch_news() cycle: load event memory (logs EVENT MEMORY
+        loaded) and run the rules over already-classified entries for the
+        current feed (cache hits) and active pins, oldest first — so the
+        first cycle after deploy seeds memory from what's already live and
+        caps a cached old after-action recap before it's scored. A re-seen
+        article matches its own identity and is left alone. Changed cache
+        entries / pins are persisted so the forced kind drives their clock."""
+        try:
+            entries = []
+            for i in items:
+                c = gemini_cache.get(i.get('headline', ''))
+                if not isinstance(c, dict) or not c.get('relevant') or (c.get('confidence') or 0) < 0.75:
+                    continue
+                max_h = 24 if c.get('kind') == 'follow_up' else MAX_ARTICLE_AGE_HOURS
+                if self.is_article_too_old(c.get('classified_at', ''), max_hours=max_h):
+                    continue
+                entries.append((c.get('classified_at', ''), {
+                    'ctx': self._event_ctx(i.get('headline', ''), c.get('summary'), i.get('description'),
+                                           c.get('reason'), c.get('tier_reasoning'), i.get('link'), i),
+                    'target': c,
+                    'store': 'cache',
+                }))
+            for p in pinned_stories or []:
+                entries.append((p.get('classified_at') or p.get('pinned_at', ''), {
+                    'ctx': self._event_ctx(p.get('headline', ''), p.get('summary'), p.get('summary'),
+                                           p.get('reason'), p.get('tier_reasoning'), p.get('link'), p),
+                    'target': p,
+                    'store': 'pin',
+                }))
+            entries.sort(key=lambda e: e[0] or '')
+            changed = self._apply_event_rules([e for _, e in entries], log_loaded=True)
+            if 'cache' in changed:
+                atomic_write_json(gemini_cache_file, gemini_cache)
+            if 'pin' in changed:
+                self.save_pinned_stories(pinned_stories)
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Event memory pass on cached/pinned items failed — keeping stored kind/tier: {e}",
+                             level="WARNING")
+
     def fetch_news(self):
         if not THENEWS_API_KEY:
             pulse_logger.log("⚠️ THENEWS_API_KEY not set — skipping geopolitical news fetch", level="WARNING")
@@ -2043,6 +2877,15 @@ CONTEXT: {context}"""
             if early_blocked:
                 pulse_logger.log(f"🚫 Early blocklist — {early_blocked} article(s) removed before classification")
 
+        # Pins are loaded here (rather than just before injection below) so
+        # the event-memory pass can see them alongside cache hits.
+        pinned_stories = self.load_pinned_stories()
+
+        # Event memory + 14-day after-action cap over already-classified
+        # entries (cache hits + pins), BEFORE known_relevant reads kind for
+        # its age window and before anything is scored. Persists any change.
+        self._apply_event_rules_to_known(items, gemini_cache, gemini_cache_file, pinned_stories)
+
         # Split into already classified vs new
         new_items = [i for i in items if i['headline'] not in gemini_cache]
         known_relevant = []
@@ -2098,7 +2941,6 @@ CONTEXT: {context}"""
         # Only an exact headline match skips injection — a same-story judgment
         # never retires a pin, so a distinct article keeps contributing to
         # score until it ages out via TTL in load_pinned_stories().
-        pinned_stories = self.load_pinned_stories()
         current_headlines = {i['headline'] for i in immediately_available}
         injected = 0
         for pin in pinned_stories:
@@ -2193,6 +3035,11 @@ CONTEXT: {context}"""
                     classifications = self._classify_relevance_batch_chunked(new_items)
                     duplicate_headlines = set()
                     if classifications:
+                        # Event memory + 14-day cap: may overwrite r['kind'] (and
+                        # cap r['tier']) in place BEFORE new_class is built, the
+                        # cache is written, update_pinned_store() runs (which
+                        # already skips kind == follow_up), and anything scores.
+                        self._apply_event_rules(self._event_rule_entries_for_fresh(new_items, classifications))
                         for r in classifications:
                             idx = r['id'] - 1
                             if idx < len(new_items):
@@ -2234,6 +3081,9 @@ CONTEXT: {context}"""
                                     'article_text': new_items[idx].get('_full_text', ''),
                                     'classified_at': datetime.now(timezone.utc).isoformat()
                                 }
+                                for f in ('event_rule', 'pre_rule_kind', 'pre_rule_tier'):
+                                    if f in r:
+                                        new_class[f] = r[f]
 
                                 # Duplicate-event check — same underlying story, just re-titled.
                                 # Compared against the 15 most recently classified active
@@ -2674,6 +3524,7 @@ CONTEXT: {context}"""
                 classifications = self.classify_relevance_batch(pending)
                 if not classifications:
                     return
+                self._apply_event_rules(self._event_rule_entries_for_fresh(pending, classifications))
                 for r in classifications:
                     idx = r['id'] - 1
                     if 0 <= idx < len(pending):
@@ -2706,6 +3557,9 @@ CONTEXT: {context}"""
                             'article_text': pending[idx].get('_full_text', ''),
                             'classified_at': datetime.now(timezone.utc).isoformat()
                         }
+                        for f in ('event_rule', 'pre_rule_kind', 'pre_rule_tier'):
+                            if f in r:
+                                gc[headline][f] = r[f]
                         pulse_logger.log(
                             f"🔄 Fallback-reclassified: '{headline[:60]}' → "
                             f"{'relevant' if r.get('relevant') else 'irrelevant'} | "
