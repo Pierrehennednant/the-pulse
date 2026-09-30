@@ -818,6 +818,74 @@ class GeopoliticalPipeline:
             return False
         return any(c in text for c in self._EC_SURVEY_CUES)
 
+    # Isolated civil-aviation incidents (cockpit fights, foiled hijacks,
+    # diverted airliners) are not market domain — Sep 30 Flydubai FZ1073 miss.
+    # Word-boundary regex so 'oil' never hits 'turmoil', 'plane' never 'planet'.
+    _AVIATION_PHRASE_RE = re.compile(r'\b(?:' + '|'.join((
+        r'fly ?dubai',
+        r'fz ?1073',
+        r'violent incidents? between pilots',
+        r'(?:fights?|clash(?:es)?) between pilots',
+        r'pilots? (?:was |were )?stabb(?:ed|ing)',
+        r'stabb(?:ed|ing) the (?:pilot|captain)',
+        r'cockpit stabb?(?:ed|ing|s)?',
+        r'cockpit assaults?',
+        r'cockpit fights?',
+        r'hijack(?:s|ed|er|ers|ing)?',
+        r'unlawful interference',
+        r'squawk(?:s|ed|ing)? 7500',
+        r'7500 squawk',
+        r'flights? (?:was |were )?diverted',
+        r'diverted flights?',
+        r'emergency landings?',
+        r'passengers recount(?:s|ed|ing)?',
+        r'passengers (?:overcame|subdued)',
+        r'(?:attempted|tried) to crash the plane',
+    )) + r')\b')
+    _AVIATION_CUE_RE = re.compile(
+        r'\b(?:pilots?|co-?pilots?|copilots?|captains?|cockpits?|passengers?|'
+        r'airlines?|flights?|aircraft|planes?|diverted|landings?|airports?)\b'
+    )
+    _AVIATION_VETO_RE = re.compile(
+        r'\b(?:hormuz|strait of hormuz|oil|pipelines?|tankers?|sanctions|tariffs?|'
+        r'ban on imports|ceasefires?|nato|troop deployments?|army expansion|'
+        r'mobili[sz]ations?|missile strikes? on infrastructure|'
+        r'airspace closed by government order|no-fly zones? declared|'
+        # Concept widening of the two phrases above so real war copy
+        # ("missile barrage", "airspace closes", "airstrikes") vetoes too.
+        r'airspace|missiles?|air ?strikes?|drone strikes?|no-fly)\b'
+    )
+
+    def _is_aviation_incident(self, item):
+        if not isinstance(item, dict):
+            text = str(item or '').lower()
+            veto_text = text
+        else:
+            text = ' '.join([
+                str(item.get('headline') or ''),
+                str(item.get('description') or ''),
+                str(item.get('summary') or ''),
+                str(item.get('title') or ''),
+            ]).lower()
+            # Veto reads the article's own text only, not Haiku's `summary` —
+            # the live FZ1073 pin's summary invented "Oil and broad risk
+            # sentiment face near-term uncertainty", which would otherwise
+            # veto the very card this reject exists to catch.
+            veto_text = ' '.join([
+                str(item.get('headline') or ''),
+                str(item.get('description') or ''),
+                str(item.get('title') or ''),
+            ]).lower()
+        if not text.strip():
+            return False
+        if not self._AVIATION_PHRASE_RE.search(text):
+            return False
+        if not self._AVIATION_CUE_RE.search(text):
+            return False
+        if self._AVIATION_VETO_RE.search(veto_text):
+            return False
+        return True
+
     def _reevaluate_pinned_ec_folds(self):
         """Code-only pass over currently-pinned stories, run on every
         fetch() call regardless of whether a live TheNewsAPI fetch happens
@@ -1369,6 +1437,7 @@ Is the person or organization in this headline someone who directly moves market
 
 FILTER 5 — MARKET DOMAIN TEST
 Does this article exist within the domain of financial markets, geopolitics affecting markets, energy, trade, or monetary policy? Articles about space missions, scientific discoveries, social policy, and non-financial government activity should be rejected even if they use financial language.
+- Isolated civil-aviation crime is not market domain: a cockpit fight, foiled hijack, passenger restraining a pilot, or a diverted airliner — even if the destination is Israel, even if an official calls it terror, even if jets were scrambled — fails FILTER 5 and DECISION 1 unless THIS article also reports a new state military campaign, a government airspace-closure/no-fly order, or an energy/trade disruption. A second write-up of the same landing is the same reject, not a new FIRST_PRINT.
 
 FILTER 6 — CONFIRMATION TRAP TEST
 Is this article just confirming something the market already knows and has already priced in? If the macro situation is already established and this is just another data point piling on, it adds no new directional information ON ITS OWN — but per the FIRST_PRINT/FOLLOW_UP step above, that is grounds for classifying it FOLLOW_UP (relevant: true, 24-hour clock), not for failing it under this filter. Only fail it here if it also can't be tied to any identifiable already-scored event at all.
@@ -1779,6 +1848,12 @@ Articles to classify:
                     )
                     dirty = True
                     continue
+                if self._is_aviation_incident(story):
+                    pulse_logger.log(
+                        f"🚫 Geo aviation-incident reject (pinned): {headline[:80]}"
+                    )
+                    dirty = True
+                    continue
                 if story.get('kind') not in ('first_print', 'follow_up'):
                     pulse_logger.log(f"⚠️ Pinned story missing/malformed kind '{story.get('kind')}' for '{headline[:60]}' — defaulting to first_print", level="WARNING")
                     story['kind'] = 'first_print'
@@ -1998,6 +2073,11 @@ Respond with only one word: DIVERGED or UNCHANGED"""
             if self._is_ec_survey_recap(article):
                 pulse_logger.log(
                     f"🚫 Geo EC-survey reject (pin skipped): {headline[:80]}"
+                )
+                continue
+            if self._is_aviation_incident(article):
+                pulse_logger.log(
+                    f"🚫 Geo aviation-incident reject (pin skipped): {headline[:80]}"
                 )
                 continue
             tier = r.get('tier')
@@ -2828,7 +2908,11 @@ CONTEXT: {context}"""
                 for ec_key, ec_rec in ec_cache.items():
                     if not isinstance(ec_rec, dict):
                         continue
-                    if not (self._is_ec_survey_recap(ec_key) or self._is_ec_survey_recap(ec_rec)):
+                    if self._is_ec_survey_recap(ec_key) or self._is_ec_survey_recap(ec_rec):
+                        ec_reject_log = "🚫 Geo EC-survey reject (cache row)"
+                    elif self._is_aviation_incident(ec_key) or self._is_aviation_incident(ec_rec):
+                        ec_reject_log = "🚫 Geo aviation-incident reject (cache row)"
+                    else:
                         continue
                     if (ec_rec.get('relevant') is False and ec_rec.get('tier') is None
                             and ec_rec.get('kind') is None and ec_rec.get('gate_pass') is False):
@@ -2838,7 +2922,7 @@ CONTEXT: {context}"""
                     ec_rec['kind'] = None
                     ec_rec['gate_pass'] = False
                     ec_changed = True
-                    pulse_logger.log(f"🚫 Geo EC-survey reject (cache row): '{str(ec_key)[:60]}'")
+                    pulse_logger.log(f"{ec_reject_log}: '{str(ec_key)[:60]}'")
                 if ec_changed:
                     atomic_write_json(ec_cache_file, ec_cache)
         except Exception as e:
@@ -3556,6 +3640,11 @@ CONTEXT: {context}"""
                     f"🚫 Geo EC-survey reject (score skipped): {str(item.get('headline') or '')[:80]}"
                 )
                 continue
+            if self._is_aviation_incident(item):
+                pulse_logger.log(
+                    f"🚫 Geo aviation-incident reject (score skipped): {str(item.get('headline') or '')[:80]}"
+                )
+                continue
             # Direction
             direction = item.get('gemini_direction')
             if direction == 'bullish':
@@ -3772,6 +3861,12 @@ CONTEXT: {context}"""
             if self._is_ec_survey_recap(item):
                 pulse_logger.log(
                     f"🚫 Geo EC-survey reject (cache drop): '{item.get('headline', '')[:60]}'"
+                )
+                updated += 1  # forces _refresh_cached_data() to recompute flags/score without it
+                continue
+            if self._is_aviation_incident(item):
+                pulse_logger.log(
+                    f"🚫 Geo aviation-incident reject (cache drop): '{item.get('headline', '')[:60]}'"
                 )
                 updated += 1  # forces _refresh_cached_data() to recompute flags/score without it
                 continue
