@@ -775,6 +775,49 @@ class GeopoliticalPipeline:
             return False
         return self._ec_fold_matches(item, ec_anchors) is not None
 
+    _EC_SURVEY_PHRASES = (
+        'consumer confidence',
+        'consumer optimism',
+        'conference board',
+        'present situation index',
+        'expectations index',
+        'university of michigan',
+        'u. of m.',
+        'umich',
+        'michigan consumer',
+        'jolts',
+        'jobless claims',
+        'initial claims',
+        'continuing claims',
+        'adp employment',
+        'adp non-farm',
+        'adp nonfarm',
+        'ism manufacturing',
+        'ism services',
+        'purchasing managers',
+    )
+    _EC_SURVEY_CUES = (
+        'confidence', 'optimism', 'sentiment', 'survey', 'index',
+        'actual', 'forecast', 'expected', 'consensus', 'miss', 'beat',
+        'points', 'lowest since', 'highest since',
+    )
+
+    def _is_ec_survey_recap(self, item):
+        if not isinstance(item, dict):
+            text = str(item or '').lower()
+        else:
+            text = ' '.join([
+                str(item.get('headline') or ''),
+                str(item.get('description') or ''),
+                str(item.get('summary') or ''),
+                str(item.get('title') or ''),
+            ]).lower()
+        if not text.strip():
+            return False
+        if not any(p in text for p in self._EC_SURVEY_PHRASES):
+            return False
+        return any(c in text for c in self._EC_SURVEY_CUES)
+
     def _reevaluate_pinned_ec_folds(self):
         """Code-only pass over currently-pinned stories, run on every
         fetch() call regardless of whether a live TheNewsAPI fetch happens
@@ -1413,7 +1456,7 @@ Key rules:
 - When uncertain between tiers, default to the lower tier.
 - De-escalation and peace developments are generally Bullish for US equities. Escalation and conflict are generally Bearish.
 - Oil/Energy Rule: Falling oil prices caused by geopolitical de-escalation or peace deals are Bullish for equities. Only classify oil price moves as Bearish when driven by demand destruction, recession fears, or oversupply.
-- Major Economic Data Exception — NFP / CPI / GDP only: If the article reports actual data for Non-Farm Payrolls (NFP), CPI (any variant: Core CPI, CPI m/m, CPI y/y), or GDP (any variant: GDP q/q, Final GDP), AND the deviation of actual from consensus forecast is 50% or greater in absolute relative terms (e.g. NFP 57K actual vs 114K expected = 50% miss; CPI 0.6% actual vs 0.3% expected = 100% beat), classify as Tier 1 regardless of other factors. Cite the specific actual vs. forecast figures and the % deviation as the reasoning. This exception does NOT apply to ISM, PMI, Retail Sales, ADP, or any other economic data — those continue to use standard Tier 2/3 judgment.
+- EC PRINTS ARE NOT GEO. Reject as not relevant (relevant: false, no tier, no kind) when the article is primarily a scheduled US data print or household survey recap. This includes Conference Board Consumer Confidence / Expectations / Present Situation, University of Michigan consumer sentiment, JOLTS, Initial or Continuing Jobless Claims, ADP, ISM, PMI, Retail Sales, Housing Starts, Durable Goods, Existing or New Home Sales, Personal Income/Spending, and any "consumer optimism / household mood / confidence slides" write-up of those prints. NFP, CPI (any variant), Core PCE, and GDP are also EC-owned — if the article is only "the number came out," reject it. Geo may keep an article that uses a print as one sentence inside a NEW policy, war, tariff, or supply-chain action (example: "White House announces oil-export ban after CPI print") — the action is the event, not the print. Never use "50% relative deviation" or "Major Economic Data Exception." Those phrases are retired. Percent-miss math lives only in pipelines/economic_calendar.py.
 
 Articles to classify:
 {article_list}"""
@@ -1730,6 +1773,12 @@ Articles to classify:
                         pulse_logger.log(f"🚫 Blocked by blocklist (pinned): {headline[:80]} | matched: {matched[0][:60]}")
                         dirty = True
                         continue
+                if self._is_ec_survey_recap(story):
+                    pulse_logger.log(
+                        f"🚫 Geo EC-survey reject (pinned): {headline[:80]}"
+                    )
+                    dirty = True
+                    continue
                 if story.get('kind') not in ('first_print', 'follow_up'):
                     pulse_logger.log(f"⚠️ Pinned story missing/malformed kind '{story.get('kind')}' for '{headline[:60]}' — defaulting to first_print", level="WARNING")
                     story['kind'] = 'first_print'
@@ -1946,6 +1995,11 @@ Respond with only one word: DIVERGED or UNCHANGED"""
 
             article = new_items[idx]
             headline = article.get('headline', '')
+            if self._is_ec_survey_recap(article):
+                pulse_logger.log(
+                    f"🚫 Geo EC-survey reject (pin skipped): {headline[:80]}"
+                )
+                continue
             tier = r.get('tier')
             if tier not in (1, 2, 3):
                 tier = None
@@ -2113,7 +2167,7 @@ Key rules:
 - When uncertain between tiers, default to the lower tier.
 - De-escalation and peace developments are generally Bullish for US equities. Escalation and conflict are generally Bearish.
 - Oil/Energy Rule: Falling oil prices caused by geopolitical de-escalation or peace deals are Bullish for equities. Only classify oil price moves as Bearish when driven by demand destruction, recession fears, or oversupply.
-- Major Economic Data Exception — NFP / CPI / GDP only: If the article reports actual data for Non-Farm Payrolls (NFP), CPI (any variant: Core CPI, CPI m/m, CPI y/y), or GDP (any variant: GDP q/q, Final GDP), AND the deviation of actual from consensus forecast is 50% or greater in absolute relative terms (e.g. NFP 57K actual vs 114K expected = 50% miss; CPI 0.6% actual vs 0.3% expected = 100% beat), classify as Tier 1 regardless of other factors. Cite the specific actual vs. forecast figures and the % deviation as the reasoning. This exception does NOT apply to ISM, PMI, Retail Sales, ADP, or any other economic data — those continue to use standard Tier 2/3 judgment.
+- EC PRINTS ARE NOT GEO. Reject as not relevant (relevant: false, no tier, no kind) when the article is primarily a scheduled US data print or household survey recap. This includes Conference Board Consumer Confidence / Expectations / Present Situation, University of Michigan consumer sentiment, JOLTS, Initial or Continuing Jobless Claims, ADP, ISM, PMI, Retail Sales, Housing Starts, Durable Goods, Existing or New Home Sales, Personal Income/Spending, and any "consumer optimism / household mood / confidence slides" write-up of those prints. NFP, CPI (any variant), Core PCE, and GDP are also EC-owned — if the article is only "the number came out," reject it. Geo may keep an article that uses a print as one sentence inside a NEW policy, war, tariff, or supply-chain action (example: "White House announces oil-export ban after CPI print") — the action is the event, not the print. Never use "50% relative deviation" or "Major Economic Data Exception." Those phrases are retired. Percent-miss math lives only in pipelines/economic_calendar.py.
 
 Return ONLY a JSON object with no markdown, no explanation, no preamble. Exactly this format:
 {{"tier": 1, "direction": "bullish", "reasoning": "One short sentence explaining the tier and direction choice", "confidence": 0.85}}
@@ -2762,6 +2816,33 @@ CONTEXT: {context}"""
                              level="WARNING")
 
     def fetch_news(self):
+        # EC-survey recaps (Conference Board / UMich / JOLTS / claims / ADP /
+        # ISM) are EC-owned — neutralize any cached classification for one
+        # once per cycle so it can never come back as a Tier 1 Geo card.
+        try:
+            ec_cache_file = "/data/gemini_classifications.json"
+            if os.path.exists(ec_cache_file):
+                with open(ec_cache_file, 'r') as f:
+                    ec_cache = json.load(f)
+                ec_changed = False
+                for ec_key, ec_rec in ec_cache.items():
+                    if not isinstance(ec_rec, dict):
+                        continue
+                    if not (self._is_ec_survey_recap(ec_key) or self._is_ec_survey_recap(ec_rec)):
+                        continue
+                    if (ec_rec.get('relevant') is False and ec_rec.get('tier') is None
+                            and ec_rec.get('kind') is None and ec_rec.get('gate_pass') is False):
+                        continue
+                    ec_rec['relevant'] = False
+                    ec_rec['tier'] = None
+                    ec_rec['kind'] = None
+                    ec_rec['gate_pass'] = False
+                    ec_changed = True
+                    pulse_logger.log(f"🚫 Geo EC-survey reject (cache row): '{str(ec_key)[:60]}'")
+                if ec_changed:
+                    atomic_write_json(ec_cache_file, ec_cache)
+        except Exception as e:
+            pulse_logger.log(f"⚠️ EC-survey cache purge failed: {e}", level="WARNING")
         if not THENEWS_API_KEY:
             pulse_logger.log("⚠️ THENEWS_API_KEY not set — skipping geopolitical news fetch", level="WARNING")
             return []
@@ -3470,6 +3551,11 @@ CONTEXT: {context}"""
                 item['ec_folded'] = True
                 folded_count += 1
                 continue
+            if self._is_ec_survey_recap(item):
+                pulse_logger.log(
+                    f"🚫 Geo EC-survey reject (score skipped): {str(item.get('headline') or '')[:80]}"
+                )
+                continue
             # Direction
             direction = item.get('gemini_direction')
             if direction == 'bullish':
@@ -3683,6 +3769,12 @@ CONTEXT: {context}"""
         kept = []
         updated = 0
         for item in all_items:
+            if self._is_ec_survey_recap(item):
+                pulse_logger.log(
+                    f"🚫 Geo EC-survey reject (cache drop): '{item.get('headline', '')[:60]}'"
+                )
+                updated += 1  # forces _refresh_cached_data() to recompute flags/score without it
+                continue
             if not item.get('keyword_fallback_only'):
                 kept.append(item)
                 continue
