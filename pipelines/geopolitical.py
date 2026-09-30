@@ -886,6 +886,57 @@ class GeopoliticalPipeline:
             return False
         return True
 
+    # Late official attribution of an already-public incident (Sep 30 miss:
+    # PM Burnham naming Iran on the Sunday RAF Fairford incident, 3 days on)
+    # is follow_up 24h max Tier 3, never first_print 48h Tier 2. Applied as
+    # Rule C inside _event_decide() so it runs after Haiku, before pin/score.
+    _LATE_ATTRIBUTION_SITE_RE = re.compile(
+        r'\b(?:raf fairford|fairford|incident near air base|played a part|'
+        r'strong indications|believes iran was involved|we believe iran)\b'
+    )
+    _LATE_ATTRIBUTION_VERB_RE = re.compile(
+        r'\b(?:believes|believed|indications|played a part|involved|'
+        r'foreign actor|linked to|suspects iran)\b'
+    )
+    _LATE_ATTRIBUTION_KINETIC_RE = re.compile(
+        r'\b(?:struck|bombed|bombing|explosions?|missiles?|drone hits?|killed|'
+        r'airspace closed|no-fly|signed|deployed|ban effective)\b'
+    )
+
+    def _is_late_attribution(self, item):
+        # Reads headline + description + title only. Haiku's `summary` is
+        # excluded from match AND veto (same choice as the aviation veto):
+        # summaries paraphrase background ("a U.S. air base used for strikes
+        # on Iran") and can carry kinetic words like 'missile' that are not
+        # new facts in THIS article.
+        if not isinstance(item, dict):
+            text = str(item or '').lower()
+        else:
+            text = ' '.join([
+                str(item.get('headline') or ''),
+                str(item.get('description') or ''),
+                str(item.get('title') or ''),
+            ]).lower()
+        if not text.strip():
+            return False
+        if not self._LATE_ATTRIBUTION_SITE_RE.search(text):
+            return False
+        if not self._LATE_ATTRIBUTION_VERB_RE.search(text):
+            return False
+        if self._LATE_ATTRIBUTION_KINETIC_RE.search(text):
+            return False
+        return True
+
+    @staticmethod
+    def _late_attribution_locked(record):
+        return 'late_attribution' in str((record or {}).get('event_rule') or '')
+
+    @staticmethod
+    def _late_attribution_tier(direction, tier):
+        if direction in ('bullish', 'bearish') or tier in (1, 2):
+            return 3
+        return tier
+
     def _reevaluate_pinned_ec_folds(self):
         """Code-only pass over currently-pinned stories, run on every
         fetch() call regardless of whether a live TheNewsAPI fetch happens
@@ -1335,6 +1386,7 @@ FOMC / RATE-DECISION RECAP RULE: if the article's only substance is language abo
 EXAMPLE — FOLLOW_UP, FOMC recap pattern: "Three words from Kevin Warsh have Wall Street wondering how far the Fed will go with rate hikes," published days after this week's FOMC decision and press conference, analyzing a quote made AT that press conference. No new vote, no new number, no new date — this is analysis of an event the Economic Calendar pillar already scored: kind=follow_up, 24h. Contrast a genuine FIRST_PRINT in this category: an unscheduled interview days later where Warsh states a specific new policy path not previously disclosed (e.g. "another hike in November is likely") — that is a new fact from a primary actor, FIRST_PRINT.
 
 Reject an item entirely (relevant: false, no tier, no kind) only if it neither introduces a new fact (FIRST_PRINT) nor restates an identifiable, already-scored, still-live event (FOLLOW_UP) — i.e. it has no traceable connection to anything market-moving, or it fails one of the other filters below on its own terms (source-vs-echo, actor test, market domain, etc.).
+- An official naming a country on an incident that was already public (arrests, “major incident,” prior foreign-actor comments) is FOLLOW_UP, 24-hour clock, max Tier 3. first_print 48h is only for a new fact the tape did not have: a new strike, a new target class, a new supply break, or the first public report of the incident itself. A PM saying “we believe X played a part” three days later is not the incident happening today.
 
 M&A/PARTNERSHIP/DEAL ITEMS: apply the DEAL GATE inside the TECH/AI MEGA-DEAL RULES section below FIRST, before FIRST_PRINT/FOLLOW_UP or anything else. If an item fails that gate, set relevant: false and do not assign a tier or a kind.
 
@@ -1906,6 +1958,18 @@ Articles to classify:
         merged EXCEPT kind/classified_at (and the echo's event-rule audit
         fields), so the original keeps first_print and its clock start.
         Not used by the EC fold, which is a separate rule."""
+        if self._late_attribution_locked(existing):
+            merged = {k: v for k, v in new_class.items() if k not in self.MERGE_KIND_GUARD_KEEP_FIELDS}
+            for k in self.MERGE_KIND_GUARD_KEEP_FIELDS:
+                if k in existing:
+                    merged[k] = existing[k]
+            merged['kind'] = 'follow_up'
+            merged['tier'] = self._late_attribution_tier(merged.get('direction'), merged.get('tier'))
+            pulse_logger.log(
+                f"🔧 Geo late-attribution fold held on merge: {original_headline[:90]} | "
+                f"incoming {new_class.get('kind')} T{new_class.get('tier')} → follow_up T{merged.get('tier')}"
+            )
+            return merged
         if not self._merge_kind_guard_applies(existing.get('kind'), new_class.get('kind')):
             return new_class
         merged = {k: v for k, v in new_class.items() if k not in self.MERGE_KIND_GUARD_KEEP_FIELDS}
@@ -1951,7 +2015,11 @@ Articles to classify:
                     # the pin keeps first_print and its 48h clock (pin TTL is
                     # published_at/timestamp/date + kind; none of those
                     # timestamps are touched here).
-                    if self._merge_kind_guard_applies(pin.get('kind'), new_class.get('kind')):
+                    if self._late_attribution_locked(pin):
+                        # Late-attribution pin stays follow_up / max T3.
+                        pin['kind'] = 'follow_up'
+                        pin['tier'] = self._late_attribution_tier(pin.get('direction'), pin.get('tier'))
+                    elif self._merge_kind_guard_applies(pin.get('kind'), new_class.get('kind')):
                         self._log_merge_kind_guard(headline, incoming_headline)
                     else:
                         pin['kind'] = new_class.get('kind', pin.get('kind', 'first_print'))
@@ -2691,6 +2759,18 @@ CONTEXT: {context}"""
             self._event_log_once('age_skip', identity['headline_norm'],
                                  f"AGE CAP skip | reason=no_event_date | headline={short}")
 
+        # Rule C — late official attribution (see _is_late_attribution()).
+        # description is passed only when it is the article's own text, not
+        # a Haiku summary copied into it (pins/cached items carry summary there).
+        la_desc = ctx.get('description') if ctx.get('description') != ctx.get('summary') else ''
+        if self._is_late_attribution({'headline': headline, 'description': la_desc}):
+            la_tier = self._late_attribution_tier(target.get('direction'), tier)
+            if (kind, tier) != ('follow_up', la_tier):
+                prev_kind = kind
+                kind, tier = 'follow_up', la_tier
+                rules.append('late_attribution')
+                logs.append(f"🔧 Geo late-attribution fold: {headline} {prev_kind}→follow_up T{tier if tier is not None else '-'}")
+
         # Rule A — 7-day event memory.
         key, weak = _event_build_key(ctx, today)
         touched = False
@@ -2875,6 +2955,19 @@ CONTEXT: {context}"""
                 entries.append((c.get('classified_at', ''), {
                     'ctx': self._event_ctx(i.get('headline', ''), c.get('summary'), i.get('description'),
                                            c.get('reason'), c.get('tier_reasoning'), i.get('link'), i),
+                    'target': c,
+                    'store': 'cache',
+                }))
+            covered = {i.get('headline', '') for i in items}
+            for p in pinned_stories or []:
+                ph = p.get('headline', '')
+                c = gemini_cache.get(ph)
+                if ph in covered or not isinstance(c, dict) or not c.get('relevant') or (c.get('confidence') or 0) < 0.75:
+                    continue
+                covered.add(ph)
+                entries.append((c.get('classified_at', ''), {
+                    'ctx': self._event_ctx(ph, c.get('summary'), p.get('description') or c.get('summary'),
+                                           c.get('reason'), c.get('tier_reasoning'), p.get('link'), p),
                     'target': c,
                     'store': 'cache',
                 }))
