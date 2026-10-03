@@ -31,7 +31,6 @@ MAX_ARTICLE_AGE_HOURS = 48
 GEO_EVENT_MEMORY_FILE = "/data/geo_event_memory.json"
 EVENT_MEMORY_TTL_DAYS = 7
 AGE_CAP_DAYS = 14
-EVENT_FALLBACK_SPAN_TOKENS = 8
 EVENT_MAX_IDENTITIES = 25
 _EVENT_TZ = pytz.timezone(TIMEZONE)
 
@@ -82,6 +81,7 @@ _EVENT_ACTORS = (
     ('israel', r'\bisraeli?s?\b|\bidf\b|\bnetanyahu\b'),
     ('denmark', r'\bdenmark\b|\bdanish\b|\bddis\b'),
     ('nato', r'\bnato\b'),
+    ('opec', r'\bopec\b'),
     ('cuba', r'\bcuban?s?\b|\bhavana\b'),
     ('venezuela', r'\bvenezuelan?s?\b|\bcaracas\b|\bmaduro\b'),
     ('kuwait', r'\bkuwait(?:i|is)?\b'),
@@ -106,51 +106,6 @@ _EVENT_ACTORS = (
     ('turkey', r'\bturkey\b|\bturkish\b|\bankara\b'),
 )
 _EVENT_ACTOR_RES = tuple((name, re.compile(pat)) for name, pat in _EVENT_ACTORS)
-_EVENT_STRIKE_ADJ = {
-    'iranian': 'iran', 'israeli': 'israel', 'russian': 'russia', 'ukrainian': 'ukraine',
-    'american': 'us', 'united_states': 'us', 'houthi': 'yemen', 'chinese': 'china',
-    'hezbollah': 'lebanon', 'pakistani': 'pakistan', 'indian': 'india', 'saudi': 'saudi',
-}
-_EVENT_STRIKE_ADJ_RE = re.compile(
-    r'\b(' + '|'.join(_EVENT_STRIKE_ADJ) + r')\s+(?:[\w-]+\s+){0,2}?(?:drone |missile |rocket )?(?:strikes?|bombing|attack)\b')
-
-# Recognized actions, in priority order. First action found in the
-# headline wins; otherwise first found in the subject sentences (headline +
-# first sentence of summary/description). Anything else -> weak_key.
-#   actor:  'first' | 'fixed:<x>' | 'strike'
-#   bucket: 'month' (ongoing tallies / disclosed assessments) | 'date'
-#   obj:    'intel' | 'amount' | 'exports_level' | 'target' | 'strike_target' | 'fixed:<x>'
-_EVENT_ACTIONS = (
-    {'action': 'ddis', 'trig': r'\bddis\b|\bdanish (?:military |defen[cs]e )?intelligence\b',
-     'actor': 'fixed:denmark', 'bucket': 'month', 'obj': 'intel'},
-    {'action': 'intel_assessment', 'trig': r'\bintelligence assessment\b',
-     'actor': 'first', 'bucket': 'month', 'obj': 'intel'},
-    {'action': 'pocket_rescission', 'trig': r'\brescission\b',
-     'ctx': r'spending|funding|funds|appropriat|congress|\bomb\b|budget|\baid\b|impound',
-     'actor': 'fixed:us', 'bucket': 'date', 'obj': 'amount'},
-    {'action': 'crude_exports', 'trig': r'\b(?:crude|oil)(?: oil)? exports\b|\bexports of (?:crude|oil)\b',
-     'actor': 'first', 'bucket': 'month', 'obj': 'exports_level'},
-    {'action': 'hormuz_reopen_signed', 'trig': r'\bhormuz\b',
-     'need': r'\bsign(?:s|ed)?\b|\bagreement reached\b|\bdeal reached\b|\breopen(?:s|ed)\b',
-     'veto': r'close to|near(?:ing)? (?:a )?deal|\bcould\b|\bwould\b|\bmay\b|expected to|poised to|\bpitch\b|\bproposal\b',
-     'actor': 'fixed:iran', 'bucket': 'date', 'obj': 'fixed:hormuz'},
-    {'action': 'hormuz_talks', 'trig': r'\bhormuz\b',
-     'need': r'\btalks?\b|negotiat|\bpitch\b|\bproposal\b|\boffer\b|close to (?:a )?deal|near(?:ing)? (?:a )?deal|deal to (?:re)?open',
-     'actor': 'fixed:iran', 'bucket': 'date', 'obj': 'fixed:hormuz'},
-    {'action': 'deployment_order', 'trig': r'\bdeployment orders?\b|\border(?:s|ed)? (?:the )?deployment\b|\border(?:s|ed)? (?:[\w-]+ ){0,2}troops\b|\bdeploy(?:s|ed)? (?:[\w-]+ ){0,2}troops\b',
-     'veto': r'\bno (?:indication|deployment)|\bnot (?:yet )?(?:been )?(?:issued|received)|\bhas not\b|\bhave not\b|\bno units\b',
-     'actor': 'first', 'bucket': 'date', 'obj': 'target'},
-    {'action': 'military_planning', 'trig': r'\bgroundwork\b|\bcontingency plan|\bplanning memo\b|\binternal (?:army |military |pentagon )?(?:memo|message|document)|\bmilitary planning\b|\bsets? up for (?:potential|possible) (?:military )?action\b',
-     'actor': 'first', 'bucket': 'month', 'obj': 'target'},
-    {'action': 'strike', 'trig': r'\b(?:drone |missile |rocket )?strikes?\b|\bstruck\b|\bbomb(?:ed|ing|ings)\b',
-     'actor': 'strike', 'bucket': 'date', 'obj': 'strike_target', 'headline_only': True},
-)
-for _a in _EVENT_ACTIONS:
-    for _f in ('trig', 'ctx', 'need', 'veto'):
-        if _f in _a:
-            _a[_f + '_re'] = re.compile(_a[_f])
-del _a, _f
-
 _EVENT_MONTHS = {'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6, 'jul': 7, 'aug': 8,
                  'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12}
 _EVENT_DATE_RE = re.compile(
@@ -275,15 +230,21 @@ def _event_parse_iso(ts):
 
 
 def _event_resolve_md(month, day, year, ref):
-    """Calendar date for a month/day (year optional, inferred as the most
-    recent occurrence not more than 2 days after `ref`)."""
+    """Calendar date for a month/day (year optional, inferred as the
+    occurrence nearest to `ref`, the article date)."""
     try:
         if year:
             return datetime(int(year), month, day).date()
-        d = datetime(ref.year, month, day).date()
-        if d > ref + timedelta(days=2):
-            d = datetime(ref.year - 1, month, day).date()
-        return d
+        # Nearest plausible date to the article date: "starting Oct. 5" in a
+        # Oct. 1 article is 2026-10-05 (a future start, which
+        # _event_action_dates() then ignores), never 2025-10-05.
+        cands = []
+        for y in (ref.year - 1, ref.year, ref.year + 1):
+            try:
+                cands.append(datetime(y, month, day).date())
+            except ValueError:
+                continue
+        return min(cands, key=lambda d: abs((d - ref).days)) if cands else None
     except Exception:
         return None
 
@@ -387,171 +348,546 @@ def _event_amount_millions(obj):
     return float(m.group(1)) * (1000 if m.group(2) == 'b' else 1)
 
 
-def _event_time_bucket(spec_bucket, full, subject, pub, today):
+# ── Event identity (one event, one identity) ─────────────────────────────
+# Every scoring-eligible item gets an identity — there is no action
+# whitelist, so every pair of items is comparable. An identity records:
+#   KIND    — the core action of the item (attack, call, talks, deal, rate
+#             move, tariff, sanction, output decision, pause...), read from
+#             the headline + lead sentence + first summary sentence, with
+#             negated clauses ("no ceasefire was announced") removed. An item
+#             with no action kind is a remark/commentary.
+#   ACTORS  — countries/blocs anywhere in the text, and those in the headline.
+#   SPEAKER — a named person/institution whose remark IS the headline
+#             ("Fed's Kashkari says ...", "Trump told Putin ...").
+#   OBJECT  — what the action is about: object concepts (energy grid, oil,
+#             inflation, servers ...), named proper nouns and named sites,
+#             with the speaker's own name/title removed.
+# The CONCEPT lexicon is synonym classes, not event patterns: it never
+# decides WHETHER an item has an identity, only how words are spelled for
+# comparison ("hits" / "launches massive strikes" / "pounds" / "attack on"
+# are all #attack).
+# Same event = ALL of:
+#   1. same actors   — actor sets overlap when both name actors; headline
+#                      actor sets overlap when both headlines name actors;
+#                      no actor in the new headline that the row never names.
+#   2. same core event — the KIND sets intersect (or both are remarks).
+#   3. same speaker  — a headline remark matches only a row in which that
+#                      named speaker appears; two remarks by different named
+#                      speakers are different events.
+#   4. same object   — the OBJECT sets intersect (when both have objects;
+#                      otherwise two or more shared actors carry the object).
+#   5. score         — weighted token agreement (shared weight / smaller
+#                      identity) >= EVENT_IDENTITY_MIN_OVERLAP.
+# A match is then checked for a NEW FACT (stage escalation, newly disclosed
+# amount, a policy action on a new object, or — for an act of the same kind
+# on a different day — a new named site/place or a new-act/new-round cue) — a new fact is its own
+# event (first_print), never a fold.
+EVENT_CORE_WEIGHT = 3
+EVENT_IDENTITY_MIN_OVERLAP = 0.42
+EVENT_SAME_ACTION_DAY_WINDOW = 1  # kinetic acts within ±1 day = same barrage/campaign day
+
+_EVENT_CONCEPTS = (
+    ('attack', r'\b(?:strikes?|struck|striking|'
+               r'(?:hits?|hitting)(?!\s+(?:an?\s+)?(?:\$|\d|(?:(?:new|fresh|record|all-time|multi-year)\s+)*(?:highs?|lows?|records?)\b))|'
+               r'pound(?:s|ed|ing)?|attack(?:s|ed|ing)?|'
+               r'barrages?|bombard\w*|shell(?:s|ed|ing)|bomb(?:s|ed|ing|ings)?|missiles?|drones?|'
+               r'salvos?|assaults?|offensive)\b'),
+    ('energy', r'\b(?:energy|power|grid|electric\w*|plants?|substations?|thermal|utilit(?:y|ies))\b'),
+    ('outage', r'\b(?:outages?|blackouts?|shutoffs?|power cuts?|emergency cuts?)\b'),
+    ('ceasefire', r'\b(?:ceasefires?|cease-fires?|truces?|pauses?|halt(?:s|ed)?|armistice)\b'),
+    ('call', r'\b(?:phone calls?|calls? with|by phone|phone|spoke (?:with|to|by)|talked (?:with|to|by)|readout)\b'),
+    ('talks', r'\b(?:talks?|negotiat\w*|discuss\w*|weigh(?:s|ing)?(?!\s+on\b)|mediat\w*|breakthrough)\b'),
+    ('deal', r'\b(?:deals?|agreements?|accords?|pacts?|framework)\b'),
+    ('reopen', r'\b(?:reopen\w*|re-open\w*)\b'),
+    ('output', r'\b(?:output|production|barrels (?:a|per) day|bpd)\b'),
+    ('oil', r'\b(?:oil|crude|fuel|gas(?:oline)?|petrol|diesel)\b'),
+    ('price', r'\b(?:prices?|costs?)\b'),
+    ('fed', r'\b(?:fed|federal reserve|fomc|central bank)\b'),
+    ('ratemove', r'\b(?:rate (?:hikes?|increases?|cuts?|rises?)|hikes?|hiked|'
+                 r'(?:rais|cut|lower|hik)(?:e|es|ed|ing|s)? (?:its |the |their )?(?:benchmark |key |policy )?'
+                 r'(?:interest )?rates?|basis points?|quarter(?:-| )point|half(?:-| )point)\b'),
+    ('rate', r'\b(?:interest rates?|rates?)\b'),
+    ('inflation', r'\b(?:inflation\w*|cpi)\b'),
+    ('tariff', r'\b(?:tariffs?|levy|levies|import dut(?:y|ies))\b'),
+    ('sanction', r'\b(?:sanction\w*|designat\w*|blacklist\w*)\b'),
+    ('tanker', r'\b(?:tankers?|vessels?|ships?)\b'),
+    ('jobs', r'\b(?:payrolls?|jobs?|employment|labor market)\b'),
+    ('voter', r'\b(?:voters?|electorate)\b'),
+    ('company', r'\b(?:companies|company|firms?|businesses|corporate)\b'),
+    ('server', r'\b(?:servers?|data centers?|data centres?)\b'),
+)
+_EVENT_CONCEPT_RES = tuple((n, re.compile(p)) for n, p in _EVENT_CONCEPTS)
+# Which concepts name the core ACTION (kind) vs what it is ABOUT (object).
+_EVENT_KIND_CONCEPTS = frozenset({'attack', 'ceasefire', 'call', 'talks', 'deal', 'output', 'ratemove',
+                                  'tariff', 'sanction'})
+_EVENT_OBJECT_CONCEPTS = frozenset({'energy', 'outage', 'reopen', 'oil', 'price', 'fed', 'rate', 'inflation',
+                                    'tanker', 'jobs', 'server'})
+_EVENT_IDENTITY_STOP = frozenset(_EVENT_STOPWORDS | {
+    'officials', 'official', 'according', 'statement', 'statements', 'monday', 'tuesday', 'wednesday',
+    'thursday', 'friday', 'saturday', 'sunday', 'january', 'february', 'march', 'april', 'june', 'july',
+    'august', 'september', 'sept', 'october', 'november', 'december', 'jan', 'feb', 'mar', 'apr', 'jun',
+    'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'today', 'tonight', 'overnight', 'yesterday', 'week',
+    'weeks', 'month', 'months', 'year', 'years', 'morning', 'evening', 'night', 'day', 'days', 'new',
+    'also', 'more', 'about', 'before', 'since', 'last', 'first', 'people', 'familiar', 'matter', 'which',
+    'who', 'what', 'when', 'while', 'where', 'there', 'these', 'those', 'some', 'any', 'all', 'one',
+    'two', 'three', 'been', 'being', 'did', 'does', 'told', 'tell', 'telling', 'earlier', 'later',
+    'still', 'just', 'only', 'other', 'such', 'very', 'should', 'might', 'must', 'per', 'via', 'among',
+    'across', 'around', 'ahead', 'during', 'under', 'between', 'both', 'each', 'few', 'most', 'much',
+    'own', 'same', 'then', 'too', 'now', 'here', 'how', 'why', 'out', 'off', 'again', 'once', 'no',
+    'est', 'edt', 'gmt', 'utc', 'recap', 'article', 'reported', 'reporting', 'says', 'saying',
+    'analysts', 'analyst', 'note', 'interview', 'program', 'show', 'continue', 'continued',
+    'expected', 'major', 'large', 'big', 'biggest', 'massive', 'several', 'many', 'including',
+    'repeated', 'repeats', 'restates', 'restated', 'reports', 'its', 'it', 'them', 'him', 'she',
+    'did', 'make', 'made', 'making', 'take', 'takes', 'took', 'taken', 'give', 'gave', 'like', 'way',
+    'ways', 'time', 'times', 'next', 'previous', 'previously', 'already', 'set', 'see', 'seen',
+})
+# Stage ladder for "new status/stage" facts: 1 = talk/consider/close,
+# 2 = announced/disclosed, 3 = signed/agreed/applied/in force/reopened/
+# confirmed. Counted only outside negated, hedged or restating clauses.
+_EVENT_STAGE3_RE = re.compile(
+    r'\b(?:sign(?:s|ed|ing)?|agreed|agrees|appl(?:ied|ies)|impos(?:ed|es)|takes? effect|took effect|'
+    r'effective (?:today|immediately)|reopen(?:ed|s)|confirm(?:ed|s)|ratif(?:ied|ies)|enact(?:ed|s)|'
+    r'approved|approves)\b')
+_EVENT_STAGE2_RE = re.compile(r'\b(?:announc(?:e|es|ed|ing)|disclos(?:e|es|ed)|unveil(?:s|ed)|issued)\b')
+_EVENT_STAGE1_RE = re.compile(
+    r'\b(?:talks?|negotiat\w*|discuss\w*|weigh(?:s|ing)?|consider\w*|close to|getting close|nearing|'
+    r'proposal|proposed|possible|potential)\b')
+_EVENT_POLICY_NOUN_RE = re.compile(
+    r'\b(?:deals?|agreements?|accords?|pacts?|treat(?:y|ies)|framework|ceasefires?|cease-fires?|truces?|'
+    r'pauses?|halt|tariffs?|levy|levies|dut(?:y|ies)|sanctions?|sanctions list|bans?|embargo|restrictions?|'
+    r'export controls?|orders?|decrees?|law|bill|reopening|strait|blockade|curfew|quotas?)\b')
+_EVENT_NEGATION_RE = re.compile(r"\b(?:no|not|never|without|nor|yet to|denied|den(?:y|ies))\b|n't\b")
+_EVENT_HEDGE_RE = re.compile(r"\b(?:could|may|might|would|expected to|poised to|likely to|set to|plans? to)\b")
+_EVENT_RESTATE_RE = re.compile(
+    r'\b(?:already|earlier|previously|yesterday|last week|days? after|a day after|restat\w*|recap\w*|'
+    r'repeat(?:s|ed)?|reiterat\w*|same)\b')
+_EVENT_SITE_RE = re.compile(
+    r"\b([A-Z][a-z]+(?:[-'][A-Za-z]+)?)\s+(?:(?:thermal|electrical|nuclear|hydroelectric|hydro|power|oil|"
+    r"gas|coal|heat|combined)\s+){0,2}(?:power plant|power station|plant|substation|station|refinery|"
+    r"terminal|port|air base|airbase|base|airport|dam|depot|facility|oilfield|field|pipeline|bridge)\b")
+_EVENT_SITE_EXCLUDE = frozenset({'the', 'a', 'an', 'this', 'that', 'its', 'power', 'thermal', 'nuclear',
+                                 'electrical', 'new', 'one', 'another', 'key', 'main', 'major', 'local'})
+# Identity-only cue that an action is a NEW ROUND of the same kind of act
+# ("a new set of tankers", "another round of strikes", "not previously
+# named"). Kept separate from _EVENT_NEW_ACTION_RE, which Rule B uses.
+_EVENT_NEW_ROUND_RE = re.compile(
+    r'\bnew (?:set|group|batch|tranche|round|wave|series|list|package|slate) of\b|'
+    r'\banother (?:set|group|batch|tranche|round|wave|series)\b|\badditional (?:sanctions|tariffs|strikes|designations)\b|'
+    r'\bnot (?:previously|already|yet) (?:been )?(?:named|listed|designated|sanctioned|targeted|hit)\b')
+# Named speaker: a capitalized name run directly before a speech verb
+# ("Minneapolis Fed President Neel Kashkari said", "Fed's Kashkari says",
+# "Trump told"). The last word of the run is the speaker; the whole run is
+# the speaker's title and is not part of the item's OBJECT.
+_EVENT_SPEECH_VERBS = (r'(?i:says|said|say|warns|warned|warn|told|tells|repeated|repeats|reiterated|reiterates|'
+                       r'argued|argues|added|adds|noted|notes|insisted|insists|claims|claimed|stated|states)')
+_EVENT_SPEAKER_RE = re.compile(
+    r"((?:[A-Z][\w'\u2019\-]*\.?\s+){0,5}?([A-Z][\w\-]+))(?:'s|\u2019s)?\s+" + _EVENT_SPEECH_VERBS + r"\b")
+# Unnamed / generic speakers are commentary, not a named source.
+_EVENT_GENERIC_SPEAKERS = frozenset({
+    'analysts', 'analyst', 'economists', 'economist', 'officials', 'official', 'mediators', 'investors',
+    'traders', 'executives', 'experts', 'sources', 'source', 'diplomats', 'lawmakers', 'senator', 'senators',
+    'report', 'reports', 'poll', 'survey', 'study', 'data', 'markets', 'banks', 'bank', 'he', 'she', 'they',
+    'it', 'who', 'this', 'that', 'the', 'a', 'an', 'statement', 'readout', 'spokesman', 'spokeswoman',
+    'spokesperson', 'governor', 'people', 'companies', 'company', 'residents', 'witnesses', 'police', 'media',
+    'note', 'article', 'administration', 'government', 'ministry', 'department',
+})
+
+
+def _event_clauses(text):
+    return [c for c in re.split(r'[.;:!?]+\s+|,\s*but\s+|\s+but\s+', text or '') if c.strip()]
+
+
+def _event_stage(text_norm):
+    """Highest stage asserted in the text, ignoring negated ("no agreement
+    has been signed"), hedged ("could be signed") and restating ("announced
+    yesterday", "already announced") clauses, and stage verbs with no
+    deal/policy noun in their clause."""
+    best = 0
+    for clause in _event_clauses(text_norm):
+        if _EVENT_RESTATE_RE.search(clause):
+            continue
+        neg = _EVENT_NEGATION_RE.search(clause)
+        live = clause[:neg.start()] if neg else clause
+        if not _EVENT_POLICY_NOUN_RE.search(live):
+            # Stage verbs only mark a new status of a deal/policy ("signed an
+            # agreement", "tariff took effect"), not consequences of a
+            # kinetic event ("power cuts were imposed").
+            if _EVENT_STAGE1_RE.search(clause):
+                best = max(best, 1)
+            continue
+        hedged = bool(_EVENT_HEDGE_RE.search(live))
+        if _EVENT_STAGE3_RE.search(live):
+            best = max(best, 1 if hedged else 3)
+        elif _EVENT_STAGE2_RE.search(live):
+            best = max(best, 1 if hedged else 2)
+        elif _EVENT_STAGE1_RE.search(clause):
+            best = max(best, 1)
+    return best
+
+
+def _event_new_amounts(text_norm):
+    """Dollar amounts asserted outside restating clauses ("the $5B deal
+    announced yesterday" restates; "agreed to buy $5B" discloses)."""
+    out = set()
+    for clause in _event_clauses(text_norm):
+        if _EVENT_RESTATE_RE.search(clause):
+            continue
+        for m in _EVENT_AMOUNT_RE.finditer(clause):
+            a = _event_amount(m.group(0))
+            if a:
+                out.add(a)
+    return out
+
+
+def _event_all_amounts(text_norm):
+    out = set()
+    for m in _EVENT_AMOUNT_RE.finditer(text_norm or ''):
+        a = _event_amount(m.group(0))
+        if a:
+            out.add(a)
+    return out
+
+
+def _event_sites(raw_text):
+    """Named sites ("Trypilska thermal power plant", "Novokyivska
+    electrical substation") from the article's own sentence-case text."""
+    out = set()
+    for m in _EVENT_SITE_RE.finditer(raw_text or ''):
+        w = m.group(1).lower()
+        if w in _EVENT_SITE_EXCLUDE or _event_actor_hits(w):
+            continue
+        out.add(w)
+    return out
+
+
+_EVENT_PROPER_SKIP = frozenset({
+    'president', 'prime', 'minister', 'ministry', 'mr', 'mrs', 'ms', 'dr', 'gen', 'sen', 'senator', 'rep',
+    'gov', 'governor', 'mayor', 'chair', 'chairman', 'secretary', 'department', 'officials', 'official',
+    'the', 'a', 'an', 'in', 'on', 'at', 'of', 'and', 'but', 'his', 'her', 'its', 'their', 'no', 'not',
+    'markets', 'investors', 'traders', 'stocks', 'shares', 'economists', 'executives', 'voters', 'companies',
+})
+
+
+def _event_proper_nouns(raw_text, headline=''):
+    """Lowercased proper nouns from the article's sentence-case text (and
+    the headline unless it is Title Case). Actor names and concept words
+    are left to their own tokens."""
+    out = set()
+    chunks = [raw_text or '']
+    if headline and not headline.istitle():
+        chunks.append(headline)
+    seen_caps = {}
+    cands = []
+    for chunk in chunks:
+        for sent in re.split(r'(?<=[.!?])\s+', chunk):
+            words = re.findall(r"[A-Za-z][A-Za-z'\-]+", sent)
+            for pos, w in enumerate(words):
+                if w[0].isupper():
+                    k = w.lower().replace("'s", '').strip("'-")
+                    seen_caps[k] = seen_caps.get(k, 0) + 1
+                    cands.append((pos, w))
+    for pos, w in cands:
+        # Mid-sentence capital, or a sentence-initial word capitalized at
+        # least twice in the text ("Apple said ... Apple's deal").
+        if w.isupper() and len(w) <= 4:
+            continue
+        key = w.lower().replace("'s", '').strip("'-")
+        if pos == 0 and seen_caps.get(key, 0) < 2:
+            continue
+        if (len(key) < 3 or key in _EVENT_PROPER_SKIP or key in _EVENT_IDENTITY_STOP
+                or _event_actor_hits(key) or any(rx.search(key) for _, rx in _EVENT_CONCEPT_RES)):
+            continue
+        out.add(key)
+    return out
+
+
+def _event_identity_tokens(text_norm, proper=()):
+    toks = set()
+    proper = set(proper)
+    t = text_norm
+    for name, rx in _EVENT_CONCEPT_RES:
+        if rx.search(t):
+            toks.add('#' + name)
+            t = rx.sub(' ', t)
+    for name, rx in _EVENT_ACTOR_RES:
+        if rx.search(t):
+            toks.add('@' + name)
+            t = rx.sub(' ', t)
+    for w in re.findall(r"[a-z][a-z'\-]+", t):
+        w = w.strip("'-")
+        if w.endswith("'s"):
+            w = w[:-2]
+        if len(w) < 3 or w in _EVENT_IDENTITY_STOP:
+            continue
+        if w in proper:
+            toks.add('!' + w)
+            continue
+        if len(w) > 4 and w.endswith('s') and not w.endswith('ss'):
+            w = w[:-1]
+        toks.add(w)
+    return toks
+
+
+def _event_token_weight(tok):
+    return EVENT_CORE_WEIGHT if tok[:1] in ('#', '@', '!') else 1
+
+
+def _event_kinds(text_norm):
+    """Core-action concepts asserted in the text. Negated parts of a clause
+    ("no ceasefire was announced") do not count; inside one clause a phone
+    call absorbs its own "discussed" (a call is not a round of talks)."""
+    kinds = set()
+    for clause in _event_clauses(text_norm):
+        neg = _EVENT_NEGATION_RE.search(clause)
+        live = clause[:neg.start()] if neg else clause
+        found = set()
+        t = live
+        for name, rx in _EVENT_CONCEPT_RES:
+            if rx.search(t):
+                if name in _EVENT_KIND_CONCEPTS:
+                    found.add(name)
+                t = rx.sub(' ', t)
+        if 'call' in found:
+            found.discard('talks')
+        kinds |= found
+    return kinds
+
+
+def _event_speakers(raw_text):
+    """[(speaker, title_words)] for named speakers in sentence-case text."""
+    out = []
+    for m in _EVENT_SPEAKER_RE.finditer(raw_text or ''):
+        name = m.group(2).lower().replace("'s", '').strip("'-")
+        if name in _EVENT_GENERIC_SPEAKERS or name in _EVENT_IDENTITY_STOP or len(name) < 3:
+            continue
+        title = [w.lower().replace("'s", '').replace('\u2019s', '').strip(".'-")
+                 for w in m.group(1).split()]
+        out.append((name, [w for w in title if w]))
+    return out
+
+
+def _event_headline_speaker(headline):
+    """Named speaker whose remark IS the headline ("Fed's Kashkari says
+    ...", "Trump told Putin ..."): the speech verb sits within the first
+    few words. A trailing attribution (", Kremlin says") is not a remark
+    headline."""
+    for m in _EVENT_SPEAKER_RE.finditer(headline or ''):
+        if len(headline[:m.end()].split()) > 5:
+            break
+        name = m.group(2).lower().replace("'s", '').strip("'-")
+        if name in _EVENT_GENERIC_SPEAKERS or name in _EVENT_IDENTITY_STOP or len(name) < 3:
+            continue
+        return name
+    return None
+
+
+def _event_names(raw_text):
+    """Every capitalized word in the text (lowercased) — who is named at all."""
+    return {w.lower().replace("'s", '').replace('\u2019s', '').strip("'-")
+            for w in re.findall(r"\b[A-Z][\w'\u2019\-]+", raw_text or '')}
+
+
+def _event_identity_date(ctx, today):
+    """Day the item's OWN action happened: an explicit action date in the
+    headline/first sentence, else 'yesterday', else a weekday named in the
+    article, else the publish date. Dates further down the body ("different
+    from the Sept. 30 attack") are references, not this item's action day."""
+    pub = ctx.get('published_date')
     ref = pub or today
-    if spec_bucket == 'month':
-        d = (_event_action_dates(subject, ref) or [ref])[0]
-        return d.strftime('%Y-%m')
-    dates = _event_action_dates(subject, ref) or _event_action_dates(full, ref)
+    desc = ctx.get('description') or ''
+    subject = _event_norm_text(' '.join([ctx.get('headline') or '', _event_first_sentence(desc)]))
+    full = _event_norm_text(' '.join([ctx.get('headline') or '', desc]))
+    dates = _event_action_dates(subject, ref)
     if dates:
-        return dates[0].isoformat()
+        return dates[0]
     if re.search(r'\byesterday\b', subject):
-        return (ref - timedelta(days=1)).isoformat()
+        return ref - timedelta(days=1)
     wm = _EVENT_WEEKDAY_RE.search(subject) or _EVENT_WEEKDAY_RE.search(full)
     if wm:
         back = (ref.weekday() - _EVENT_WEEKDAYS.index(wm.group(1))) % 7
-        return (ref - timedelta(days=back)).isoformat()
-    return ref.isoformat()
+        return ref - timedelta(days=back)
+    return ref
 
 
-def _event_build_key(ctx, today):
-    """actor|action|object|time_bucket, or (None, reason) when at least
-    actor + action can't be built. Deterministic; no model call. There is
-    deliberately no generic "war" action, so a broad Iran-war piece comes
-    back weak_key instead of a fat iran|war key that swallows the war."""
-    pub = ctx.get('published_date')
+def _event_word_stems(words):
+    return sorted({w[:5] for w in words if len(w) >= 5})
+
+
+def _event_identity(ctx, today):
+    """Identity record for one item (stored on each memory identity)."""
     headline = _EVENT_HEADLINE_PREFIX_RE.sub('', ' '.join((ctx.get('headline') or '').split()))
-    h = _event_norm_text(headline)
-    subject = _event_norm_text(' '.join([headline, _event_first_sentence(ctx.get('summary')),
-                                         _event_first_sentence(ctx.get('description'))]))
-    full = _event_norm_text(' '.join([headline, ctx.get('summary') or '', ctx.get('description') or '',
-                                      ctx.get('reason') or '', ctx.get('tier_reasoning') or '']))
-
-    def _matches(spec, text):
-        if not spec['trig_re'].search(text):
-            return False
-        if 'ctx_re' in spec and not spec['ctx_re'].search(full):
-            return False
-        if 'need_re' in spec and not spec['need_re'].search(text):
-            return False
-        if 'veto_re' in spec and spec['veto_re'].search(text):
-            return False
-        return True
-
-    spec, where = None, None
-    for s in _EVENT_ACTIONS:
-        if _matches(s, h):
-            spec, where = s, h
-            break
-    if spec is None:
-        for s in _EVENT_ACTIONS:
-            if not s.get('headline_only') and _matches(s, subject):
-                spec, where = s, subject
-                break
-    if spec is None:
-        return None, 'weak_key'
-
-    # Actor
-    actor = None
-    rule = spec['actor']
-    if rule.startswith('fixed:'):
-        actor = rule[6:]
-    elif rule == 'strike':
-        m = _EVENT_STRIKE_ADJ_RE.search(subject) or _EVENT_STRIKE_ADJ_RE.search(full)
-        if m:
-            actor = _EVENT_STRIKE_ADJ[m.group(1)]
-        else:
-            sm = spec['trig_re'].search(h)
-            before = _event_actor_hits(h[:sm.start()]) if sm else []
-            actor = (before or _event_actor_hits(h) or [None])[0]
-    else:
-        hits = _event_actor_hits(h) or _event_actor_hits(subject)
-        actor = hits[0] if hits else None
-    if not actor:
-        return None, 'weak_key'
-
-    # Object
-    obj = '-'
-    orule = spec['obj']
-    if orule.startswith('fixed:'):
-        obj = orule[6:]
-    elif orule == 'amount':
-        obj = _event_amount(h) or _event_amount(subject) or _event_amount(full) or '-'
-    elif orule == 'exports_level':
-        for txt in (h, subject):
-            if re.search(r'highest (?:level )?since (?:the )?(?:[\w-]+ ){0,2}war|wartime (?:peak|high|record)|'
-                         r'(?:peak|high) since (?:the )?(?:[\w-]+ ){0,2}war', txt):
-                obj = 'war_high'
-                break
-            if re.search(r'\brecord\b|\bhighest\b|\bpeak\b', txt):
-                obj = 'record_high'
-                break
-            if re.search(r'\blowest\b|\bplunge|\bslump|\bcollapse', txt):
-                obj = 'low'
-                break
-    elif orule == 'intel':
-        if re.search(r'\bnato\b', subject) and re.search(r'\battack|\bstrike', subject):
-            obj = 'nato_limited_attack'
-        else:
-            others = [a for a in _event_actor_hits(subject) if a != actor]
-            obj = f"{others[0]}_threat" if others else '-'
-    elif orule == 'target':
-        others = [a for a in _event_actor_hits(where) if a != actor]
-        if not others:
-            others = [a for a in _event_actor_hits(subject) if a != actor]
-        obj = others[0] if others else '-'
-    elif orule == 'strike_target':
-        for txt in (subject, full):
-            for sm in spec['trig_re'].finditer(txt):
-                # Target = first actor in a prepositional phrase right after
-                # the strike word ("strike on March 1 at Kuwaiti port").
-                win = re.split(r'[.;]', txt[sm.end():sm.end() + 60])[0]
-                if not re.match(r'\s*(?:on|at|in|against|near|targeting|hit|hits|that hit)\b', win):
-                    continue
-                others = [a for a in _event_actor_hits(win) if a != actor]
-                if others:
-                    obj = others[0]
-                    break
-            if obj != '-':
-                break
-
-    bucket = _event_time_bucket(spec['bucket'], full, subject, pub, today)
-    return f"{actor}|{spec['action']}|{obj}|{bucket}", None
+    desc = ctx.get('description') or ''
+    summary1 = _event_first_sentence(ctx.get('summary'))
+    lead = _event_first_sentence(desc)
+    raw = ' '.join([headline, desc, summary1])
+    norm = _event_norm_text(raw)
+    article_norm = _event_norm_text(' '.join([headline, desc]))
+    core_raw = ' '.join([headline, lead, summary1])
+    proper = _event_proper_nouns(' '.join([desc, summary1]), headline)
+    tokens = _event_identity_tokens(norm, proper)
+    # Speakers and their titles are WHO talks, not WHAT the event is about.
+    speakers = _event_speakers(raw)
+    speaker_words = set()
+    for name, title in speakers:
+        speaker_words.add(name)
+        speaker_words.update(title)
+    obj_raw = raw
+    for m in _EVENT_SPEAKER_RE.finditer(raw):
+        if m.group(2).lower() in {n for n, _ in speakers}:
+            obj_raw = obj_raw.replace(m.group(1), ' ')
+    obj_norm = _event_norm_text(obj_raw)
+    obj_tokens = _event_identity_tokens(obj_norm, proper - speaker_words)
+    objects = sorted(t for t in obj_tokens
+                     if (t[:1] == '#' and t[1:] in _EVENT_OBJECT_CONCEPTS) or t[:1] == '!')
+    sites = sorted(_event_sites(' '.join([headline if not headline.istitle() else '', desc])))
+    hl_norm = _event_norm_text(headline)
+    hl_plain = [t for t in _event_identity_tokens(hl_norm, proper) if t[:1] not in ('#', '@', '!')]
+    lead_proper = sorted(_event_proper_nouns(lead, headline) - speaker_words)
+    return {
+        'tokens': sorted(tokens),
+        'actors': sorted(_event_actor_hits(norm)),
+        'hl_actors': sorted(_event_actor_hits(hl_norm)),
+        'kinds': sorted(_event_kinds(_event_norm_text(core_raw))),
+        'speaker': _event_headline_speaker(headline),
+        'speakers': sorted({n for n, _ in speakers}),
+        'names': sorted(_event_names(raw)),
+        'objects': sorted(set(objects) | {'!' + s for s in sites}),
+        'sites': sites,
+        'lead_proper': lead_proper,
+        'hl_stems': _event_word_stems(hl_plain),
+        'stems': _event_word_stems([t for t in tokens if t[:1] not in ('#', '@')] + [t[1:] for t in tokens if t[:1] == '!']),
+        'amounts': sorted(_event_all_amounts(norm)),
+        'new_amounts': sorted(_event_new_amounts(article_norm)),
+        'stage': _event_stage(article_norm),
+        'event_date': _event_identity_date(ctx, today).isoformat(),
+        'kinetic': '#attack' in tokens,
+        'new_action': bool(_EVENT_NEW_ACTION_RE.search(article_norm) or _EVENT_NEW_ROUND_RE.search(article_norm)),
+    }
 
 
-def _event_keys_compatible(a, b):
-    """Same event under the key's own normalization: identical actor and
-    action; object equal, missing on one side, or two amounts within 25%
-    ("nearly $1B" vs "$810M"); date buckets within 1 day (ET/UTC edge,
-    Friday announcement reported Saturday)."""
-    pa, pb = a.split('|'), b.split('|')
-    if len(pa) != 4 or len(pb) != 4 or pa[0] != pb[0] or pa[1] != pb[1]:
-        return False
-    oa, ob = pa[2], pb[2]
-    if not (oa == ob or oa == '-' or ob == '-'):
-        ma, mb = _event_amount_millions(oa), _event_amount_millions(ob)
-        if ma is None or mb is None or min(ma, mb) / max(ma, mb) < 0.75:
-            return False
-    ba, bb = pa[3], pb[3]
-    if ba == bb:
-        return True
-    if len(ba) == 10 and len(bb) == 10:
-        try:
-            da = datetime.strptime(ba, '%Y-%m-%d').date()
-            db = datetime.strptime(bb, '%Y-%m-%d').date()
-            return abs((da - db).days) <= 1
-        except Exception:
-            return False
-    return False
+def _event_identity_of(ident):
+    """Stored identity -> comparable identity. Rows without the current
+    identity fields (legacy schema: headline_norm/story_url only) are rebuilt
+    from the stored headline."""
+    if isinstance(ident, dict) and 'tokens' in ident and 'kinds' in ident:
+        return ident
+    hl = (ident or {}).get('headline_norm', '') if isinstance(ident, dict) else ''
+    rebuilt = _event_identity({'headline': hl}, datetime.now(_EVENT_TZ).date())
+    rebuilt['event_date'] = None
+    return rebuilt
 
 
-def _event_meaningful_tokens(headline_norm):
-    toks = re.findall(r"[a-z0-9$][a-z0-9$.'\-]*", headline_norm or '')
-    return [t.strip(".'-") for t in toks if t.strip(".'-") and t.strip(".'-") not in _EVENT_STOPWORDS]
+def _event_same_event_gates(a, b):
+    """None when `a` (new item) and `b` (stored identity) are the same event
+    by actors, core action, speaker and object; else the failing gate."""
+    aa, ba = set(a.get('actors') or []), set(b.get('actors') or [])
+    if aa and ba and not aa & ba:
+        return 'actors'
+    ah, bh = set(a.get('hl_actors') or []), set(b.get('hl_actors') or [])
+    if ah and bh and not ah & bh:
+        return 'headline_actors'
+    if ah - ba:
+        return 'new_actor'
+    ak, bk = set(a.get('kinds') or []), set(b.get('kinds') or [])
+    if (ak or bk) and not ak & bk:
+        return 'kind'
+    for x, y in ((a, b), (b, a)):
+        sp = x.get('speaker')
+        if sp and sp not in set(y.get('names') or []):
+            return 'speaker'
+    ao, bo = set(a.get('objects') or []), set(b.get('objects') or [])
+    if ao and bo:
+        if not ao & bo:
+            return 'object'
+    elif len(aa & ba) < 2:
+        return 'object'
+    return None
 
 
-def _event_longest_shared_span(a_tokens, b_tokens):
-    best = 0
-    prev = [0] * (len(b_tokens) + 1)
-    for i in range(1, len(a_tokens) + 1):
-        cur = [0] * (len(b_tokens) + 1)
-        for j in range(1, len(b_tokens) + 1):
-            if a_tokens[i - 1] == b_tokens[j - 1]:
-                cur[j] = prev[j - 1] + 1
-                if cur[j] > best:
-                    best = cur[j]
-        prev = cur
+def _event_identity_score(a, b):
+    """Weighted token agreement after the gates: shared weight over the
+    smaller identity (core tokens weigh EVENT_CORE_WEIGHT). An item that only
+    ADDS to the row (a new product, region or site) can score high here —
+    that is what the NEW FACT check is for."""
+    ta, tb = set(a['tokens']), set(b['tokens'])
+    if not ta or not tb:
+        return 0.0
+    shared = sum(_event_token_weight(t) for t in ta & tb)
+    return shared / min(sum(_event_token_weight(t) for t in ta), sum(_event_token_weight(t) for t in tb))
+
+
+def _event_identity_similarity(a, b):
+    """(shared core weight, score) between two identities, or None when a
+    same-event gate fails."""
+    if _event_same_event_gates(a, b) is not None:
+        return None
+    both = set(a['tokens']) & set(b['tokens'])
+    core = sum(_event_token_weight(t) for t in both if t[:1] in ('#', '@', '!'))
+    return core, _event_identity_score(a, b)
+
+
+def _event_identity_matches(ident, row):
+    """Best similarity of `ident` against any identity on `row`, or None."""
+    best = None
+    for stored in row.get('identities') or []:
+        sim = _event_identity_similarity(ident, _event_identity_of(stored))
+        if sim is None:
+            continue
+        core, overlap = sim
+        if overlap >= EVENT_IDENTITY_MIN_OVERLAP:
+            if best is None or overlap > best[1]:
+                best = sim
     return best
+
+
+def _event_new_fact(ident, row):
+    """Reason string when `ident` carries a fact the matched row does not
+    have (so it is a NEW event, first_print), else None."""
+    stored = [_event_identity_of(s) for s in row.get('identities') or []]
+    row_stage = max([s.get('stage') or 0 for s in stored] or [0])
+    if ident['stage'] >= 2 and ident['stage'] > row_stage:
+        return f"stage {row_stage}->{ident['stage']}"
+    row_amounts = set()
+    for s in stored:
+        row_amounts.update(s.get('amounts') or [])
+    for amt in ident.get('new_amounts') or []:
+        ma = _event_amount_millions(amt)
+        close = [r for r in row_amounts
+                 if _event_amount_millions(r) and ma
+                 and min(ma, _event_amount_millions(r)) / max(ma, _event_amount_millions(r)) >= 0.75]
+        if not close:
+            return f"new amount {amt}"
+    row_stems, row_names = set(), set()
+    for s in stored:
+        row_stems.update(s.get('stems') or [])
+        row_names.update(s.get('names') or [])
+        row_names.update(t[1:] for t in s.get('tokens') or [] if t[:1] == '!')
+    # A policy action asserted now (announced/imposed/signed...) on an object
+    # the row never mentions ("tariffs on semiconductors" vs a steel row).
+    if ident['stage'] >= 2 and ident['stage'] >= row_stage:
+        new_obj = [w for w in ident.get('hl_stems') or [] if w not in row_stems]
+        if new_obj:
+            return f"policy action on new object '{new_obj[0]}'"
+    # An act of the same kind on a different day (kinetic strike, sanctions
+    # round, tariff action, output decision...) is a new event when it names
+    # a new site/place or says it is a new act/round.
+    if (ident['kinetic'] or ident.get('kinds')) and ident.get('event_date'):
+        row_dates = [s.get('event_date') for s in stored if s.get('event_date')]
+        my_day = datetime.strptime(ident['event_date'], '%Y-%m-%d').date()
+        gaps = [abs((my_day - datetime.strptime(d, '%Y-%m-%d').date()).days) for d in row_dates]
+        if gaps and min(gaps) > EVENT_SAME_ACTION_DAY_WINDOW:
+            row_sites = set()
+            for s in stored:
+                row_sites.update(s.get('sites') or [])
+            new_sites = set(ident.get('sites') or []) - row_sites
+            if new_sites:
+                return f"new site {sorted(new_sites)[0]} on {ident['event_date']}"
+            new_places = [p for p in ident.get('lead_proper') or [] if p not in row_names]
+            if new_places:
+                return f"new place {new_places[0]} on {ident['event_date']}"
+            if ident.get('new_action'):
+                return f"new act on {ident['event_date']}"
+    return None
 
 
 def _event_is_same_article(row, identity):
@@ -596,6 +932,12 @@ class GeopoliticalPipeline:
         'uncertainty_score': 'uncertainty_score',
         'kind': 'kind',
         'gate_pass': 'haiku_gate_pass',
+        # Event-identity fold (see _event_decide() Rule A): the item is the
+        # same event as an earlier card — it rides that card's clock and is
+        # never a separate vote in calculate_score().
+        'event_folded': 'event_folded',
+        'clock_anchor': 'clock_anchor',
+        'clock_hours': 'clock_hours',
     }
     # Same names as the map's keys — what a pin record carries forward,
     # unrenamed, from the classification that created it.
@@ -802,6 +1144,17 @@ class GeopoliticalPipeline:
         'points', 'lowest since', 'highest since',
     )
 
+    # Jobs prints (NFP / payrolls) are EC-owned like the survey prints
+    # above: never a geo card, never geo identity, never a geo vote. Kept
+    # only when the same text reports a NEW geo/policy action the print
+    # merely accompanies.
+    _EC_JOBS_PRINT_RE = re.compile(
+        r'\b(?:non-?farm payrolls?|payrolls?|jobs report|nfp|employment report)\b'
+        r'|\b(?:economy|employers|u\.s\.|us) (?:added|shed|lost|created) (?:just |only |a mere )?[\d,.]+k? jobs\b')
+    _EC_JOBS_PRINT_VETO_RE = re.compile(
+        r'\b(?:tariffs?|sanctions?|ban(?:s|ned)?|strikes?|missiles?|ceasefire|troops|embargo|'
+        r'executive order|export controls?|blockade|invasion)\b')
+
     def _is_ec_survey_recap(self, item):
         if not isinstance(item, dict):
             text = str(item or '').lower()
@@ -814,6 +1167,8 @@ class GeopoliticalPipeline:
             ]).lower()
         if not text.strip():
             return False
+        if self._EC_JOBS_PRINT_RE.search(text) and not self._EC_JOBS_PRINT_VETO_RE.search(text):
+            return True
         if not any(p in text for p in self._EC_SURVEY_PHRASES):
             return False
         return any(c in text for c in self._EC_SURVEY_CUES)
@@ -1847,6 +2202,20 @@ Articles to classify:
         except Exception:
             return None
 
+    def _clock_expired(self, entry):
+        """Score/board clock for a classification entry. A folded follow-up
+        (event_folded, see _event_decide() Rule A) has NO clock of its own:
+        it expires with the original card — clock_anchor (the original's
+        clock start) + clock_hours (the original's window, 48h for a
+        first_print). Everything else keeps its own classified_at clock,
+        24h for follow_up, 48h otherwise (unchanged)."""
+        anchor = entry.get('clock_anchor')
+        if anchor:
+            return self.is_article_too_old(anchor, max_hours=entry.get('clock_hours') or MAX_ARTICLE_AGE_HOURS)
+        return self.is_article_too_old(
+            entry.get('classified_at', ''),
+            max_hours=24 if entry.get('kind') == 'follow_up' else MAX_ARTICLE_AGE_HOURS)
+
     def _pin_is_expired(self, story):
         """Fails CLOSED (treats as expired) on a missing or unparseable
         timestamp, same reasoning as is_article_too_old(). Kept as its own
@@ -1861,6 +2230,8 @@ Articles to classify:
         first_print today, so this is a no-op in practice — but it's the
         correct plumbing rather than an assumption, and costs nothing if
         that exclusion rule ever changes. Not a third clock — same two."""
+        if story.get('clock_anchor'):
+            return self._clock_expired(story)
         ts = self._pin_ttl_timestamp(story)
         dt = self._pin_parsed_timestamp(ts)
         if dt is None:
@@ -2124,7 +2495,7 @@ Respond with only one word: DIVERGED or UNCHANGED"""
                 continue
             if r.get('direction', 'neutral') == 'neutral':
                 continue
-            if r.get('kind') == 'follow_up':
+            if r.get('event_folded') or r.get('kind') == 'follow_up':
                 # A follow_up's only claim to relevance is borrowed from
                 # whatever it's restating — if the underlying story needs
                 # to survive past a feed gap, its first_print already had
@@ -2396,10 +2767,7 @@ CONTEXT: {context}"""
 
         active_relevant = {
             headline: entry for headline, entry in gemini_cache.items()
-            if entry.get('relevant') and not self.is_article_too_old(
-                entry.get('classified_at', ''),
-                max_hours=24 if entry.get('kind') == 'follow_up' else MAX_ARTICLE_AGE_HOURS
-            )
+            if entry.get('relevant') and not self._clock_expired(entry)
         }
         if not active_relevant:
             return
@@ -2728,7 +3096,8 @@ CONTEXT: {context}"""
         pulse_logger.log(line)
 
     def _event_decide(self, entry, mem, now, today):
-        """Rule B then Rule A for one classification. Mutates `mem` only;
+        """Rule B, Rule C, then Rule A (event identity) for one
+        classification. Mutates `mem` only;
         returns a decision dict (or None when nothing changes) that
         _apply_event_rules() applies to the classification afterwards."""
         ctx = entry['ctx']
@@ -2771,92 +3140,79 @@ CONTEXT: {context}"""
                 rules.append('late_attribution')
                 logs.append(f"🔧 Geo late-attribution fold: {headline} {prev_kind}→follow_up T{tier if tier is not None else '-'}")
 
-        # Rule A — 7-day event memory.
-        key, weak = _event_build_key(ctx, today)
+        # Rule A — 7-day event identity bank (one event, one identity).
+        # EC-owned prints (jobs/data recaps) never enter geo identity.
         touched = False
-        if key is None:
-            self._event_log_once('weak', identity['headline_norm'],
-                                 f"EVENT MEMORY skip | reason={weak} | headline={short}")
-            # Fallback only for weak keys: long shared headline span.
-            my_tokens = _event_meaningful_tokens(identity['headline_norm'])
-            same_row, match_row = None, None
+        fold = None
+        ec_owned = self._is_ec_survey_recap({'headline': headline, 'description': ctx.get('description'),
+                                             'summary': ctx.get('summary')})
+        if ec_owned:
+            self._event_log_once('ec_owned', identity['headline_norm'],
+                                 f"EVENT MEMORY skip | reason=ec_owned_print | headline={short}")
+        else:
+            ident = _event_identity(ctx, today)
+            same_row = None
             for rkey, row in mem.items():
                 if _event_is_same_article(row, identity):
                     same_row = rkey
                     break
-            if same_row is None and len(my_tokens) >= EVENT_FALLBACK_SPAN_TOKENS:
-                for rkey, row in sorted(mem.items(), key=lambda kv: kv[1].get('first_seen', '')):
-                    for ident in row.get('identities') or []:
-                        span = _event_longest_shared_span(
-                            my_tokens, _event_meaningful_tokens(ident.get('headline_norm', '')))
-                        if span >= EVENT_FALLBACK_SPAN_TOKENS:
-                            match_row = rkey
-                            break
-                    if match_row:
-                        break
             if same_row is not None:
                 mem[same_row]['last_seen'] = now_iso
                 touched = True
-            elif match_row is not None:
-                row = mem[match_row]
-                row['last_seen'] = now_iso
-                idents = row.setdefault('identities', [])
-                idents.append(identity)
-                if len(idents) > EVENT_MAX_IDENTITIES:
-                    del idents[1:len(idents) - EVENT_MAX_IDENTITIES + 1]
-                touched = True
-                if kind != 'follow_up':
-                    kind = 'follow_up'
-                    row['forced_follow_up_count'] = int(row.get('forced_follow_up_count', 0)) + 1
-                    rules.append('event_memory_headline_fallback')
-                    logs.append(
-                        f"FORCE FOLLOW_UP (headline fallback) | key={match_row} | haiku_kind={haiku_kind} | "
-                        f"matched=\"{row.get('sample_headline', '')[:90]}\" | headline={short}"
-                    )
             else:
-                fb_key = f"~headline|{hashlib.sha1(identity['headline_norm'].encode('utf-8')).hexdigest()[:12]}"
-                mem[fb_key] = {
-                    'first_seen': now_iso, 'last_seen': now_iso, 'sample_headline': headline,
-                    'haiku_kind_on_first_seen': haiku_kind, 'forced_follow_up_count': 0,
-                    'identities': [identity],
-                }
-                touched = True
-        else:
-            row_key = key if key in mem else None
-            if row_key is None:
-                compatible = [k for k in mem if not k.startswith('~') and _event_keys_compatible(key, k)]
-                if compatible:
-                    row_key = min(compatible, key=lambda k: mem[k].get('first_seen', ''))
-            if row_key is None:
-                mem[key] = {
-                    'first_seen': now_iso, 'last_seen': now_iso, 'sample_headline': headline,
-                    'haiku_kind_on_first_seen': haiku_kind, 'forced_follow_up_count': 0,
-                    'identities': [identity],
-                }
-                touched = True
-            else:
-                row = mem[row_key]
-                row['last_seen'] = now_iso
-                touched = True
-                if not _event_is_same_article(row, identity):
+                folds, new_facts = [], []
+                for rkey, row in mem.items():
+                    sim = _event_identity_matches(ident, row)
+                    if sim is None:
+                        continue
+                    reason = _event_new_fact(ident, row)
+                    if reason is None:
+                        folds.append((-sim[1], row.get('first_seen', ''), rkey, sim))
+                    else:
+                        new_facts.append((rkey, reason))
+                full_identity = dict(identity, **ident)
+                if folds:
+                    _, _, row_key, sim = min(folds)
+                    row = mem[row_key]
+                    row['last_seen'] = now_iso
                     idents = row.setdefault('identities', [])
-                    idents.append(identity)
+                    idents.append(full_identity)
                     if len(idents) > EVENT_MAX_IDENTITIES:
                         del idents[1:len(idents) - EVENT_MAX_IDENTITIES + 1]
+                    touched = True
+                    clock_hours = row.get('clock_hours') or (
+                        24 if row.get('haiku_kind_on_first_seen') == 'follow_up' else MAX_ARTICLE_AGE_HOURS)
+                    fold = {'event_key': row_key,
+                            'clock_anchor': row.get('clock_start') or row.get('first_seen'),
+                            'clock_hours': clock_hours}
                     if kind != 'follow_up':
-                        kind = 'follow_up'
                         row['forced_follow_up_count'] = int(row.get('forced_follow_up_count', 0)) + 1
-                        rules.append('event_memory')
-                        key_part = f"key={key}" + (f" | matched_key={row_key}" if row_key != key else '')
-                        logs.append(
-                            f"FORCE FOLLOW_UP | {key_part} | haiku_kind={haiku_kind} | "
-                            f"matched=\"{row.get('sample_headline', '')[:90]}\" | headline={short}"
-                        )
+                    kind = 'follow_up'
+                    rules.append('event_memory')
+                    logs.append(
+                        f"FORCE FOLLOW_UP | key={row_key} | core={sim[0]} overlap={sim[1]:.2f} | "
+                        f"haiku_kind={haiku_kind} | clock=original {fold['clock_anchor']} +{clock_hours}h | "
+                        f"matched=\"{row.get('sample_headline', '')[:90]}\" | headline={short}"
+                    )
+                else:
+                    row_key = f"evt|{hashlib.sha1((identity['headline_norm'] + now_iso).encode('utf-8')).hexdigest()[:12]}"
+                    mem[row_key] = {
+                        'first_seen': now_iso, 'last_seen': now_iso, 'sample_headline': headline,
+                        'haiku_kind_on_first_seen': haiku_kind, 'forced_follow_up_count': 0,
+                        # The card's own clock — what a later fold inherits.
+                        'clock_start': target.get('classified_at') or now_iso,
+                        'clock_hours': 24 if kind == 'follow_up' else MAX_ARTICLE_AGE_HOURS,
+                        'identities': [full_identity],
+                    }
+                    touched = True
+                    for nk, reason in new_facts:
+                        self._event_log_once('new_fact', identity['headline_norm'],
+                                             f"NEW FACT | {reason} | vs key={nk} | kept kind={kind} | headline={short}")
 
         decision = None
-        if (kind, tier) != (haiku_kind, haiku_tier):
+        if (kind, tier) != (haiku_kind, haiku_tier) or fold:
             decision = {'kind': kind, 'tier': tier, 'haiku_kind': haiku_kind, 'haiku_tier': haiku_tier,
-                        'rules': rules, 'logs': logs}
+                        'rules': rules, 'logs': logs, 'fold': fold}
         return decision, touched
 
     def _apply_event_rules(self, entries, log_loaded=False):
@@ -2900,6 +3256,13 @@ CONTEXT: {context}"""
                 target['event_rule'] = '+'.join(d['rules'])
                 target['pre_rule_kind'] = d['haiku_kind']
                 target['pre_rule_tier'] = d['haiku_tier']
+                if d.get('fold'):
+                    # Folded into an existing event: inherits the original
+                    # card's clock, never pinned, never a separate vote.
+                    target['event_folded'] = True
+                    target['event_key'] = d['fold']['event_key']
+                    target['clock_anchor'] = d['fold']['clock_anchor']
+                    target['clock_hours'] = d['fold']['clock_hours']
                 changed_stores.add(entry.get('store', ''))
                 for line in d['logs']:
                     # A pin and its own cache entry are the same article; if
@@ -2949,8 +3312,7 @@ CONTEXT: {context}"""
                 c = gemini_cache.get(i.get('headline', ''))
                 if not isinstance(c, dict) or not c.get('relevant') or (c.get('confidence') or 0) < 0.75:
                     continue
-                max_h = 24 if c.get('kind') == 'follow_up' else MAX_ARTICLE_AGE_HOURS
-                if self.is_article_too_old(c.get('classified_at', ''), max_hours=max_h):
+                if self._clock_expired(c):
                     continue
                 entries.append((c.get('classified_at', ''), {
                     'ctx': self._event_ctx(i.get('headline', ''), c.get('summary'), i.get('description'),
@@ -3197,8 +3559,7 @@ CONTEXT: {context}"""
         for i in items:
             cached = gemini_cache.get(i['headline'], {})
             if cached.get('relevant') and cached.get('confidence', 0) >= 0.75:
-                kind_max_hours = 24 if cached.get('kind') == 'follow_up' else MAX_ARTICLE_AGE_HOURS
-                if self.is_article_too_old(cached.get('classified_at', ''), max_hours=kind_max_hours):
+                if self._clock_expired(cached):
                     continue
                 if cached.get('direction'):
                     direction = cached['direction']
@@ -3362,6 +3723,8 @@ CONTEXT: {context}"""
                                     kind = 'first_print'
                                 kind_hours = 24 if kind == 'follow_up' else MAX_ARTICLE_AGE_HOURS
                                 kind_display = f"{kind} ({kind_hours}h{', defaulted' if kind_defaulted else ''})"
+                                if r.get('event_folded'):
+                                    kind_display = f"{kind} (folded — original clock {r.get('clock_anchor')} +{r.get('clock_hours')}h, no vote)"
                                 text_source = new_items[idx].get('_text_source', 'unknown')
                                 new_class = {
                                     'relevant': r.get('relevant', False),
@@ -3386,7 +3749,8 @@ CONTEXT: {context}"""
                                     'article_text': new_items[idx].get('_full_text', ''),
                                     'classified_at': datetime.now(timezone.utc).isoformat()
                                 }
-                                for f in ('event_rule', 'pre_rule_kind', 'pre_rule_tier'):
+                                for f in ('event_rule', 'pre_rule_kind', 'pre_rule_tier',
+                                          'event_folded', 'event_key', 'clock_anchor', 'clock_hours'):
                                     if f in r:
                                         new_class[f] = r[f]
 
@@ -3398,10 +3762,7 @@ CONTEXT: {context}"""
                                     active_entries = [
                                         (h, c) for h, c in gemini_cache.items()
                                         if h != headline and c.get('relevant')
-                                        and not self.is_article_too_old(
-                                            c.get('classified_at', ''),
-                                            max_hours=24 if c.get('kind') == 'follow_up' else MAX_ARTICLE_AGE_HOURS
-                                        )
+                                        and not self._clock_expired(c)
                                     ]
                                     active_entries.sort(key=lambda hc: hc[1].get('classified_at', ''), reverse=True)
                                     candidates = active_entries[:15]
@@ -3693,6 +4054,7 @@ CONTEXT: {context}"""
         pending_count = 0
         gate_failed_count = 0
         folded_count = 0
+        event_folded_count = 0
         tier_map = {1: (1.7, 4.0), 2: (0.75, 2.0), 3: (0.35, 1.0)}
         for item in items:
             # Keyword-fallback-only articles (no Haiku confirmation yet) never
@@ -3723,6 +4085,12 @@ CONTEXT: {context}"""
             # before direction/sentiment_score for the same reason as the
             # gate above. See _check_ec_fold()'s docstring for the full
             # (a)-(d) condition breakdown.
+            # Event-identity fold: same event as an earlier card, which
+            # already carries the vote — this one is visible on the
+            # original's clock but never votes a second time.
+            if item.get('event_folded'):
+                event_folded_count += 1
+                continue
             if self._check_ec_fold(item, ec_anchors):
                 item['kind'] = 'follow_up'  # already true by construction (condition d) — set explicitly for clarity
                 item['ec_folded'] = True
@@ -3799,6 +4167,8 @@ CONTEXT: {context}"""
             pulse_logger.log(f"🚪 Geo — {gate_failed_count} article(s) excluded from score, failed the political pressure gate (visible, non-scoring)")
         if folded_count:
             pulse_logger.log(f"🔗 Geo — {folded_count} article(s) excluded from score, folded into an existing EC event (visible, non-scoring)")
+        if event_folded_count:
+            pulse_logger.log(f"🔗 Geo — {event_folded_count} article(s) excluded from score, folded into an earlier card's event (original clock, no second vote)")
         if total_weight == 0:
             return 0.0
         return round(max(-2.0, min(2.0, weighted_sum / total_weight)), 2)
@@ -3857,6 +4227,8 @@ CONTEXT: {context}"""
                             kind = 'first_print'
                         kind_hours = 24 if kind == 'follow_up' else MAX_ARTICLE_AGE_HOURS
                         kind_display = f"{kind} ({kind_hours}h{', defaulted' if kind_defaulted else ''})"
+                        if r.get('event_folded'):
+                            kind_display = f"{kind} (folded — original clock {r.get('clock_anchor')} +{r.get('clock_hours')}h, no vote)"
                         text_source = pending[idx].get('_text_source', 'unknown')
                         gc[headline] = {
                             'relevant': r.get('relevant', False),
@@ -3874,7 +4246,8 @@ CONTEXT: {context}"""
                             'article_text': pending[idx].get('_full_text', ''),
                             'classified_at': datetime.now(timezone.utc).isoformat()
                         }
-                        for f in ('event_rule', 'pre_rule_kind', 'pre_rule_tier'):
+                        for f in ('event_rule', 'pre_rule_kind', 'pre_rule_tier',
+                                  'event_folded', 'event_key', 'clock_anchor', 'clock_hours'):
                             if f in r:
                                 gc[headline][f] = r[f]
                         pulse_logger.log(
