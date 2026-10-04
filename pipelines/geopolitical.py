@@ -387,7 +387,13 @@ EVENT_IDENTITY_MIN_OVERLAP = 0.42
 EVENT_SAME_ACTION_DAY_WINDOW = 1  # kinetic acts within ±1 day = same barrage/campaign day
 
 _EVENT_CONCEPTS = (
-    ('attack', r'\b(?:strikes?|struck|striking|'
+    # Moving forces is its own act, not an attack ("third carrier strike
+    # group", "sends 2,000 Marines").
+    ('deploy', r'\b(?:(?:re)?deploy(?:s|ed|ing|ments?)?|dispatch(?:es|ed|ing)?|'
+               r'(?:aircraft )?carrier (?:strike )?groups?|aircraft carriers?|(?:strike|amphibious ready) groups?|'
+               r'military build-?up|(?:send|sends|sending|sent|order(?:s|ed)?)\s+(?:[\w,-]+\s+){0,3}?'
+               r'(?:troops|warships|marines|soldiers|destroyers|bombers|fighter jets|carriers?))\b'),
+    ('attack', r'\b(?:strikes?(?!\s+(?:groups?|forces?|fighters?|package))|struck|striking|'
                r'(?:hits?|hitting)(?!\s+(?:an?\s+)?(?:\$|\d|(?:(?:new|fresh|record|all-time|multi-year)\s+)*(?:highs?|lows?|records?)\b))|'
                r'pound(?:s|ed|ing)?|attack(?:s|ed|ing)?|'
                r'barrages?|bombard\w*|shell(?:s|ed|ing)|bomb(?:s|ed|ing|ings)?|missiles?|drones?|'
@@ -419,7 +425,14 @@ _EVENT_CONCEPTS = (
 _EVENT_CONCEPT_RES = tuple((n, re.compile(p)) for n, p in _EVENT_CONCEPTS)
 # Which concepts name the core ACTION (kind) vs what it is ABOUT (object).
 _EVENT_KIND_CONCEPTS = frozenset({'attack', 'ceasefire', 'call', 'talks', 'deal', 'output', 'ratemove',
-                                  'tariff', 'sanction'})
+                                  'tariff', 'sanction', 'deploy'})
+# A coercive act named only as a threat, warning or possibility ("warns of
+# new Iran strikes", "could impose tariffs") is kind 'threat', not the act.
+_EVENT_THREAT_KINDS = frozenset({'attack', 'tariff', 'sanction'})
+_EVENT_THREAT_RE = re.compile(
+    r"\b(?:warn(?:s|ed|ing)?|threat(?:s|en|ens|ened|ening)?|vow(?:s|ed)?|signal(?:s|ed|ing|led|ling)?|"
+    r"could|may(?!\s+\d)|might|would|plans? to|planning to|intends? to|consider(?:s|ing)?|"
+    r"ready to|possible|potential)\b")
 _EVENT_OBJECT_CONCEPTS = frozenset({'energy', 'outage', 'reopen', 'oil', 'price', 'fed', 'rate', 'inflation',
                                     'tanker', 'jobs', 'server'})
 _EVENT_IDENTITY_STOP = frozenset(_EVENT_STOPWORDS | {
@@ -643,9 +656,14 @@ def _event_kinds(text_norm):
         found = set()
         t = live
         for name, rx in _EVENT_CONCEPT_RES:
-            if rx.search(t):
+            m = rx.search(t)
+            if m:
                 if name in _EVENT_KIND_CONCEPTS:
-                    found.add(name)
+                    threat = _EVENT_THREAT_RE.search(t, 0, m.start())
+                    if name in _EVENT_THREAT_KINDS and threat:
+                        found.add('threat')
+                    else:
+                        found.add(name)
                 t = rx.sub(' ', t)
         if 'call' in found:
             found.discard('talks')
@@ -697,6 +715,8 @@ def _event_identity_date(ctx, today):
     desc = ctx.get('description') or ''
     subject = _event_norm_text(' '.join([ctx.get('headline') or '', _event_first_sentence(desc)]))
     full = _event_norm_text(' '.join([ctx.get('headline') or '', desc]))
+    # "the first strikes since Sept. 1" names a reference day, not this act's.
+    subject = re.sub(r'\b(?:since|until|till)\s+(?:the\s+)?[a-z]+\.?\s+\d{1,2}(?:st|nd|rd|th)?\b', ' ', subject)
     dates = _event_action_dates(subject, ref)
     if dates:
         return dates[0]
@@ -743,6 +763,10 @@ def _event_identity(ctx, today):
     hl_norm = _event_norm_text(headline)
     hl_plain = [t for t in _event_identity_tokens(hl_norm, proper) if t[:1] not in ('#', '@', '!')]
     lead_proper = sorted(_event_proper_nouns(lead, headline) - speaker_words)
+    # What the headline itself names as the target/place (for NEW TARGET).
+    hl_objects = sorted({t for t in _event_identity_tokens(hl_norm, proper - speaker_words)
+                         if (t[:1] == '#' and t[1:] in _EVENT_OBJECT_CONCEPTS) or t[:1] == '!'}
+                        | {'!' + s for s in _event_sites(headline if not headline.istitle() else '')})
     return {
         'tokens': sorted(tokens),
         'actors': sorted(_event_actor_hits(norm)),
@@ -754,6 +778,7 @@ def _event_identity(ctx, today):
         'objects': sorted(set(objects) | {'!' + s for s in sites}),
         'sites': sites,
         'lead_proper': lead_proper,
+        'hl_objects': hl_objects,
         'hl_stems': _event_word_stems(hl_plain),
         'stems': _event_word_stems([t for t in tokens if t[:1] not in ('#', '@')] + [t[1:] for t in tokens if t[:1] == '!']),
         'amounts': sorted(_event_all_amounts(norm)),
@@ -774,6 +799,7 @@ def _event_identity_of(ident):
     hl = (ident or {}).get('headline_norm', '') if isinstance(ident, dict) else ''
     rebuilt = _event_identity({'headline': hl}, datetime.now(_EVENT_TZ).date())
     rebuilt['event_date'] = None
+    rebuilt['legacy'] = True
     return rebuilt
 
 
@@ -801,7 +827,23 @@ def _event_same_event_gates(a, b):
             return 'object'
     elif len(aa & ba) < 2:
         return 'object'
+    elif ao or bo:
+        # One side names no object (e.g. a legacy row rebuilt from its
+        # lowercase headline): an empty object cannot vouch for "same
+        # object" — the other side's object must at least appear in it.
+        full_objs, other = (ao, b) if ao else (bo, a)
+        if not _event_plain(full_objs) & _event_plain(other.get('tokens') or []):
+            return 'object'
     return None
+
+
+def _event_plain(tokens):
+    """Tokens without their #/@/! prefix and plural s (for mention checks)."""
+    out = set()
+    for t in tokens:
+        w = t.lstrip('#@!')
+        out.add(w[:-1] if len(w) > 4 and w.endswith('s') and not w.endswith('ss') else w)
+    return out
 
 
 def _event_identity_score(a, b):
@@ -862,27 +904,53 @@ def _event_new_fact(ident, row):
         row_stems.update(s.get('stems') or [])
         row_names.update(s.get('names') or [])
         row_names.update(t[1:] for t in s.get('tokens') or [] if t[:1] == '!')
+        if s.get('legacy'):
+            # A legacy row has only its lowercase headline: every word in it
+            # may be a name ("strait of hormuz").
+            row_names.update(_event_plain(s.get('tokens') or []))
     # A policy action asserted now (announced/imposed/signed...) on an object
     # the row never mentions ("tariffs on semiconductors" vs a steel row).
     if ident['stage'] >= 2 and ident['stage'] >= row_stage:
         new_obj = [w for w in ident.get('hl_stems') or [] if w not in row_stems]
         if new_obj:
             return f"policy action on new object '{new_obj[0]}'"
+    # A kinetic act whose headline names a target CLASS the row never
+    # mentions anywhere (tankers vs a carrier-deployment row) is a new event
+    # on any day. Named sites/places stay with the day-gap rule below (a
+    # same-day rewrite may name the plant the first report did not).
+    if 'attack' in (ident.get('kinds') or []):
+        row_words = _event_plain(row_names)
+        for s in stored:
+            row_words |= _event_plain(s.get('tokens') or [])
+        new_tgt = sorted(_event_plain([t for t in ident.get('hl_objects') or [] if t[:1] == '#']) - row_words)
+        if new_tgt:
+            return f"new target {new_tgt[0]}"
     # An act of the same kind on a different day (kinetic strike, sanctions
     # round, tariff action, output decision...) is a new event when it names
     # a new site/place or says it is a new act/round.
     if (ident['kinetic'] or ident.get('kinds')) and ident.get('event_date'):
         row_dates = [s.get('event_date') for s in stored if s.get('event_date')]
+        if any(not s.get('event_date') for s in stored):
+            # Legacy identities carry no action date: use the row's first_seen day.
+            fs = _event_parse_iso(row.get('first_seen'))
+            if fs is not None:
+                row_dates.append(fs.astimezone(_EVENT_TZ).date().isoformat())
         my_day = datetime.strptime(ident['event_date'], '%Y-%m-%d').date()
         gaps = [abs((my_day - datetime.strptime(d, '%Y-%m-%d').date()).days) for d in row_dates]
         if gaps and min(gaps) > EVENT_SAME_ACTION_DAY_WINDOW:
             row_sites = set()
             for s in stored:
                 row_sites.update(s.get('sites') or [])
+                if s.get('legacy'):
+                    row_sites.update(_event_plain(s.get('tokens') or []))
             new_sites = set(ident.get('sites') or []) - row_sites
             if new_sites:
                 return f"new site {sorted(new_sites)[0]} on {ident['event_date']}"
-            new_places = [p for p in ident.get('lead_proper') or [] if p not in row_names]
+            places = ident.get('lead_proper') or []
+            if any(s.get('legacy') for s in stored):
+                # A legacy row kept only its headline: compare headline to headline.
+                places = [t[1:] for t in ident.get('hl_objects') or [] if t[:1] == '!']
+            new_places = [p for p in places if p not in row_names]
             if new_places:
                 return f"new place {new_places[0]} on {ident['event_date']}"
             if ident.get('new_action'):
