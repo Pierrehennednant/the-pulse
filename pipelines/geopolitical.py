@@ -3458,6 +3458,40 @@ CONTEXT: {context}"""
             'federal reserve OR tariff OR war OR iran OR sanctions OR recession OR trump'
         ]
 
+        def _news_get(url, label, retries=3, backoff=2, timeout=6):
+            # Same loop as utils.retry.fetch_with_retry (3 attempts, 2s/4s
+            # waits, retry on 429/5xx and RequestException) plus one log line
+            # per failed attempt with elapsed seconds and attempt number.
+            last_exc = None
+            last_response = None
+            for attempt in range(retries):
+                t0 = time.monotonic()
+                try:
+                    response = requests.get(url, timeout=timeout)
+                    last_response = response
+                    if response.status_code == 429 or response.status_code >= 500:
+                        pulse_logger.log(
+                            f"⚠️ TheNewsAPI {label} attempt {attempt + 1}/{retries} got HTTP {response.status_code} after {time.monotonic() - t0:.1f}s",
+                            level="WARNING")
+                        if attempt < retries - 1:
+                            time.sleep(backoff * (2 ** attempt))
+                            continue
+                    return response
+                except requests.exceptions.RequestException as e:
+                    last_exc = e
+                    kind = "timed out" if isinstance(e, requests.exceptions.Timeout) else "failed"
+                    err = str(e).replace(THENEWS_API_KEY, "***")
+                    pulse_logger.log(
+                        f"⚠️ TheNewsAPI {label} attempt {attempt + 1}/{retries} {kind} after {time.monotonic() - t0:.1f}s: {type(e).__name__}: {err}",
+                        level="WARNING")
+                    if attempt < retries - 1:
+                        time.sleep(backoff * (2 ** attempt))
+            if last_exc:
+                raise last_exc
+            if last_response is None:
+                raise RuntimeError(f"fetch_with_retry exhausted {retries} attempts with no response for TheNewsAPI {label}")
+            return last_response
+
         def fetch_category(category):
             url = (
                 f"https://api.thenewsapi.com/v1/news/top"
@@ -3468,7 +3502,7 @@ CONTEXT: {context}"""
                 f"&published_after={(datetime.now(pytz.utc) - timedelta(hours=MAX_ARTICLE_AGE_HOURS)).strftime('%Y-%m-%dT%H:%M:%S')}"
                 f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,abcnews.go.com,washingtonpost.com,nytimes.com"
             )
-            response = fetch_with_retry(url, timeout=6, retries=3)
+            response = _news_get(url, f"top/{category}")
             if not response.ok:
                 pulse_logger.log(f"⚠️ TheNewsAPI top stories returned {response.status_code} — skipping", level="WARNING")
                 return {}
@@ -3485,7 +3519,7 @@ CONTEXT: {context}"""
                 f"&published_after={(datetime.now(pytz.utc) - timedelta(hours=MAX_ARTICLE_AGE_HOURS)).strftime('%Y-%m-%dT%H:%M:%S')}"
                 f"&domains=reuters.com,apnews.com,cnbc.com,bloomberg.com,wsj.com,ft.com,marketwatch.com,foxbusiness.com,politico.com,axios.com,thehill.com,cbsnews.com,nbcnews.com,washingtonpost.com,nytimes.com"
             )
-            response = fetch_with_retry(url, timeout=6, retries=3)
+            response = _news_get(url, "query")
             if not response.ok:
                 pulse_logger.log(f"⚠️ TheNewsAPI query '{query}' returned {response.status_code} — skipping", level="WARNING")
                 return {}
