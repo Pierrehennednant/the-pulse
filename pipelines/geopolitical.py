@@ -3458,7 +3458,7 @@ CONTEXT: {context}"""
             'federal reserve OR tariff OR war OR iran OR sanctions OR recession OR trump'
         ]
 
-        def _news_get(url, label, retries=3, backoff=2, timeout=6):
+        def _news_get(url, label, retries=3, backoff=2, timeout=10):
             # Same loop as utils.retry.fetch_with_retry (3 attempts, 2s/4s
             # waits, retry on 429/5xx and RequestException) plus one log line
             # per failed attempt with elapsed seconds and attempt number.
@@ -3476,6 +3476,8 @@ CONTEXT: {context}"""
                         if attempt < retries - 1:
                             time.sleep(backoff * (2 ** attempt))
                             continue
+                    pulse_logger.log(
+                        f"TheNewsAPI {label} attempt {attempt + 1}/{retries} returned HTTP {response.status_code} in {time.monotonic() - t0:.1f}s")
                     return response
                 except requests.exceptions.RequestException as e:
                     last_exc = e
