@@ -972,6 +972,94 @@ def _event_is_same_article(row, identity):
     return False
 
 
+# ── Geo drop reason codes + hard keep (deterministic, post-classification) ──
+# Every geo/energy drop writes exactly one of these codes.
+GEO_DROP_CODES = ('duplicate', 'below-threshold', 'excluded-type', 'provider-empty')
+_GEO_EXCLUDED_TYPE_RE = re.compile(
+    r"\b(?:polls?|polling|endorse(?:s|d|ment|ments)?|campaign (?:ad|ads|clip|video|trail|stop)|stump speech|"
+    r"op-ed|opinion|editorial|column|commentary|explainer|podcast|recap)\b")
+_GEO_BENCH = r"(?:brent|wti|west texas intermediate|u\.s\. crude|us crude|crude(?: oil)?|oil(?: prices?)?)"
+_GEO_HEDGE_RE = re.compile(r"\b(?:could|may|might|would|forecast\w*|range|expects?|expected|if|predicts?|targets?|sees?|"
+                           r"outlook|by year-end|next year|average)\b")
+_GEO_BENCH_PRICE_RE = re.compile(_GEO_BENCH + r"[^.;!?]{0,40}?\$\s?(\d{3}(?:\.\d+)?)")
+_GEO_PRICE_BENCH_RE = re.compile(r"\$\s?(\d{3}(?:\.\d+)?)(?:\s*(?:a|per)\s*barrel)?\s+" + _GEO_BENCH)
+_GEO_UP = r"(?:up|rose|rises?|rising|hit|hits|top|tops|topped|jump\w*|surg\w*|soar\w*|climb\w*|gain\w*|spik\w*|rall\w*|higher)"
+_GEO_DOWN = r"(?:down|fell|falls?|falling|drop\w*|slid|slides?|sliding|slump\w*|plung\w*|tumbl\w*|sank|sinks?|sinking|los(?:e|es|t|ing)|lower|declin\w*)"
+_GEO_BENCH_MOVE_RE = re.compile(
+    _GEO_BENCH + r"[^.;!?]{0,50}?\b(?:" + _GEO_UP + "|" + _GEO_DOWN + r")\b[^.;!?]{0,25}?"
+    r"(?:\b(about|around|nearly|almost|roughly)\s+)?(\d+(?:\.\d+)?)\s?(?:%|percent)")
+_GEO_STRIKE_ACTOR_RE = re.compile(r"\b(?:trump|pentagon|centcom|iran|iranian|white house)\b")
+_GEO_STRIKE_OPTION_RE = re.compile(
+    r"\b(?:consider\w*|weigh\w*|mull\w*|options?|plans? to|planning|prepar\w*|could|may|might|threat\w*|warn\w*|"
+    r"eye(?:s|ing)?|review\w*)\b[^.;!?]{0,60}?\b(?:renewed|resum\w*|new|fresh|more|further|expand\w*|wider|broader|"
+    r"large-scale|return to|another round of)\b[^.;!?]{0,30}?\b(?:strikes?|attacks?|bombing|air ?strikes?|"
+    r"military (?:operations|action|campaign))\b|\bresum\w*\s+(?:large-scale\s+)?(?:u\.s\.\s+)?"
+    r"(?:strikes|attacks|bombing|military operations)\b")
+_GEO_EQUITY = r"(?:stocks|stock market|equities|nasdaq|s&p(?: 500)?|dow|wall street|treasur(?:y|ies)|yields?|10-year)"
+_GEO_EQUITY_MOVE_RE = re.compile(r"\b" + _GEO_EQUITY + r"\b[^.;!?]{0,30}?\b(?:" + _GEO_UP + "|" + _GEO_DOWN + r")\b")
+_GEO_TIE_RE = re.compile(r"\b(?:oil|crude|brent|wti|strikes?|iran|war|hormuz)\b")
+_GEO_TIER1_RE = re.compile(
+    r"\b(?:order(?:s|ed)? (?:new |renewed |large-scale )?(?:strikes|attacks|military)|launch(?:es|ed)? (?:new |renewed )?"
+    r"(?:strikes|attacks)|strikes? (?:began|begins|under ?way|in progress)|(?:strait|hormuz) (?:is |was |has been )?closed|"
+    r"clos(?:es|ed|ure of) the strait)\b")
+
+
+def _geo_sentences(text):
+    return [c for c in re.split(r'(?<=[.;!?])\s+|\n+', text or '') if c.strip()]
+
+
+def _geo_hard_keep(headline, *texts):
+    """Hard keep for a geo/energy item that would otherwise be dropped:
+    a named crude benchmark at/through $100 or a same-day move of ~3%+; a
+    named actor (Trump/Pentagon/CENTCOM/Iran) with a live option to resume or
+    expand strikes (no order needed); or a same-day equity/yield move tied to
+    the oil or strike line. Returns {'reason', 'tier', 'direction'} or None.
+    Reads the headline, feed description and Haiku summary only (not the
+    article body, whose forecasts — "Brent could trade $95-$120" — are not
+    facts of the day)."""
+    raw = ' '.join([headline or ''] + [t or '' for t in texts])
+    sents = [s.lower() for s in _geo_sentences(raw)]
+    reasons = []
+    oil_up = oil_down = eq_down = eq_up = yld_up = False
+    for s in sents:
+        for rx in (_GEO_BENCH_PRICE_RE, _GEO_PRICE_BENCH_RE):
+            for m in rx.finditer(s):
+                if 100 <= float(m.group(1)) < 1000 and not _GEO_HEDGE_RE.search(s[:m.end()]):
+                    reasons.append(f"benchmark ${m.group(1)}")
+        for m in _GEO_BENCH_MOVE_RE.finditer(s):
+            pct = float(m.group(2))
+            if not _GEO_HEDGE_RE.search(s[:m.end()]) and (pct >= 3 or (m.group(1) and pct >= 2.5)):
+                reasons.append(f"benchmark move {m.group(2)}%")
+        if _GEO_STRIKE_ACTOR_RE.search(s) and _GEO_STRIKE_OPTION_RE.search(s):
+            reasons.append("actor + live strike option")
+        if _GEO_EQUITY_MOVE_RE.search(s) and _GEO_TIE_RE.search(s):
+            reasons.append("equity/yield move tied to oil/strike line")
+        if re.search(_GEO_BENCH + r"[^.;!?]{0,40}?\b" + _GEO_UP + r"\b", s):
+            oil_up = True
+        if re.search(_GEO_BENCH + r"[^.;!?]{0,40}?\b" + _GEO_DOWN + r"\b", s):
+            oil_down = True
+        for m in _GEO_EQUITY_MOVE_RE.finditer(s):
+            word = m.group(0)
+            is_yield = re.match(r"(?:treasur|yield|10-year)", word)
+            down = re.search(r"\b" + _GEO_DOWN + r"\b", word)
+            if is_yield:
+                yld_up = yld_up or not down
+            elif down:
+                eq_down = True
+            else:
+                eq_up = True
+    if not reasons:
+        return None
+    tier = 1 if any(_GEO_TIER1_RE.search(s) and not _GEO_HEDGE_RE.search(s) for s in sents) else 2
+    if oil_up or eq_down or yld_up:
+        direction = 'bearish'
+    elif oil_down or eq_up:
+        direction = 'bullish'
+    else:
+        direction = 'bearish'
+    return {'reason': '; '.join(dict.fromkeys(reasons)), 'tier': tier, 'direction': direction}
+
+
 class GeopoliticalPipeline:
     GEO_BLOCKLIST_FILE = "/data/geo_blocklist.json"
     GEO_MANUAL_BLOCKLIST_FILE = "/data/geo_manual_blocklist.json"
@@ -2335,13 +2423,13 @@ Articles to classify:
                         continue
                 if self._is_ec_survey_recap(story):
                     pulse_logger.log(
-                        f"🚫 Geo EC-survey reject (pinned): {headline[:80]}"
+                        f"🚫 Geo EC-survey reject (pinned) | reason=excluded-type: {headline[:80]}"
                     )
                     dirty = True
                     continue
                 if self._is_aviation_incident(story):
                     pulse_logger.log(
-                        f"🚫 Geo aviation-incident reject (pinned): {headline[:80]}"
+                        f"🚫 Geo aviation-incident reject (pinned) | reason=below-threshold: {headline[:80]}"
                     )
                     dirty = True
                     continue
@@ -2579,12 +2667,12 @@ Respond with only one word: DIVERGED or UNCHANGED"""
             headline = article.get('headline', '')
             if self._is_ec_survey_recap(article):
                 pulse_logger.log(
-                    f"🚫 Geo EC-survey reject (pin skipped): {headline[:80]}"
+                    f"🚫 Geo EC-survey reject (pin skipped) | reason=excluded-type: {headline[:80]}"
                 )
                 continue
             if self._is_aviation_incident(article):
                 pulse_logger.log(
-                    f"🚫 Geo aviation-incident reject (pin skipped): {headline[:80]}"
+                    f"🚫 Geo aviation-incident reject (pin skipped) | reason=below-threshold: {headline[:80]}"
                 )
                 continue
             tier = r.get('tier')
@@ -2862,7 +2950,12 @@ CONTEXT: {context}"""
                 continue
             headline = pseudo_articles[idx]['headline']
             processed += 1
-            if not r.get('relevant'):
+            hk = None if r.get('relevant') else _geo_hard_keep(headline, gemini_cache[headline].get('summary'))
+            if hk:
+                pulse_logger.log(f"GEO KEEP | hard_keep={hk['reason']} | overrides=daily re-validation revoke | headline={headline[:90]}")
+            elif not r.get('relevant'):
+                gemini_cache[headline]['drop_reason'] = self._geo_drop_code(headline, gemini_cache[headline])
+                self._geo_log_drop(headline, gemini_cache[headline]['drop_reason'], "daily re-validation revoked relevance")
                 gemini_cache[headline]['relevant'] = False
                 gemini_cache[headline]['revalidated_at'] = datetime.now(timezone.utc).isoformat()
                 gemini_cache[headline]['revalidation_reason'] = r.get('reason', '')
@@ -3263,6 +3356,19 @@ CONTEXT: {context}"""
                         f"matched=\"{row.get('sample_headline', '')[:90]}\" | headline={short}"
                     )
                 else:
+                    # Strike clock (before tier): a kinetic act Haiku called
+                    # follow_up that matches no same-event row, and no strike
+                    # of the same wave (same place, ±1 day) on the board, is a
+                    # NEW strike — first_print 48h. Only a toll/rescue/quote
+                    # on a strike already on the board stays follow_up.
+                    if (kind == 'follow_up' and haiku_kind == 'follow_up' and not rules
+                            and 'attack' in (ident.get('kinds') or [])):
+                        sc_reason = self._event_strike_clock_reason(ident, mem, new_facts, today)
+                        if sc_reason:
+                            kind = 'first_print'
+                            rules.append('strike_clock')
+                            logs.append(f"STRIKE CLOCK | haiku_kind=follow_up -> first_print {MAX_ARTICLE_AGE_HOURS}h | "
+                                        f"{sc_reason} | headline={short}")
                     row_key = f"evt|{hashlib.sha1((identity['headline_norm'] + now_iso).encode('utf-8')).hexdigest()[:12]}"
                     mem[row_key] = {
                         'first_seen': now_iso, 'last_seen': now_iso, 'sample_headline': headline,
@@ -3282,6 +3388,91 @@ CONTEXT: {context}"""
             decision = {'kind': kind, 'tier': tier, 'haiku_kind': haiku_kind, 'haiku_tier': haiku_tier,
                         'rules': rules, 'logs': logs, 'fold': fold}
         return decision, touched
+
+    def _event_strike_clock_reason(self, ident, mem, new_facts, today):
+        """Why a Haiku follow_up kinetic item is really a new strike, or None
+        when a strike of the same wave is already on the board (a stored
+        kinetic identity within ±1 day sharing a named place, with no new fact
+        against it) or the item's own action day is older than ±1 day."""
+        try:
+            my_day = datetime.strptime(ident['event_date'], '%Y-%m-%d').date()
+        except Exception:
+            return None
+        if abs((today - my_day).days) > EVENT_SAME_ACTION_DAY_WINDOW:
+            return None
+        new_fact_keys = {k for k, _ in new_facts}
+        my_places = {t[1:] for t in ident.get('objects') or [] if t[:1] == '!'} | set(ident.get('sites') or [])
+        for rkey, row in mem.items():
+            if rkey in new_fact_keys:
+                continue
+            for stored in row.get('identities') or []:
+                s = _event_identity_of(stored)
+                if 'attack' not in (s.get('kinds') or []):
+                    continue
+                d = s.get('event_date')
+                if not d:
+                    fs = _event_parse_iso(row.get('first_seen'))
+                    d = fs.astimezone(_EVENT_TZ).date().isoformat() if fs else None
+                if not d or abs((my_day - datetime.strptime(d, '%Y-%m-%d').date()).days) > EVENT_SAME_ACTION_DAY_WINDOW:
+                    continue
+                s_places = ({t[1:] for t in s.get('objects') or [] if t[:1] == '!'} | set(s.get('sites') or [])
+                            | _event_plain(s.get('tokens') or []) if s.get('legacy') else
+                            {t[1:] for t in s.get('objects') or [] if t[:1] == '!'} | set(s.get('sites') or []))
+                if my_places & s_places and set(ident.get('actors') or []) & set(s.get('actors') or []):
+                    return None
+        if new_facts:
+            return f"new fact vs {new_facts[0][0]}: {new_facts[0][1]}"
+        return f"no same-wave strike on the board (event_date={ident['event_date']})"
+
+    def _geo_drop_code(self, headline, rec, item=None):
+        """Exactly one GEO_DROP_CODES code for a dropped geo/energy item."""
+        rec = rec if isinstance(rec, dict) else {}
+        have_item = isinstance(item, dict)  # provider text known only when the caller passes the item
+        item = item if have_item else {}
+        if rec.get('drop_reason') in GEO_DROP_CODES:
+            return rec['drop_reason']
+        if rec.get('duplicate_of'):
+            return 'duplicate'
+        # Provider text only (feed description / fetched body), never Haiku's summary.
+        body = ' '.join(str(x or '') for x in (item.get('description'), item.get('_full_text'),
+                                                 rec.get('article_text')))
+        if have_item and not body.strip():
+            return 'provider-empty'
+        if (self._is_ec_survey_recap({'headline': headline, 'description': item.get('description') or '',
+                                      'summary': rec.get('summary') or ''})
+                or _GEO_EXCLUDED_TYPE_RE.search((headline or '').lower())):
+            return 'excluded-type'
+        return 'below-threshold'
+
+    def _geo_log_drop(self, headline, code, detail=''):
+        pulse_logger.log(f"GEO DROP | reason={code} | {detail} | headline={(headline or '')[:90]}")
+
+    def _geo_hard_keep_rejects(self, source_items, classifications, label):
+        """Before event rules run: a Haiku reject (relevant false or
+        confidence < 0.75) that meets a hard-keep rule is kept, with the
+        keep's tier/direction. Mutates the classification in place."""
+        for r in classifications or []:
+            if not isinstance(r, dict) or 'id' not in r:
+                continue
+            idx = r['id'] - 1
+            if not (0 <= idx < len(source_items)):
+                continue
+            art = source_items[idx]
+            hk = _geo_hard_keep(art.get('headline', ''), art.get('description'), r.get('summary'))
+            if not hk:
+                continue
+            if r.get('relevant') and (r.get('confidence') or 0) >= 0.75:
+                r['hard_keep'] = hk['reason']  # tag only: Haiku's own tier/direction stand
+                continue
+            prev = f"relevant={r.get('relevant')} conf={r.get('confidence')}"
+            r['relevant'] = True
+            r['confidence'] = max(r.get('confidence') or 0, 0.75)
+            r['tier'], r['direction'] = hk['tier'], hk['direction']
+            if r.get('kind') not in ('first_print', 'follow_up'):
+                r['kind'] = 'first_print'
+            r['hard_keep'] = hk['reason']
+            pulse_logger.log(f"GEO KEEP | hard_keep={hk['reason']} | overrides=haiku_reject ({prev}){label} | "
+                             f"Tier {hk['tier']} | {hk['direction']} | headline={art.get('headline', '')[:90]}")
 
     def _apply_event_rules(self, entries, log_loaded=False):
         """Rule B (14-day after-action cap) then Rule A (7-day event memory)
@@ -3432,9 +3623,9 @@ CONTEXT: {context}"""
                     if not isinstance(ec_rec, dict):
                         continue
                     if self._is_ec_survey_recap(ec_key) or self._is_ec_survey_recap(ec_rec):
-                        ec_reject_log = "🚫 Geo EC-survey reject (cache row)"
+                        ec_reject_log = "🚫 Geo EC-survey reject (cache row) | reason=excluded-type"
                     elif self._is_aviation_incident(ec_key) or self._is_aviation_incident(ec_rec):
-                        ec_reject_log = "🚫 Geo aviation-incident reject (cache row)"
+                        ec_reject_log = "🚫 Geo aviation-incident reject (cache row) | reason=below-threshold"
                     else:
                         continue
                     if (ec_rec.get('relevant') is False and ec_rec.get('tier') is None
@@ -3809,6 +4000,7 @@ CONTEXT: {context}"""
                         # cap r['tier']) in place BEFORE new_class is built, the
                         # cache is written, update_pinned_store() runs (which
                         # already skips kind == follow_up), and anything scores.
+                        self._geo_hard_keep_rejects(new_items, classifications, '')
                         self._apply_event_rules(self._event_rule_entries_for_fresh(new_items, classifications))
                         for r in classifications:
                             idx = r['id'] - 1
@@ -3854,7 +4046,7 @@ CONTEXT: {context}"""
                                     'classified_at': datetime.now(timezone.utc).isoformat()
                                 }
                                 for f in ('event_rule', 'pre_rule_kind', 'pre_rule_tier',
-                                          'event_folded', 'event_key', 'clock_anchor', 'clock_hours'):
+                                          'event_folded', 'event_key', 'clock_anchor', 'clock_hours', 'hard_keep'):
                                     if f in r:
                                         new_class[f] = r[f]
 
@@ -3884,6 +4076,28 @@ CONTEXT: {context}"""
                                             f"🔍 is_same_story() — no match for '{headline[:60]}' "
                                             f"against {len(candidates)} candidate(s)"
                                         )
+                                    else:
+                                        # Hard keep overrides a duplicate drop: the item
+                                        # stays its own card (never staged into the pin).
+                                        hk = _geo_hard_keep(headline, new_items[idx].get('description'),
+                                                            new_class.get('summary'))
+                                        # A valid duplicate = same event already on the board,
+                                        # SAME DAY, no new fact: the target is itself a hard-keep
+                                        # card classified today (ET). Cross-day never qualifies.
+                                        dup_rec = gemini_cache.get(duplicate_of) or {}
+                                        dup_at = _event_parse_iso(dup_rec.get('classified_at'))
+                                        same_day_keep = bool(
+                                            dup_rec.get('hard_keep') and dup_at
+                                            and dup_at.astimezone(_EVENT_TZ).date() == datetime.now(_EVENT_TZ).date())
+                                        if hk and not same_day_keep:
+                                            new_class['tier'] = r['tier'] = tier = hk['tier']
+                                            new_class['direction'] = r['direction'] = hk['direction']
+                                            new_class['hard_keep'] = r['hard_keep'] = hk['reason']
+                                            pulse_logger.log(
+                                                f"GEO KEEP | hard_keep={hk['reason']} | overrides=duplicate of "
+                                                f"'{duplicate_of[:60]}' | Tier {hk['tier']} | {hk['direction']} | "
+                                                f"headline={headline[:90]}")
+                                            duplicate_of = None
 
                                 if duplicate_of:
                                     existing = gemini_cache[duplicate_of]
@@ -3908,7 +4122,11 @@ CONTEXT: {context}"""
                                             pulse_logger.log(f"🧭 Outcome divergence detected despite matching labels: '{headline[:60]}' vs anchor '{duplicate_of[:60]}'")
 
                                     materially_changed = tier_changed or direction_changed or confidence_shifted or outcome_diverged
-                                    if materially_changed:
+                                    if materially_changed and existing.get('hard_keep'):
+                                        pulse_logger.log(
+                                            f"GEO KEEP | hard_keep={existing['hard_keep']} | protected from merge by "
+                                            f"'{headline[:60]}' | headline={duplicate_of[:90]}")
+                                    elif materially_changed:
                                         # A single Haiku read — even at confidence 1.0 — is not
                                         # reliable enough to flip a PINNED entry's classification
                                         # (confirmed incident: one same-story headline merged in at
@@ -3953,10 +4171,16 @@ CONTEXT: {context}"""
                                     gemini_cache[headline] = {
                                         'relevant': False,
                                         'duplicate_of': duplicate_of,
+                                        'drop_reason': 'duplicate',
                                         'classified_at': datetime.now(timezone.utc).isoformat()
                                     }
+                                    self._geo_log_drop(headline, 'duplicate', f"same story as '{duplicate_of[:60]}'")
                                     duplicate_headlines.add(headline)
                                 else:
+                                    if not new_class['relevant'] or (new_class.get('confidence') or 0) < 0.75:
+                                        new_class['drop_reason'] = self._geo_drop_code(headline, new_class, new_items[idx])
+                                        self._geo_log_drop(headline, new_class['drop_reason'],
+                                                           f"haiku relevant={new_class['relevant']} conf={new_class.get('confidence')}")
                                     gemini_cache[headline] = new_class
                                     pulse_logger.log(
                                         f"🧭 Haiku tier | {headline[:60]} | Tier {tier if tier is not None else 'N/A (fallback)'} | "
@@ -4315,6 +4539,7 @@ CONTEXT: {context}"""
                 classifications = self.classify_relevance_batch(pending)
                 if not classifications:
                     return
+                self._geo_hard_keep_rejects(pending, classifications, ' (fallback reclassification)')
                 self._apply_event_rules(self._event_rule_entries_for_fresh(pending, classifications))
                 for r in classifications:
                     idx = r['id'] - 1
@@ -4351,9 +4576,14 @@ CONTEXT: {context}"""
                             'classified_at': datetime.now(timezone.utc).isoformat()
                         }
                         for f in ('event_rule', 'pre_rule_kind', 'pre_rule_tier',
-                                  'event_folded', 'event_key', 'clock_anchor', 'clock_hours'):
+                                  'event_folded', 'event_key', 'clock_anchor', 'clock_hours', 'hard_keep'):
                             if f in r:
                                 gc[headline][f] = r[f]
+                        if not gc[headline]['relevant'] or (gc[headline].get('confidence') or 0) < 0.75:
+                            gc[headline]['drop_reason'] = self._geo_drop_code(headline, gc[headline], pending[idx])
+                            self._geo_log_drop(headline, gc[headline]['drop_reason'],
+                                               f"fallback reclassification relevant={gc[headline]['relevant']} "
+                                               f"conf={gc[headline].get('confidence')}")
                         pulse_logger.log(
                             f"🔄 Fallback-reclassified: '{headline[:60]}' → "
                             f"{'relevant' if r.get('relevant') else 'irrelevant'} | "
@@ -4430,13 +4660,13 @@ CONTEXT: {context}"""
         for item in all_items:
             if self._is_ec_survey_recap(item):
                 pulse_logger.log(
-                    f"🚫 Geo EC-survey reject (cache drop): '{item.get('headline', '')[:60]}'"
+                    f"🚫 Geo EC-survey reject (cache drop) | reason=excluded-type: '{item.get('headline', '')[:60]}'"
                 )
                 updated += 1  # forces _refresh_cached_data() to recompute flags/score without it
                 continue
             if self._is_aviation_incident(item):
                 pulse_logger.log(
-                    f"🚫 Geo aviation-incident reject (cache drop): '{item.get('headline', '')[:60]}'"
+                    f"🚫 Geo aviation-incident reject (cache drop) | reason=below-threshold: '{item.get('headline', '')[:60]}'"
                 )
                 updated += 1  # forces _refresh_cached_data() to recompute flags/score without it
                 continue
@@ -4448,7 +4678,8 @@ CONTEXT: {context}"""
                 kept.append(item)  # Haiku hasn't classified it yet — still pending
                 continue
             if not cached.get('relevant') or cached.get('confidence', 0) < 0.75:
-                pulse_logger.log(f"🔄 Cache refresh — Haiku rejected as not relevant, dropping: '{item.get('headline', '')[:60]}'")
+                self._geo_log_drop(item.get('headline', ''), self._geo_drop_code(item.get('headline', ''), cached, item),
+                                   "cache refresh — removed from served list")
                 updated += 1
                 continue  # drop — matches how known_relevant would never have included it
             if cached.get('direction'):
