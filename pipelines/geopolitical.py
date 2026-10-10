@@ -2735,6 +2735,11 @@ Respond with only one word: DIVERGED or UNCHANGED"""
             tier = r.get('tier')
             if tier not in (1, 2, 3):
                 tier = None
+            if tier is None:
+                # Ticket 2: a directional read with no tier never pins (no
+                # untyped pin). A later Haiku tier re-admits the story.
+                self._geo_log_drop(headline, 'below-threshold', 'detail=keyword backup returned no tier')
+                continue
             pin_kind = r.get('kind')
             if pin_kind not in ('first_print', 'follow_up'):
                 # Same raw Haiku response background_classify() already
@@ -2938,6 +2943,17 @@ CONTEXT: {context}"""
             if r.get('confidence') is not None:
                 gemini_cache[headline]['confidence'] = r['confidence']
             updated += 1
+            held = gemini_cache[headline].pop('no_tier_hold', None)
+            if isinstance(held, dict):
+                # Ticket 2: Haiku's later tier stands; the held story pins now
+                # (same gates as any pin; its age clock is still published_at).
+                e = gemini_cache[headline]
+                try:
+                    self.update_pinned_store(
+                        [dict(held, headline=headline, description=e.get('summary', ''), _full_text=e.get('article_text', ''))],
+                        [dict(e, id=1, reasoning=e.get('tier_reasoning', ''))])
+                except Exception as ex:
+                    pulse_logger.log(f"⚠️ Tier backfill — pin of held story failed for '{headline[:60]}': {ex}", level="WARNING")
             pulse_logger.log(
                 f"🧭 Tier backfill | {headline[:60]} | Tier {tier} | {r.get('direction', 'unknown')} | "
                 f"conf={r.get('confidence', 0)} | {r.get('reasoning', '')}"
@@ -4290,6 +4306,10 @@ CONTEXT: {context}"""
                                         new_class['drop_reason'] = self._geo_drop_code(headline, new_class, new_items[idx])
                                         self._geo_log_drop(headline, new_class['drop_reason'],
                                                            f"haiku relevant={new_class['relevant']} conf={new_class.get('confidence')}")
+                                    if (tier is None and new_class['relevant'] and (new_class.get('confidence') or 0) >= 0.75
+                                            and new_class.get('direction') in ('bullish', 'bearish')):
+                                        new_class['no_tier_hold'] = {k: new_items[idx].get(k, '') for k in
+                                                                     ('source', 'timestamp', 'date', 'link', 'published_at')}
                                     gemini_cache[headline] = new_class
                                     pulse_logger.log(
                                         f"🧭 Haiku tier | {headline[:60]} | Tier {tier if tier is not None else 'N/A (fallback)'} | "
@@ -4557,6 +4577,11 @@ CONTEXT: {context}"""
             # Haiku confidence (None for unclassified articles)
             haiku_conf = item.get('haiku_confidence')
             haiku_tier = item.get('haiku_tier')
+            if haiku_tier not in tier_map:
+                # Ticket 2: the keyword backup no longer scores a directional
+                # item that has no tier. Visible, not scored, until Haiku tiers it.
+                self._geo_log_drop(item.get('headline', ''), 'below-threshold', 'detail=keyword backup returned no tier')
+                continue
             if haiku_tier in tier_map:
                 haiku_tier_count += 1
                 tier_score, tier_weight = tier_map[haiku_tier]
