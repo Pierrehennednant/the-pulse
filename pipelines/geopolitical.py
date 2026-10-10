@@ -1060,6 +1060,57 @@ def _geo_hard_keep(headline, *texts):
     return {'reason': '; '.join(dict.fromkeys(reasons)), 'tier': tier, 'direction': direction}
 
 
+# ── Stock-move exclusion (v5, deterministic, post-classification) ──
+# A single-name or single-sector stock move is not a Geo event unless it is a
+# locked tech/AI deal or capex item, or carries a war/tariff/sanctions/physical
+# supply fact. Move cue is read from the HEADLINE only; a market-level move
+# (S&P/Nasdaq/Dow/Wall Street/bare "stocks") is not a single-name move.
+_GEO_STOCK_MOVE_RE = re.compile(
+    r"\b(?:stocks?|shares?)\b[^.;!?]{0,40}?\b(?:" + _GEO_UP + "|" + _GEO_DOWN +
+    r"|sell(?:s|ing)? off|sold off|slip\w*|whack\w*|hammer\w*|crater\w*)\b"
+    r"|\b(?:worst|best) (?:day|week|month|session|quarter|year)s? (?:since|in|on record|ever)\b")
+# Bare sell-off cue (no stock/shares word). Equity-only: it does not fire when the
+# subject (the headline text before the cue) is a bond, yield, oil, metal, dollar
+# or other commodity.
+_GEO_SELLOFF_RE = re.compile(r"\b(?:sell|sells|selling|sold) off\b|\bsell-offs?\b|\bselloffs?\b")
+_GEO_NON_EQUITY_RE = re.compile(
+    r"\b(?:treasur(?:y|ies)|bonds?|yields?|oil|crude|brent|wti|gold|silver|dollar|greenback|commodit(?:y|ies)|"
+    r"copper|aluminum|aluminium|nickel|platinum|palladium|natural gas|gasoline|diesel|wheat|corn|soybeans?|"
+    r"iron ore|lithium|uranium|cocoa|coffee|sugar|cotton)\b")
+# Price-move verbs after a priority company name ("Nvidia, Oracle, CoreWeave sink on ...").
+_GEO_NAME_MOVE = (r"sink|sinks|sank|slump\w*|plung\w*|tumbl\w*|soar\w*|surg\w*|jump\w*|rall\w*|"
+                  r"slid|slides?|sliding|fall|falls|fell|drop|drops|dropped|slip\w*|sell(?:s|ing)? off|sold off")
+_GEO_MARKET_LEVEL_RE = re.compile(
+    r"\b(?:s&p(?: 500)?|nasdaq|dow(?: jones)?|wall street|stock market|stock futures|equities|"
+    r"global (?:stocks|markets|shares)|world stocks)\b|(?:^|\b(?:and|as|while|but)\s+|,\s*)(?:u\.s\.\s+)?stocks\b")
+# Index + price-move verb ("Nasdaq slides on Nvidia earnings miss"); a cue only with a corporate cause.
+_GEO_INDEX_MOVE_RE = re.compile(
+    r"\b(?:s&p(?: 500)?|nasdaq|dow(?: jones)?|wall street|stock market|stock futures|equities|stocks)\b"
+    r"[^.;!?]{0,30}?\b(?:" + _GEO_UP + "|" + _GEO_DOWN + r")\b")
+# A revenue number, earnings line or product plan as the cause: the index word does not save it.
+_GEO_CORP_CAUSE_RE = re.compile(
+    r"\b(?:revenues?|earnings|profits?|eps|products?|unveil\w*|roll-?out|rolls? out|"
+    r"(?:network|product|service|expansion|satellite) plans?)\b")
+_GEO_STOCK_FACT_RE = re.compile(
+    r"\b(?:wars?|wartime|military|missiles?|troops|invasion|invad\w*|air ?strikes?|drone strikes?|strikes? on|"
+    r"bomb(?:s|ed|ing|ings)?|attack(?:s|ed|ing)?|ceasefire|"
+    r"tariffs?|trade war|export (?:controls?|bans?|curbs?|restrictions?)|import bans?|"
+    r"sanction\w*|embargo\w*|entity list|"
+    r"supply (?:chain|disruption|shock|cut|outage)s?|shortages?|blockade\w*|strait|hormuz|pipelines?|"
+    r"refiner(?:y|ies)|tankers?|opec\+?|output cuts?|production cuts?|"
+    r"oil (?:supply|supplies|exports?|output|production))\b")
+# Transaction terms of the existing tech/AI mega-deal block in
+# GeopoliticalPipeline.market_keywords (unchanged there); priority names are
+# the existing GeopoliticalPipeline.company_keywords.
+_GEO_TECH_DEAL_TERMS = ('deal', 'deals', 'partnership', 'partnerships', 'capex',
+                        'acquisition', 'acquisitions', 'acquire', 'acquires', 'acquired',
+                        'merger', 'mergers', 'merge', 'merges', 'merged')
+_GEO_CAPEX_BEAT_MISS_RE = re.compile(
+    r"\b(?:capex|capital expenditures?|capital spending)\b[^.;!?]{0,60}?\b(?:beat\w*|miss\w*|tops?|topped|"
+    r"above|below|rais\w*|cut\w*|boost\w*|lift\w*|lower\w*)\b|\b(?:beat\w*|miss\w*|tops?|topped|rais\w*|cut\w*|"
+    r"boost\w*|lift\w*|lower\w*)\b[^.;!?]{0,40}?\b(?:capex|capital expenditures?|capital spending)\b")
+
+
 class GeopoliticalPipeline:
     GEO_BLOCKLIST_FILE = "/data/geo_blocklist.json"
     GEO_MANUAL_BLOCKLIST_FILE = "/data/geo_manual_blocklist.json"
@@ -2231,6 +2282,9 @@ Articles to classify:
         if not results:
             return {'ok': False, 'error': 'Haiku classification failed (see logs) — record left unchanged'}
         r = results[0]
+        r['id'] = 1  # single-article call
+        self._geo_stock_move_excludes([{'headline': headline, 'description': record.get('description')}], [r],
+                                      ' (force_reclassify)')
 
         tier = r.get('tier')
         if tier not in (1, 2, 3):
@@ -2261,6 +2315,9 @@ Articles to classify:
         record['gate_pass'] = r.get('gate_pass', True)
         record['tier_reasoning'] = r.get('reasoning', '')
         record['classified_at'] = new_classified_at
+        record.pop('drop_reason', None)
+        if r.get('drop_reason'):
+            record['drop_reason'] = r['drop_reason']
 
         if is_pin:
             pins[pin_idx] = record
@@ -3447,6 +3504,57 @@ CONTEXT: {context}"""
     def _geo_log_drop(self, headline, code, detail=''):
         pulse_logger.log(f"GEO DROP | reason={code} | {detail} | headline={(headline or '')[:90]}")
 
+    def _geo_stock_move_excludes(self, source_items, classifications, label):
+        """After the hard keep, before event rules: a Haiku-kept single-name or
+        single-sector stock move with no tech/AI deal or capex exemption and no
+        war/tariff/sanctions/supply fact is dropped as excluded-type (never
+        pinned, never scored). A hard-keep item is never touched. Mutates the
+        classification in place."""
+        for r in classifications or []:
+            if not isinstance(r, dict) or 'id' not in r:
+                continue
+            idx = r['id'] - 1
+            if not (0 <= idx < len(source_items)) or r.get('hard_keep'):
+                continue
+            if not r.get('relevant') or (r.get('confidence') or 0) < 0.75:
+                continue
+            art = source_items[idx]
+            headline = art.get('headline', '')
+            hl = headline.lower()
+            m = _GEO_STOCK_MOVE_RE.search(hl)
+            if not m:
+                m = _GEO_SELLOFF_RE.search(hl)
+                if m and _GEO_NON_EQUITY_RE.search(hl[:m.start()]):
+                    m = None
+            for k in ([] if m else self.company_keywords):
+                m = re.search(r"\b" + re.escape(k) + r"\b[^.;!?]{0,40}?\b(?:" + _GEO_NAME_MOVE + r")\b", hl)
+                if m:
+                    break
+            if not m and _GEO_CORP_CAUSE_RE.search(hl):
+                m = _GEO_INDEX_MOVE_RE.search(hl)
+            if not m or (_GEO_MARKET_LEVEL_RE.search(hl) and not _GEO_CORP_CAUSE_RE.search(hl)):
+                continue
+            text = ' '.join(str(t or '') for t in (headline, art.get('description'), r.get('summary'))).lower()
+            if _GEO_STOCK_FACT_RE.search(text) or _geo_hard_keep(headline, art.get('description'), r.get('summary')):
+                continue
+            if any(self._keyword_matches(text, k) for k in self.company_keywords):
+                exempt = False
+                for s in _geo_sentences(text):
+                    if _GEO_CAPEX_BEAT_MISS_RE.search(s):
+                        exempt = True
+                    elif any(self._keyword_matches(s, k) for k in _GEO_TECH_DEAL_TERMS) and any(
+                            (_event_amount_millions(_event_amount(a.group(0))) or 0) >= 2000
+                            for a in _EVENT_AMOUNT_RE.finditer(s)):
+                        exempt = True
+                if exempt:
+                    continue
+            prev = f"haiku relevant={r.get('relevant')} conf={r.get('confidence')} Tier {r.get('tier')} {r.get('direction')}"
+            r['relevant'] = False
+            r['drop_reason'] = 'excluded-type'
+            self._geo_log_drop(headline, 'excluded-type',
+                               f"single-name/sector stock move \"{m.group(0)}\", no war/tariff/sanctions/supply fact, "
+                               f"no tech deal/capex; overrides {prev}{label}")
+
     def _geo_hard_keep_rejects(self, source_items, classifications, label):
         """Before event rules run: a Haiku reject (relevant false or
         confidence < 0.75) that meets a hard-keep rule is kept, with the
@@ -4001,6 +4109,7 @@ CONTEXT: {context}"""
                         # cache is written, update_pinned_store() runs (which
                         # already skips kind == follow_up), and anything scores.
                         self._geo_hard_keep_rejects(new_items, classifications, '')
+                        self._geo_stock_move_excludes(new_items, classifications, '')
                         self._apply_event_rules(self._event_rule_entries_for_fresh(new_items, classifications))
                         for r in classifications:
                             idx = r['id'] - 1
@@ -4046,7 +4155,7 @@ CONTEXT: {context}"""
                                     'classified_at': datetime.now(timezone.utc).isoformat()
                                 }
                                 for f in ('event_rule', 'pre_rule_kind', 'pre_rule_tier',
-                                          'event_folded', 'event_key', 'clock_anchor', 'clock_hours', 'hard_keep'):
+                                          'event_folded', 'event_key', 'clock_anchor', 'clock_hours', 'hard_keep', 'drop_reason'):
                                     if f in r:
                                         new_class[f] = r[f]
 
@@ -4540,6 +4649,7 @@ CONTEXT: {context}"""
                 if not classifications:
                     return
                 self._geo_hard_keep_rejects(pending, classifications, ' (fallback reclassification)')
+                self._geo_stock_move_excludes(pending, classifications, ' (fallback reclassification)')
                 self._apply_event_rules(self._event_rule_entries_for_fresh(pending, classifications))
                 for r in classifications:
                     idx = r['id'] - 1
@@ -4576,7 +4686,7 @@ CONTEXT: {context}"""
                             'classified_at': datetime.now(timezone.utc).isoformat()
                         }
                         for f in ('event_rule', 'pre_rule_kind', 'pre_rule_tier',
-                                  'event_folded', 'event_key', 'clock_anchor', 'clock_hours', 'hard_keep'):
+                                  'event_folded', 'event_key', 'clock_anchor', 'clock_hours', 'hard_keep', 'drop_reason'):
                             if f in r:
                                 gc[headline][f] = r[f]
                         if not gc[headline]['relevant'] or (gc[headline].get('confidence') or 0) < 0.75:
