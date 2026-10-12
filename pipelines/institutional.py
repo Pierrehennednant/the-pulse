@@ -11,6 +11,11 @@ from utils.error_handler import error_handler
 
 _MAX_COT_POSITION = 5_000_000  # upper bound per long/short field; flags CFTC layout changes
 _MAX_MONDAY_RECHECK_ATTEMPTS = 3  # failed Monday re-checks allowed once the cache is confirmed newest
+# CFTC Public Reporting (Socrata) — Traders in Financial Futures, Futures Only.
+# Same report the legacy financial_lf.htm page renders; codes are the "Consolidated"
+# sections the scrape matched first (S&P 500 Consolidated 13874+, NASDAQ-100 Consolidated 20974+).
+_COT_API_URL = "https://publicreporting.cftc.gov/resource/gpe5-46if.json"
+_COT_API_CODES = {'S&P 500': '13874+', 'NASDAQ': '20974+'}
 _REPORT_DATE_RE = re.compile(r'Positions\s+as\s+of\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})', re.IGNORECASE)
 
 class InstitutionalPipeline:
@@ -62,6 +67,13 @@ class InstitutionalPipeline:
                 'leveraged_long': nums[6],
                 'leveraged_short': nums[7],
             }
+            return self._build_positions(positions, instrument)
+        except Exception as e:
+            error_handler.handle(e, f"COT Parser {instrument}")
+            return None
+
+    def _build_positions(self, positions, instrument):
+        try:
             for field, val in positions.items():
                 if val < 0 or val > _MAX_COT_POSITION:
                     pulse_logger.log(
@@ -127,7 +139,74 @@ class InstitutionalPipeline:
         except Exception as e:
             pulse_logger.log(f"⚠️ COT response detail unavailable: {e}", level="WARNING")
 
+    def _log_api_exception(self, exc):
+        pulse_logger.log(
+            f"⚠️ COT response detail (API request error) | status=none | {type(exc).__name__}: {str(exc)[:300]}",
+            level="WARNING"
+        )
+
+    def fetch_cot_api(self):
+        """Pull ES/NQ TFF futures-only positions from CFTC's public Socrata API.
+        Returns (nq_data, es_data, report_date) or (None, None, None)."""
+        try:
+            codes = ",".join(f"'{c}'" for c in _COT_API_CODES.values())
+            params = {
+                '$where': f"cftc_contract_market_code in({codes})",
+                '$order': 'report_date_as_yyyy_mm_dd DESC',
+                '$limit': 8,
+            }
+            try:
+                response = fetch_with_retry(_COT_API_URL, params=params,
+                                            headers={**self.headers, 'Accept': 'application/json'}, timeout=10)
+            except Exception as e:
+                self._log_api_exception(e)
+                raise
+            if response.status_code != 200:
+                self._log_bad_response(response, "API non-200")
+                raise ValueError(f"CFTC API returned HTTP {response.status_code}")
+            try:
+                rows = response.json()
+            except Exception:
+                self._log_bad_response(response, "API non-JSON")
+                raise ValueError("CFTC API returned non-JSON body")
+            if not isinstance(rows, list) or not rows:
+                self._log_bad_response(response, "API empty")
+                raise ValueError("CFTC API returned no rows")
+            latest = max(str(r.get('report_date_as_yyyy_mm_dd', '')) for r in rows)
+            by_code = {r.get('cftc_contract_market_code'): r for r in rows
+                       if str(r.get('report_date_as_yyyy_mm_dd', '')) == latest}
+            out = {}
+            for instrument, code in _COT_API_CODES.items():
+                r = by_code.get(code)
+                if not r:
+                    pulse_logger.log(f"❌ COT API: no {instrument} ({code}) row for {latest[:10]}", level="ERROR")
+                    out[instrument] = None
+                    continue
+                positions = {
+                    'asset_mgr_long': int(float(r['asset_mgr_positions_long'])),
+                    'asset_mgr_short': int(float(r['asset_mgr_positions_short'])),
+                    'leveraged_long': int(float(r['lev_money_positions_long'])),
+                    'leveraged_short': int(float(r['lev_money_positions_short'])),
+                }
+                out[instrument] = self._build_positions(positions, instrument)
+            report_date = latest[:10] if re.match(r'\d{4}-\d{2}-\d{2}', latest) else None
+            if out['NASDAQ'] is None and out['S&P 500'] is None:
+                return None, None, None
+            return out['NASDAQ'], out['S&P 500'], report_date
+        except Exception as e:
+            error_handler.handle(e, "COT API")
+            return None, None, None
+
     def fetch_cot(self):
+        self.last_report_date = None
+        nq_data, es_data, report_date = self.fetch_cot_api()
+        if nq_data is not None or es_data is not None:
+            self.last_report_date = report_date
+            return nq_data, es_data
+        pulse_logger.log("⚠️ Institutional — CFTC API failed, trying legacy page scrape", level="WARNING")
+        return self.fetch_cot_scrape()
+
+    def fetch_cot_scrape(self):
         self.last_report_date = None
         try:
             response = fetch_with_retry(self.cot_url, headers=self.headers, timeout=10)
