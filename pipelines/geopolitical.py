@@ -385,6 +385,19 @@ def _event_amount_millions(obj):
 EVENT_CORE_WEIGHT = 3
 EVENT_IDENTITY_MIN_OVERLAP = 0.42
 EVENT_SAME_ACTION_DAY_WINDOW = 1  # kinetic acts within ±1 day = same barrage/campaign day
+# Live Tier 1 fold (see _event_t1_live_match()): a Tier 1 first_print that
+# matches a live Tier 1 card on actor + action + place folds into it unless it
+# carries one of these materially new escalation classes the card never named.
+# Casualty counts, rewrites, tallies and "escalation" wording are NOT here.
+_T1_ESCALATION_CLASSES = (
+    ('nuclear', re.compile(r'\bnuclear\b|\bradiolog\w*')),
+    ('chemical', re.compile(r'\bchemical (?:weapons?|attacks?)\b|\bnerve agents?\b')),
+    ('ground-invasion', re.compile(r'\binva(?:de|des|ded|ding|sion)\b|\bground (?:offensive|invasion|troops|forces|operation)s?\b')),
+    ('strait-closure', re.compile(r'\bblockade\w*|\bclos(?:e|es|ed|ing|ure of) (?:the )?(?:strait|hormuz|bab el-mandeb|red sea)\b')),
+    ('war-declaration', re.compile(r'\bdeclar(?:e|es|ed|ing|ation of) war\b|\bstate of war\b')),
+    ('energy-infrastructure', re.compile(r'\b(?:oil|gas) (?:fields?|facilit(?:y|ies)|terminals?|plants?|export)\b|'
+                                         r'\brefiner(?:y|ies)\b|\bpipelines?\b|\babqaiq\b|\bras tanura\b|\bdesalination\b')),
+)
 
 _EVENT_CONCEPTS = (
     # Moving forces is its own act, not an attack ("third carrier strike
@@ -3408,6 +3421,7 @@ CONTEXT: {context}"""
                     else:
                         new_facts.append((rkey, reason))
                 full_identity = dict(identity, **ident)
+                t1_live = False
                 if folds and (kind, tier) == ('first_print', 1) and haiku_kind == 'first_print' and haiku_tier == 1:
                     # Tier 1 first_print guard: Haiku's call stands unless the
                     # row is an event scored on today's board (live vote) with an exact
@@ -3424,8 +3438,19 @@ CONTEXT: {context}"""
                                                  f"matched=\"{mem[f[2]].get('sample_headline', '')[:90]}\" | headline={short}")
                     folds = kept_folds
                     t1_note = ' | t1_guard=live scored card, exact actor+action+place' if folds else ''
+                    # Folded onto a live Tier 1 card: the divergence keep may not undo it.
+                    t1_live = bool(folds and scored and scored().get(min(folds)[2]) == 1)
                 else:
                     t1_note = ''
+                if (not folds and scored and (kind, tier) == ('first_print', 1)
+                        and haiku_kind == 'first_print' and haiku_tier == 1):
+                    # A Tier 1 first_print that matches a LIVE Tier 1 card on
+                    # actor + action + place folds into it (no 2nd vote/pin)
+                    # unless it carries a narrow new fact.
+                    live = self._event_t1_live_match(ident, mem, scored(), identity['headline_norm'], short)
+                    if live is not None:
+                        folds, t1_live = [live], True
+                        t1_note = ' | t1_live=live Tier 1 card, actor+action+place, no new fact'
                 if folds:
                     _, _, row_key, sim = min(folds)
                     row = mem[row_key]
@@ -3440,6 +3465,8 @@ CONTEXT: {context}"""
                     fold = {'event_key': row_key,
                             'clock_anchor': row.get('clock_start') or row.get('first_seen'),
                             'clock_hours': clock_hours}
+                    if t1_live:
+                        fold['t1_live'] = True
                     if kind != 'follow_up':
                         row['forced_follow_up_count'] = int(row.get('forced_follow_up_count', 0)) + 1
                     kind = 'follow_up'
@@ -3512,14 +3539,66 @@ CONTEXT: {context}"""
                 return None
         return 'no-exact-actor-action-place'
 
+    # Headline words that say nothing about WHERE (stems, see _event_word_stems).
+    _T1_WHERE_GENERIC = frozenset({'deadl', 'major', 'lates', 'claim', 'escal', 'tensi', 'killi', 'injur',
+                                   'repor', 'again', 'after', 'amid', 'fears', 'times', 'daily', 'world',
+                                   'least', 'death', 'toll', 'mount', 'marks', 'leads'})
+
+    def _event_t1_where(self, ident):
+        """WHERE words for the live Tier 1 match: place/target words plus the
+        headline's own non-action, non-actor word stems ('airport')."""
+        return ({w[:5] for w in self._event_places(ident) if len(w) >= 5} | set(ident.get('hl_stems') or [])
+                | {w for w in self._event_places(ident) if len(w) < 5}) - self._T1_WHERE_GENERIC
+
+    def _event_t1_live_match(self, ident, mem, scored, headline_norm, short):
+        """Best live Tier 1 card row for a Tier 1 first_print, as a fold
+        tuple, or None. Match = some stored identity shares an actor, a core
+        action and a WHERE word (_event_t1_where). A narrow new fact keeps the
+        item's own vote: a headline actor named nowhere on the card's event,
+        or an escalation class (_T1_ESCALATION_CLASSES) the card never named."""
+        mine_actors, mine_hl = set(ident.get('actors') or []), set(ident.get('hl_actors') or [])
+        mine_kinds, mine_where = set(ident.get('kinds') or []), self._event_t1_where(ident)
+        best = None
+        for rkey, row in mem.items():
+            if scored.get(rkey) != 1:
+                continue
+            stored = [_event_identity_of(s) for s in row.get('identities') or []]
+            row_actors = set()
+            row_text = ' '.join(s.get('headline_norm') or '' for s in row.get('identities') or [])
+            for s in stored:
+                row_actors |= set(s.get('actors') or [])
+                row_text += ' ' + ' '.join(_event_plain(s.get('tokens') or []))
+            hit = None
+            for s in stored:
+                if (mine_actors & set(s.get('actors') or []) and mine_kinds & set(s.get('kinds') or [])
+                        and mine_where & self._event_t1_where(s)):
+                    score = _event_identity_score(ident, s)
+                    if hit is None or score > hit:
+                        hit = score
+            if hit is None:
+                continue
+            new_actor = sorted(mine_hl - row_actors)
+            mine_text = ' '.join([headline_norm] + sorted(_event_plain(ident.get('tokens') or [])))
+            new_class = [n for n, rx in _T1_ESCALATION_CLASSES if rx.search(mine_text) and not rx.search(row_text)]
+            if new_actor or new_class:
+                why = f"new actor {new_actor[0]}" if new_actor else f"new escalation class {new_class[0]}"
+                self._event_log_once('t1_live_new', (headline_norm, rkey),
+                                     f"T1 LIVE NEW FACT | {why} | vs live T1 key={rkey} | kept first_print own vote | "
+                                     f"matched=\"{row.get('sample_headline', '')[:90]}\" | headline={short}")
+                continue
+            cand = (-hit, row.get('first_seen', ''), rkey, (0, hit))
+            if best is None or cand < best:
+                best = cand
+        return best
+
     def _event_scored_today(self, mem, today):
-        """Event-memory keys whose own card holds a live vote on today's
-        board: a stored identity's headline is a relevant, conf >= 0.75,
+        """{event-memory key: best live tier} for rows whose own card holds a
+        live vote on today's board: a stored identity's headline is a relevant, conf >= 0.75,
         directional, tiered (1-3), gate-passing, NOT folded / NOT
         duplicate-dropped cache entry or pin, still inside its clock (so it
         is in today's score). Read from disk (the cache/pin state as of the
         last write). Never raises."""
-        voted = set()
+        voted = {}
         records = []
         for path in ("/data/gemini_classifications.json",
                      getattr(self, 'pinned_store_file', "/data/pinned_stories.json")):
@@ -3541,9 +3620,14 @@ CONTEXT: {context}"""
                 continue
             if self._clock_expired(dict(c, classified_at=c.get('classified_at') or c.get('pinned_at') or '')):
                 continue
-            voted.add(_event_headline_norm(h))
-        return {k for k, row in mem.items()
-                if any(i.get('headline_norm') in voted for i in row.get('identities') or [])}
+            hn = _event_headline_norm(h)
+            voted[hn] = min(voted.get(hn, 9), c['tier'])
+        out = {}
+        for k, row in mem.items():
+            tiers = [voted[i.get('headline_norm')] for i in row.get('identities') or [] if i.get('headline_norm') in voted]
+            if tiers:
+                out[k] = min(tiers)
+        return out
 
     def _event_strike_clock_reason(self, ident, mem, new_facts, today):
         """Why a Haiku follow_up kinetic item is really a new strike, or None
@@ -3737,6 +3821,10 @@ CONTEXT: {context}"""
                     target['event_key'] = d['fold']['event_key']
                     target['clock_anchor'] = d['fold']['clock_anchor']
                     target['clock_hours'] = d['fold']['clock_hours']
+                    if d['fold'].get('t1_live'):
+                        # Read by the outcome-divergence keep (never overrides
+                        # a live Tier 1 match). Not persisted.
+                        target['t1_live_fold'] = True
                 changed_stores.add(entry.get('store', ''))
                 for line in d['logs']:
                     # A pin and its own cache entry are the same article; if
@@ -4320,7 +4408,11 @@ CONTEXT: {context}"""
                                     tier_changed = existing.get('tier') != new_class['tier']
                                     direction_changed = existing.get('direction') != new_class['direction']
                                     confidence_shifted = abs((existing.get('confidence') or 0) - (new_class.get('confidence') or 0)) >= 0.10
-                                    if not (tier_changed or direction_changed or confidence_shifted):
+                                    if r.get('t1_live_fold'):
+                                        pulse_logger.log(
+                                            f"GEO T1 LIVE FOLD | outcome-divergence keep skipped | folded into live Tier 1 event "
+                                            f"{r.get('event_key')} | headline={headline[:90]}")
+                                    elif not (tier_changed or direction_changed or confidence_shifted):
                                         if self.has_outcome_diverged(
                                             existing.get('summary', ''), existing.get('reason', ''),
                                             new_class.get('summary', ''), new_class.get('reason', '')
