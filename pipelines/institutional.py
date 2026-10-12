@@ -1,7 +1,7 @@
 import json
 import re
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from config import TIMEZONE
 from utils.file_lock import atomic_write_json
@@ -10,6 +10,8 @@ from utils.logger import pulse_logger
 from utils.error_handler import error_handler
 
 _MAX_COT_POSITION = 5_000_000  # upper bound per long/short field; flags CFTC layout changes
+_MAX_MONDAY_RECHECK_ATTEMPTS = 3  # failed Monday re-checks allowed once the cache is confirmed newest
+_REPORT_DATE_RE = re.compile(r'Positions\s+as\s+of\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})', re.IGNORECASE)
 
 class InstitutionalPipeline:
     def __init__(self):
@@ -98,20 +100,78 @@ class InstitutionalPipeline:
             error_handler.handle(e, f"COT Parser {instrument}")
             return None
 
+    def parse_report_date(self, text):
+        """Return the CFTC 'Positions as of <Month D, YYYY>' date as YYYY-MM-DD, or None."""
+        try:
+            m = _REPORT_DATE_RE.search(text or '')
+            if not m:
+                return None
+            return datetime.strptime(' '.join(m.group(1).split()), '%B %d, %Y').date().isoformat()
+        except Exception:
+            return None
+
+    def _log_bad_response(self, response, reason):
+        """Log what CFTC actually sent back so a block/challenge page is visible."""
+        try:
+            h = response.headers or {}
+            keys = ['server', 'content-type', 'content-length', 'cf-ray', 'cf-mitigated',
+                    'x-cache', 'via', 'retry-after', 'location']
+            hdrs = ' '.join(f"{k}={h.get(k)}" for k in keys if h.get(k) is not None)
+            body = response.content[:2000].decode('utf-8', errors='replace') if response.content else ''
+            snippet = ' '.join(body.split())[:300]
+            pulse_logger.log(
+                f"⚠️ COT response detail ({reason}) | status={response.status_code} | "
+                f"bytes={len(response.content or b'')} | {hdrs or 'no headers'} | body={snippet!r}",
+                level="WARNING"
+            )
+        except Exception as e:
+            pulse_logger.log(f"⚠️ COT response detail unavailable: {e}", level="WARNING")
+
     def fetch_cot(self):
+        self.last_report_date = None
         try:
             response = fetch_with_retry(self.cot_url, headers=self.headers, timeout=10)
             soup = BeautifulSoup(response.content, 'html.parser')
             pre = soup.find('pre')
             if not pre:
+                self._log_bad_response(response, "no <pre>")
                 raise ValueError("No pre tag found in CFTC page")
             text = pre.get_text()
+            self.last_report_date = self.parse_report_date(text)
             nq_data = self.parse_positions(text, 'NASDAQ')
             es_data = self.parse_positions(text, 'S&P 500')
             return nq_data, es_data
         except Exception as e:
             error_handler.handle(e, "COT Fetcher")
             return None, None
+
+    def _latest_release(self, now):
+        """Most recent scheduled release at or before `now`: (Friday 3:30 PM ET datetime,
+        expected Tuesday as-of date). Pure schedule — no holiday assumptions; a delayed
+        release simply fails the report-date match below and stays stale."""
+        days_back = (now.weekday() - 4) % 7
+        friday = now - timedelta(days=days_back)
+        release = friday.replace(hour=15, minute=30, second=0, microsecond=0)
+        if release > now:
+            release = release - timedelta(days=7)
+        return release, (release - timedelta(days=3)).date()
+
+    def _cache_confirmed_newest(self, existing, now):
+        """True only if the cached report date equals the expected latest Tuesday as-of
+        date AND the data was fetched after that release. Caches without a parsed
+        report_date (pre-fix) are never confirmed."""
+        try:
+            report_date = existing.get('report_date')
+            ts = existing.get('data_timestamp') or existing.get('timestamp', '')
+            if not report_date or not ts:
+                return False
+            fetched = datetime.fromisoformat(ts)
+            if fetched.tzinfo is None:
+                fetched = self.timezone.localize(fetched)
+            release, expected = self._latest_release(now)
+            return report_date == expected.isoformat() and fetched >= release
+        except Exception:
+            return False
 
     def _cache_is_stale(self, existing):
         """True if the cached COT data is older than 3 days — used to detect
@@ -150,9 +210,15 @@ class InstitutionalPipeline:
             now = datetime.now(pytz.timezone(TIMEZONE))
             _from_friday = existing and self._cache_from_friday(existing)
             _stale = existing and self._cache_is_stale(existing)
-            is_monday_stale = now.weekday() == 0 and (_from_friday or _stale)
+            # Bounded retry: after a failed re-check on a confirmed-newest cache, retry
+            # only until _MAX_MONDAY_RECHECK_ATTEMPTS failures today, not every refresh.
+            _attempts = existing.get('monday_recheck_failures', 0) if existing else 0
+            _retry_today = (existing and existing.get('monday_recheck_date') == now.date().isoformat()
+                            and 0 < _attempts < _MAX_MONDAY_RECHECK_ATTEMPTS)
+            is_monday_stale = now.weekday() == 0 and (_from_friday or _stale or _retry_today)
             if is_monday_stale:
-                reason = "cache from Friday" if _from_friday else "cache >3 days old"
+                reason = ("cache from Friday" if _from_friday else "cache >3 days old" if _stale
+                          else f"bounded retry {_attempts + 1}/{_MAX_MONDAY_RECHECK_ATTEMPTS}")
                 pulse_logger.log(f"🔄 Institutional — Monday fetch triggered ({reason}), checking CFTC for latest release")
 
             if not self.is_friday() and not is_monday_stale and existing:
@@ -169,6 +235,26 @@ class InstitutionalPipeline:
             # If CFTC returned nothing, do not overwrite the permanent file with blank data.
             # Return whatever we had (as stale) so the dashboard keeps showing real positions.
             if nq_data is None and es_data is None:
+                if existing and now.weekday() == 0 and is_monday_stale and self._cache_confirmed_newest(existing, now):
+                    # Friday's report is confirmed as the newest release: the failed
+                    # re-check cannot be hiding newer data. Serve it fresh. The verification
+                    # time becomes `timestamp` (so it is not Friday-stamped); the original
+                    # fetch time is kept in `data_timestamp`.
+                    failures = (_attempts if existing.get('monday_recheck_date') == now.date().isoformat() else 0) + 1
+                    existing.setdefault('data_timestamp', existing.get('timestamp'))
+                    existing['timestamp'] = now.isoformat()
+                    existing['status'] = 'live'
+                    existing['monday_recheck_date'] = now.date().isoformat()
+                    existing['monday_recheck_failures'] = failures
+                    self._save(existing)
+                    more = ("no further retries today" if failures >= _MAX_MONDAY_RECHECK_ATTEMPTS
+                            else f"will retry ({failures}/{_MAX_MONDAY_RECHECK_ATTEMPTS})")
+                    pulse_logger.log(
+                        f"✅ Institutional — CFTC re-check failed but cached report (as of {existing['report_date']}, "
+                        f"fetched {existing['data_timestamp']}) is the newest release; keeping fresh | {more}",
+                        level="WARNING"
+                    )
+                    return existing
                 if existing:
                     existing['status'] = 'stale'
                     pulse_logger.log("⚠️ Institutional — CFTC fetch failed, returning existing data as stale", level="WARNING")
@@ -204,6 +290,7 @@ class InstitutionalPipeline:
             result = {
                 'pillar': 'institutional',
                 'timestamp': datetime.now(pytz.timezone(TIMEZONE)).isoformat(),
+                'report_date': getattr(self, 'last_report_date', None),
                 'nq_futures': nq_data or {'direction': 'unknown', 'score': 0},
                 'es_futures': es_data or {'direction': 'unknown', 'score': 0},
                 'pillar_score': pillar_score,
@@ -212,7 +299,7 @@ class InstitutionalPipeline:
                 'status': 'live'
             }
             self._save(result)
-            pulse_logger.log(f"✓ Institutional COT updated | NQ: {nq_data['direction'] if nq_data else 'unknown'} | ES: {es_data['direction'] if es_data else 'unknown'} | Score: {pillar_score}")
+            pulse_logger.log(f"✓ Institutional COT updated | as of {result['report_date'] or 'unknown'} | NQ: {nq_data['direction'] if nq_data else 'unknown'} | ES: {es_data['direction'] if es_data else 'unknown'} | Score: {pillar_score}")
             return result
         except Exception as e:
             error_handler.handle(e, "Institutional")
