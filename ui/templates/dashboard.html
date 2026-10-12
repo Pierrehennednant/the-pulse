@@ -676,6 +676,14 @@
         container.style.display = propGuidance ? 'block' : 'none';
     }
 
+    // 'EDT' or 'EST' for the given instant in New York (falls back to 'EST' on an invalid date, as before).
+    function nyTzAbbr(d) {
+        try {
+            return new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', timeZoneName: 'short'})
+                .formatToParts(d).find(p => p.type === 'timeZoneName').value;
+        } catch (e) { return 'EST'; }
+    }
+
     function updateDashboard(snapshot) {
         if (!snapshot) return;
         _snapshot = snapshot;
@@ -702,7 +710,7 @@
 
         _renderRecFromSnapshot();
 
-        document.getElementById('last-updated-text').textContent = `Last updated: ${new Date(snapshot.timestamp).toLocaleTimeString('en-US', {timeZone: 'America/New_York'})} EST`;
+        document.getElementById('last-updated-text').textContent = `Last updated: ${new Date(snapshot.timestamp).toLocaleTimeString('en-US', {timeZone: 'America/New_York'})} ${nyTzAbbr(new Date(snapshot.timestamp))}`;
         const staleBanner = document.getElementById('staleness-banner');
         const ageMinutes = snapshot.timestamp ? Math.floor((Date.now() - new Date(snapshot.timestamp).getTime()) / 60000) : null;
         if (ageMinutes !== null && ageMinutes > 10) {
@@ -822,10 +830,10 @@
             const dateStr = ts.toLocaleDateString('en-US', {month:'short', day:'numeric', timeZone:'America/New_York'});
             if (data.is_fresh) {
                 meta.style.color = '#4a9eff';
-                meta.textContent = `Generated at ${timeStr} EST`;
+                meta.textContent = `Generated at ${timeStr} ${nyTzAbbr(ts)}`;
             } else {
                 meta.style.color = '#4a5a70';
-                meta.textContent = `Last updated: ${dateStr} at ${timeStr} EST`;
+                meta.textContent = `Last updated: ${dateStr} at ${timeStr} ${nyTzAbbr(ts)}`;
             }
         } catch(e) {
             card.style.display = 'block';
