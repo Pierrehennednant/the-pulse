@@ -626,6 +626,28 @@ def api_ai_lens():
         'is_fresh': is_fresh,
     })
 
+@app.route('/api/neutral-mode', methods=['POST'])
+def api_neutral_mode():
+    """Ops write for /data/neutral_mode.json (read by bias_calculator's Neutral
+    directive). Bearer-token auth only (NEUTRAL_MODE_TOKEN), not the dashboard
+    session; checked before the body is read. Never logs the token."""
+    expected = os.environ.get('NEUTRAL_MODE_TOKEN', '')
+    header = request.headers.get('Authorization', '')
+    supplied = header[7:] if header.startswith('Bearer ') else ''
+    if not expected or not supplied or not hmac.compare_digest(supplied.encode('utf-8'), expected.encode('utf-8')):
+        return jsonify({'ok': False, 'error': 'Unauthorized'}), 401
+    data = request.get_json(silent=True)
+    if data not in ({'mode': 'half'}, {'mode': 'quarter'}):
+        return jsonify({'ok': False, 'error': 'Body must be exactly {"mode": "half"} or {"mode": "quarter"}'}), 400
+    from processors.bias_calculator import NEUTRAL_MODE_FILE
+    try:
+        atomic_write_json(NEUTRAL_MODE_FILE, {'mode': data['mode']}, indent=None)
+    except Exception as e:
+        pulse_logger.log(f"⚠️ Neutral mode write failed: {e}", level="WARNING")
+        return jsonify({'ok': False, 'error': 'Write failed'}), 500
+    pulse_logger.log(f"🟡 Neutral mode set via API → {data['mode']}")
+    return jsonify({'ok': True, 'mode': data['mode']})
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=False)
