@@ -3329,11 +3329,14 @@ CONTEXT: {context}"""
         self._event_logged.add(key)
         pulse_logger.log(line)
 
-    def _event_decide(self, entry, mem, now, today):
+    def _event_decide(self, entry, mem, now, today, scored=None):
         """Rule B, Rule C, then Rule A (event identity) for one
         classification. Mutates `mem` only;
         returns a decision dict (or None when nothing changes) that
-        _apply_event_rules() applies to the classification afterwards."""
+        _apply_event_rules() applies to the classification afterwards.
+        `scored`: zero-arg callable -> event-memory keys whose own card holds
+        a live vote on today's board (see _event_scored_today()); only
+        called by the Tier 1 fold guard."""
         ctx = entry['ctx']
         target = entry['target']
         now_iso = now.isoformat()
@@ -3405,6 +3408,24 @@ CONTEXT: {context}"""
                     else:
                         new_facts.append((rkey, reason))
                 full_identity = dict(identity, **ident)
+                if folds and (kind, tier) == ('first_print', 1) and haiku_kind == 'first_print' and haiku_tier == 1:
+                    # Tier 1 first_print guard: Haiku's call stands unless the
+                    # row is an event scored on today's board (live vote) with an exact
+                    # actor + action + place match. A dropped/unscored event
+                    # never takes the vote.
+                    kept_folds = []
+                    for f in folds:
+                        why = self._event_t1_fold_block(ident, mem[f[2]], f[2], scored() if scored else set())
+                        if why is None:
+                            kept_folds.append(f)
+                        else:
+                            self._event_log_once('t1_keep', (identity['headline_norm'], f[2]),
+                                                 f"T1 FIRST_PRINT KEEP | reason={why} | key={f[2]} | haiku_kind=first_print tier=1 | "
+                                                 f"matched=\"{mem[f[2]].get('sample_headline', '')[:90]}\" | headline={short}")
+                    folds = kept_folds
+                    t1_note = ' | t1_guard=live scored card, exact actor+action+place' if folds else ''
+                else:
+                    t1_note = ''
                 if folds:
                     _, _, row_key, sim = min(folds)
                     row = mem[row_key]
@@ -3426,7 +3447,7 @@ CONTEXT: {context}"""
                     logs.append(
                         f"FORCE FOLLOW_UP | key={row_key} | core={sim[0]} overlap={sim[1]:.2f} | "
                         f"haiku_kind={haiku_kind} | clock=original {fold['clock_anchor']} +{clock_hours}h | "
-                        f"matched=\"{row.get('sample_headline', '')[:90]}\" | headline={short}"
+                        f"matched=\"{row.get('sample_headline', '')[:90]}\"{t1_note} | headline={short}"
                     )
                 else:
                     # Strike clock (before tier): a kinetic act Haiku called
@@ -3461,6 +3482,68 @@ CONTEXT: {context}"""
             decision = {'kind': kind, 'tier': tier, 'haiku_kind': haiku_kind, 'haiku_tier': haiku_tier,
                         'rules': rules, 'logs': logs, 'fold': fold}
         return decision, touched
+
+    @staticmethod
+    def _event_places(ident):
+        """Place/target words of an identity: named places/objects and target
+        concepts (airport, grid, tanker...) plus named sites; a legacy row
+        (headline only) offers every headline word, as in the strike clock."""
+        out = _event_plain(ident.get('objects') or []) | set(ident.get('sites') or [])
+        if ident.get('legacy'):
+            out |= _event_plain(ident.get('tokens') or [])
+        return out
+
+    def _event_t1_fold_block(self, ident, row, row_key, scored):
+        """None when a Haiku first_print Tier 1 item may fold onto `row`:
+        the row's card is scoring on today's board (live vote) AND some stored identity
+        matches on actor + action + place exactly (shared actor, no new
+        headline actor; shared core action; shared place/target). Else the
+        reason code the fold is refused."""
+        if row_key not in scored:
+            return 'fold-target-unscored'
+        mine_actors, mine_hl = set(ident.get('actors') or []), set(ident.get('hl_actors') or [])
+        mine_kinds, mine_places = set(ident.get('kinds') or []), self._event_places(ident)
+        for stored in row.get('identities') or []:
+            s = _event_identity_of(stored)
+            s_actors = set(s.get('actors') or [])
+            if (mine_actors & s_actors and not (mine_hl - s_actors)
+                    and mine_kinds & set(s.get('kinds') or [])
+                    and mine_places & self._event_places(s)):
+                return None
+        return 'no-exact-actor-action-place'
+
+    def _event_scored_today(self, mem, today):
+        """Event-memory keys whose own card holds a live vote on today's
+        board: a stored identity's headline is a relevant, conf >= 0.75,
+        directional, tiered (1-3), gate-passing, NOT folded / NOT
+        duplicate-dropped cache entry or pin, still inside its clock (so it
+        is in today's score). Read from disk (the cache/pin state as of the
+        last write). Never raises."""
+        voted = set()
+        records = []
+        for path in ("/data/gemini_classifications.json",
+                     getattr(self, 'pinned_store_file', "/data/pinned_stories.json")):
+            try:
+                if os.path.exists(path):
+                    with open(path, 'r') as f:
+                        raw = json.load(f)
+                    if isinstance(raw, dict):
+                        records.extend((h, c) for h, c in raw.items() if isinstance(c, dict))
+                    elif isinstance(raw, list):
+                        records.extend((c.get('headline', ''), c) for c in raw if isinstance(c, dict))
+            except Exception as e:
+                pulse_logger.log(f"⚠️ T1 fold guard: could not read {path}: {e}", level="WARNING")
+        for h, c in records:
+            if (not h or not c.get('relevant') or (c.get('confidence') or 0) < 0.75
+                    or c.get('direction') not in ('bullish', 'bearish') or c.get('tier') not in (1, 2, 3)
+                    or c.get('gate_pass') is False or c.get('event_folded') or c.get('duplicate_of')
+                    or c.get('drop_reason')):
+                continue
+            if self._clock_expired(dict(c, classified_at=c.get('classified_at') or c.get('pinned_at') or '')):
+                continue
+            voted.add(_event_headline_norm(h))
+        return {k for k, row in mem.items()
+                if any(i.get('headline_norm') in voted for i in row.get('identities') or [])}
 
     def _event_strike_clock_reason(self, ident, mem, new_facts, today):
         """Why a Haiku follow_up kinetic item is really a new strike, or None
@@ -3616,9 +3699,17 @@ CONTEXT: {context}"""
                 dirty = dropped > 0
                 now = datetime.now(timezone.utc)
                 today = now.astimezone(_EVENT_TZ).date()
+                scored_memo = []
+
+                def scored():
+                    # Read the cache/pins from disk only when a Tier 1
+                    # first_print fold candidate actually needs it.
+                    if not scored_memo:
+                        scored_memo.append(self._event_scored_today(mem, today))
+                    return scored_memo[0]
                 for entry in entries:
                     try:
-                        decision, touched = self._event_decide(entry, mem, now, today)
+                        decision, touched = self._event_decide(entry, mem, now, today, scored)
                         dirty = dirty or touched
                         if decision:
                             decisions.append((entry, decision))
@@ -4229,6 +4320,24 @@ CONTEXT: {context}"""
                                     tier_changed = existing.get('tier') != new_class['tier']
                                     direction_changed = existing.get('direction') != new_class['direction']
                                     confidence_shifted = abs((existing.get('confidence') or 0) - (new_class.get('confidence') or 0)) >= 0.10
+                                    if not (tier_changed or direction_changed or confidence_shifted):
+                                        if self.has_outcome_diverged(
+                                            existing.get('summary', ''), existing.get('reason', ''),
+                                            new_class.get('summary', ''), new_class.get('reason', '')
+                                        ):
+                                            # Different outcome = different story: keep it as its
+                                            # own card; never drop it or merge it into the anchor.
+                                            pulse_logger.log(f"🧭 Outcome divergence detected despite matching labels: '{headline[:60]}' vs anchor '{duplicate_of[:60]}'")
+                                            pulse_logger.log(
+                                                f"GEO KEEP | reason=outcome-divergence | not a duplicate of "
+                                                f"'{duplicate_of[:60]}' | kept as own card | headline={headline[:90]}")
+                                            duplicate_of = None
+
+                                if duplicate_of:
+                                    existing = gemini_cache[duplicate_of]
+                                    tier_changed = existing.get('tier') != new_class['tier']
+                                    direction_changed = existing.get('direction') != new_class['direction']
+                                    confidence_shifted = abs((existing.get('confidence') or 0) - (new_class.get('confidence') or 0)) >= 0.10
 
                                     # Only reached when the three cheap label checks above all
                                     # agree — exactly the blind spot that let a stale "trade deal
@@ -4236,17 +4345,10 @@ CONTEXT: {context}"""
                                     # imposed" headlines: both score bearish/tier-2 for unrelated
                                     # reasons, so label agreement alone can't tell real staleness
                                     # from coincidence. has_outcome_diverged() re-reads the actual
-                                    # summary/reason text instead of the coarse labels.
-                                    outcome_diverged = False
-                                    if not (tier_changed or direction_changed or confidence_shifted):
-                                        outcome_diverged = self.has_outcome_diverged(
-                                            existing.get('summary', ''), existing.get('reason', ''),
-                                            new_class.get('summary', ''), new_class.get('reason', '')
-                                        )
-                                        if outcome_diverged:
-                                            pulse_logger.log(f"🧭 Outcome divergence detected despite matching labels: '{headline[:60]}' vs anchor '{duplicate_of[:60]}'")
-
-                                    materially_changed = tier_changed or direction_changed or confidence_shifted or outcome_diverged
+                                    # summary/reason text instead of the coarse labels; a
+                                    # divergence is kept as its own card above, so only
+                                    # UNCHANGED reads reach here with matching labels.
+                                    materially_changed = tier_changed or direction_changed or confidence_shifted
                                     if materially_changed and existing.get('hard_keep'):
                                         pulse_logger.log(
                                             f"GEO KEEP | hard_keep={existing['hard_keep']} | protected from merge by "
@@ -4725,6 +4827,13 @@ CONTEXT: {context}"""
                             f"Tier {tier or 'N/A'} | {r.get('direction', 'unknown')} | kind={kind_display} | src={text_source}"
                         )
                 atomic_write_json(gemini_cache_file, gc)
+                # An accepted first_print Tier 1 is pinned here too (only that
+                # class; update_pinned_store() applies its usual gates).
+                t1_fp = [r for r in classifications
+                         if 0 <= r['id'] - 1 < len(pending) and r.get('tier') == 1
+                         and r.get('kind') == 'first_print' and not r.get('event_folded')]
+                if t1_fp:
+                    self.update_pinned_store(pending, t1_fp)
                 pulse_logger.log(f"✅ Fallback reclassification done — {len(classifications)} article(s) classified")
             except Exception as e:
                 pulse_logger.log(f"⚠️ Fallback reclassification failed: {e}", level="WARNING")
