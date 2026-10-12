@@ -7,6 +7,7 @@ import time
 import requests
 import concurrent.futures
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from dateutil import parser as dateutil_parser
 import pytz
 import anthropic
@@ -33,6 +34,42 @@ EVENT_MEMORY_TTL_DAYS = 7
 AGE_CAP_DAYS = 14
 EVENT_MAX_IDENTITIES = 25
 _EVENT_TZ = pytz.timezone(TIMEZONE)
+
+# Article display time ("Oct 10, 02:00 PM EDT") is New York wall time. The
+# label is EDT/EST by date; strings stored before this fix always say "EST"
+# (even in daylight time) and are read back as NY wall time on that date too.
+_NY_TZ = ZoneInfo('America/New_York')
+_ET_LABEL_RE = re.compile(r'\s*\b(?:EST|EDT|ET)\s*$')
+
+
+def _et_display(dt):
+    """Aware datetime -> 'Mon DD, HH:MM AM EDT|EST' in New York time."""
+    local = dt.astimezone(_NY_TZ)
+    return local.strftime('%b %d, %I:%M %p ') + local.tzname()
+
+
+def _parse_article_ts(ts):
+    """Article timestamp (ISO, or ET display string) -> datetime. ET display
+    strings (EST/EDT/ET label, incl. legacy 'EST' written during EDT) are
+    New York wall time on their own date (zoneinfo picks EDT/EST; ambiguous
+    fall-back hour: the label picks the occurrence, else the first/EDT one). Anything else parses exactly as
+    before (dateutil, EST/EDT map). May return a naive datetime for unlabeled
+    strings, as before; raises on garbage, as before."""
+    m = _ET_LABEL_RE.search(ts)
+    if m:
+        wall = dateutil_parser.parse(ts[:m.start()],
+                                     default=datetime.now(_NY_TZ).replace(tzinfo=None, second=0, microsecond=0))
+        if wall.tzinfo is None:
+            # In the repeated fall-back hour a correct EDT/EST label picks the
+            # occurrence; otherwise (legacy 'EST' in summer, 'ET') the zone decides.
+            label = m.group(0).strip()
+            for fold in (0, 1):
+                cand = wall.replace(tzinfo=_NY_TZ, fold=fold)
+                if cand.tzname() == label:
+                    return cand
+            return wall.replace(tzinfo=_NY_TZ)
+    return dateutil_parser.parse(ts, default=datetime.now(timezone.utc),
+                                 tzinfos={"EST": -18000, "EDT": -14400})
 
 _EVENT_OUTLETS = (
     'bloomberg news', 'bloomberg', 'cnbc', 'reuters', 'the associated press', 'associated press',
@@ -208,8 +245,7 @@ def _event_published_date(date_str='', *timestamps):
         if not ts:
             continue
         try:
-            dt = dateutil_parser.parse(ts, default=datetime.now(timezone.utc),
-                                       tzinfos={"EST": -18000, "EDT": -14400})
+            dt = _parse_article_ts(ts)
             # Display strings ("Sep 25, 01:43 PM EST") are already ET wall time.
             if re.search(r'\b(?:EST|EDT)\b', ts) or dt.tzinfo is None:
                 return dt.date()
@@ -2417,14 +2453,11 @@ Articles to classify:
         if not ts:
             return None
         try:
-            dt = dateutil_parser.parse(
-                ts,
-                default=datetime.now(timezone.utc),
-                tzinfos={"EST": -18000, "EDT": -14400},
-            )
+            dt = _parse_article_ts(ts)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-            return dt
+            # UTC, so "+ 48h" (expires_at) is elapsed time even across a DST change.
+            return dt.astimezone(timezone.utc)
         except Exception:
             return None
 
@@ -4041,7 +4074,7 @@ CONTEXT: {context}"""
                     if dt.tzinfo is None:
                         dt = dt.replace(tzinfo=timezone.utc)
                     est = dt.astimezone(pytz.timezone(TIMEZONE))
-                    timestamp = est.strftime('%b %d, %I:%M %p EST')
+                    timestamp = _et_display(dt)
                     date = est.strftime('%Y-%m-%d')
                     if self.is_article_too_old(published):
                         continue
@@ -4545,7 +4578,7 @@ CONTEXT: {context}"""
                 val = item.get(field) or ''
                 if val:
                     try:
-                        parsed = dateutil_parser.parse(val, default=datetime.now(timezone.utc), tzinfos={"EST": -18000, "EDT": -14400})
+                        parsed = _parse_article_ts(val)
                         return parsed.isoformat()
                     except Exception:
                         pass
