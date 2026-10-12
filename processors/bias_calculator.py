@@ -1,7 +1,22 @@
+import json
 from datetime import datetime
 import pytz
 from config import PILLAR_WEIGHTS, TIMEZONE
 from utils.logger import pulse_logger
+
+NEUTRAL_MODE_FILE = "/data/neutral_mode.json"
+
+
+def _neutral_mode():
+    """Allowed Neutral size from the Railway volume, read fresh every time.
+    {"mode": "half"} -> 'half'; anything else (missing, unreadable, bad JSON,
+    unknown value, wrong type) -> 'quarter'."""
+    try:
+        with open(NEUTRAL_MODE_FILE, 'r') as f:
+            mode = json.load(f).get('mode')
+    except Exception:
+        return 'quarter'
+    return 'half' if mode == 'half' else 'quarter'
 
 class BiasCalculator:
     def compute(self, formatted_data, bias_threshold=0.5):
@@ -178,8 +193,11 @@ class BiasCalculator:
         if low_conviction_override:
             directive = "⚫ No Trade – Low Conviction."
             directive_color = "#7a8fa8"
+        elif active_pillars == 0:
+            directive = "⚫ No Trade – No Data"
+            directive_color = "#7a8fa8"
         elif bias == 'Neutral':
-            directive = "🟡 Neutral — Sit out."
+            directive = "🟡 Half size" if _neutral_mode() == 'half' else "🟡 Quarter size"
             directive_color = "#f39c12"
         elif confidence >= 70:
             if bias == 'Bearish':
