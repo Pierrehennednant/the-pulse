@@ -1043,7 +1043,11 @@ _GEO_STRIKE_OPTION_RE = re.compile(
     r"eye(?:s|ing)?|review\w*)\b[^.;!?]{0,60}?\b(?:renewed|resum\w*|new|fresh|more|further|expand\w*|wider|broader|"
     r"large-scale|return to|another round of)\b[^.;!?]{0,30}?\b(?:strikes?|attacks?|bombing|air ?strikes?|"
     r"military (?:operations|action|campaign))\b|\bresum\w*\s+(?:large-scale\s+)?(?:u\.s\.\s+)?"
-    r"(?:strikes|attacks|bombing|military operations)\b")
+    r"(?:strikes|attacks|bombing|military operations)\b"
+    # A bare "considering/weighing (U.S.) (military) strikes" is a live option
+    # too ("Trump considering strikes against Houthis"), no qualifier needed.
+    r"|\b(?:consider\w*|weigh\w*)\s+(?:launching\s+|new\s+)?(?:u\.s\.\s+|us\s+|american\s+)?(?:military\s+)?"
+    r"(?:strikes?|air ?strikes?|attacks?|bombing|military (?:operations|action))\b")
 _GEO_EQUITY = r"(?:stocks|stock market|equities|nasdaq|s&p(?: 500)?|dow|wall street|treasur(?:y|ies)|yields?|10-year)"
 _GEO_EQUITY_MOVE_RE = re.compile(r"\b" + _GEO_EQUITY + r"\b[^.;!?]{0,30}?\b(?:" + _GEO_UP + "|" + _GEO_DOWN + r")\b")
 _GEO_TIE_RE = re.compile(r"\b(?:oil|crude|brent|wti|strikes?|iran|war|hormuz)\b")
@@ -1055,6 +1059,48 @@ _GEO_TIER1_RE = re.compile(
 
 def _geo_sentences(text):
     return [c for c in re.split(r'(?<=[.;!?])\s+|\n+', text or '') if c.strip()]
+
+
+# ── Fetched-text junk check (feeds _fetch_and_stamp_articles) ──
+# A video/live/landing page can yield 200+ chars of <p> text that is only
+# channel listings, nav or promo copy (CBS video page, 10/12: "Watch CBS News
+# CBS Mornings CBS News Baltimore 8am ..."). That text must not replace the
+# feed description as the article body.
+_GEO_JUNK_NAV_RES = tuple(re.compile(x) for x in (
+    r"\bwatch (?:cbs|nbc|abc|cnn|fox|live|now|full episodes?)\b", r"\bfull episodes?\b", r"\bsign up\b",
+    r"\bsubscribe\b", r"\bnewsletters?\b", r"\bprivacy (?:policy|notice)\b", r"\bterms of (?:use|service)\b",
+    r"\u00a9|\bcopyright\b|\ball rights reserved\b", r"\bdownload (?:the|our) app\b", r"\bcookies?\b",
+    r"\b24/7\b", r"\bfollow us\b", r"\badvertis\w*", r"\bclosed caption\w*", r"\bmornings?\b",
+    r"\b\d{1,2}(?::\d\d)?\s?(?:am|pm)\b(?:.*?\b\d{1,2}(?::\d\d)?\s?(?:am|pm)\b){2}",
+    r"\bplay(?:ing)? (?:video|next)\b|\bup next\b", r"\btrending (?:videos?|now)\b"))
+_GEO_JUNK_FUNC_RE = re.compile(r"\b(?:the|a|an|of|to|in|and|is|was|were|said|says|on|for|after|has|have|with)\b")
+_GEO_JUNK_STOP = frozenset({'after', 'with', 'from', 'that', 'this', 'over', 'into', 'about', 'amid', 'says',
+                            'said', 'will', 'more', 'than', 'their', 'what', 'when', 'have', 'been', 'could'})
+
+
+def _geo_fetched_text_junk(text, headline):
+    """Reason string when fetched article text is boilerplate/junk rather
+    than journalism, else None. Three tests, any one fires:
+    no-title-overlap (2+ headline keywords, none in the text), low-prose
+    (< 35% of the text is sentence-like prose), nav-listing (3+ nav/channel
+    patterns and < 60% prose)."""
+    t = ' '.join((text or '').split())
+    if not t:
+        return None
+    low = t.lower()
+    kw = {w[:5] for w in re.findall(r"[a-z][a-z'\-]{3,}", (headline or '').lower()) if w not in _GEO_JUNK_STOP}
+    if len(kw) >= 2 and not any(w in low for w in kw):
+        return 'no-title-overlap'
+    sents = [x for x in re.split(r'(?<=[.!?])\s+', t) if x.strip()]
+    prose = sum(len(x) for x in sents
+                if len(x.split()) >= 8 and x.rstrip()[-1:] in '.!?"\u201d\'' and len(_GEO_JUNK_FUNC_RE.findall(x.lower())) >= 2)
+    ratio = prose / max(len(t), 1)
+    if ratio < 0.35:
+        return f'low-prose ({ratio:.2f})'
+    nav = sum(1 for rx in _GEO_JUNK_NAV_RES if rx.search(low))
+    if nav >= 3 and ratio < 0.6:
+        return f'nav-listing ({nav} patterns, prose {ratio:.2f})'
+    return None
 
 
 def _geo_hard_keep(headline, *texts):
@@ -1871,6 +1917,16 @@ class GeopoliticalPipeline:
         # from story_url at reclassify time, since pages get edited,
         # paywalled, or redirected after the fact.
         for i, article in enumerate(articles):
+            desc = article.get('description', '') or ''
+            if text_source_map[i] == 'full_text' and desc.strip():
+                junk = _geo_fetched_text_junk(results_map[i], article.get('headline', ''))
+                if junk:
+                    pulse_logger.log(
+                        f"GEO TEXT FALLBACK | reason={junk} | src=description_fallback_junk | "
+                        f"fetched={len(results_map[i] or '')}ch desc={len(desc)}ch | "
+                        f"headline={(article.get('headline') or '')[:90]}")
+                    results_map[i] = desc
+                    text_source_map[i] = 'description_fallback_junk'
             article['_text_source'] = text_source_map[i]
             article['_full_text'] = results_map[i]
 
@@ -1887,7 +1943,9 @@ class GeopoliticalPipeline:
         # Build batch input
         article_list = ""
         for i, article in enumerate(articles):
-            article_list += f"{i+1}. TITLE: {article['headline']}\n   FULL TEXT: {article['_full_text']}\n\n"
+            desc = ' '.join((article.get('description') or '').split())
+            desc_line = f"   DESCRIPTION: {desc}\n" if desc and desc != ' '.join((article['_full_text'] or '').split()) else ''
+            article_list += f"{i+1}. TITLE: {article['headline']}\n{desc_line}   FULL TEXT: {article['_full_text']}\n\n"
 
         prompt = self._build_classification_prompt(article_list)
         return self._call_haiku_classify(prompt)
@@ -3583,24 +3641,38 @@ CONTEXT: {context}"""
         return ({w[:5] for w in self._event_places(ident) if len(w) >= 5} | set(ident.get('hl_stems') or [])
                 | {w for w in self._event_places(ident) if len(w) < 5}) - self._T1_WHERE_GENERIC
 
+    def _event_t1_new_fact(self, ident, row, headline_norm):
+        """Narrow new fact of `ident` against a live Tier 1 card's event row:
+        a headline actor named nowhere on the row, or an escalation class
+        (_T1_ESCALATION_CLASSES) the row never named. Reason string or None."""
+        mine_hl = set(ident.get('hl_actors') or [])
+        row_actors = set()
+        row_text = ' '.join(s.get('headline_norm') or '' for s in row.get('identities') or [])
+        for s in (_event_identity_of(x) for x in row.get('identities') or []):
+            row_actors |= set(s.get('actors') or [])
+            row_text += ' ' + ' '.join(_event_plain(s.get('tokens') or []))
+        new_actor = sorted(mine_hl - row_actors)
+        mine_text = ' '.join([headline_norm] + sorted(_event_plain(ident.get('tokens') or [])))
+        new_class = [n for n, rx in _T1_ESCALATION_CLASSES if rx.search(mine_text) and not rx.search(row_text)]
+        if new_actor:
+            return f"new actor {new_actor[0]}"
+        if new_class:
+            return f"new escalation class {new_class[0]}"
+        return None
+
     def _event_t1_live_match(self, ident, mem, scored, headline_norm, short):
         """Best live Tier 1 card row for a Tier 1 first_print, as a fold
         tuple, or None. Match = some stored identity shares an actor, a core
         action and a WHERE word (_event_t1_where). A narrow new fact keeps the
         item's own vote: a headline actor named nowhere on the card's event,
         or an escalation class (_T1_ESCALATION_CLASSES) the card never named."""
-        mine_actors, mine_hl = set(ident.get('actors') or []), set(ident.get('hl_actors') or [])
+        mine_actors = set(ident.get('actors') or [])
         mine_kinds, mine_where = set(ident.get('kinds') or []), self._event_t1_where(ident)
         best = None
         for rkey, row in mem.items():
             if scored.get(rkey) != 1:
                 continue
             stored = [_event_identity_of(s) for s in row.get('identities') or []]
-            row_actors = set()
-            row_text = ' '.join(s.get('headline_norm') or '' for s in row.get('identities') or [])
-            for s in stored:
-                row_actors |= set(s.get('actors') or [])
-                row_text += ' ' + ' '.join(_event_plain(s.get('tokens') or []))
             hit = None
             for s in stored:
                 if (mine_actors & set(s.get('actors') or []) and mine_kinds & set(s.get('kinds') or [])
@@ -3610,11 +3682,8 @@ CONTEXT: {context}"""
                         hit = score
             if hit is None:
                 continue
-            new_actor = sorted(mine_hl - row_actors)
-            mine_text = ' '.join([headline_norm] + sorted(_event_plain(ident.get('tokens') or [])))
-            new_class = [n for n, rx in _T1_ESCALATION_CLASSES if rx.search(mine_text) and not rx.search(row_text)]
-            if new_actor or new_class:
-                why = f"new actor {new_actor[0]}" if new_actor else f"new escalation class {new_class[0]}"
+            why = self._event_t1_new_fact(ident, row, headline_norm)
+            if why:
                 self._event_log_once('t1_live_new', (headline_norm, rkey),
                                      f"T1 LIVE NEW FACT | {why} | vs live T1 key={rkey} | kept first_print own vote | "
                                      f"matched=\"{row.get('sample_headline', '')[:90]}\" | headline={short}")
@@ -3770,6 +3839,152 @@ CONTEXT: {context}"""
             self._geo_log_drop(headline, 'excluded-type',
                                f"single-name/sector stock move \"{m.group(0)}\", no war/tariff/sanctions/supply fact, "
                                f"no tech deal/capex; overrides {prev}{label}")
+
+    # Escalation-path words for the reject recheck (headline + feed description).
+    _T1_RECHECK_PATH_RE = re.compile(
+        r"\b(?:strikes?|struck|attack\w*|retaliat\w*|reprisal\w*|respon(?:d|ds|se) to|counter-?strikes?|"
+        r"escalat\w*|missiles?|drones?|bomb\w*|military action|join(?:ing)? (?:the )?fight)\b")
+
+    def _geo_live_t1_direction(self, row):
+        """Direction ('bullish'/'bearish') of the live Tier 1 card that holds
+        the vote for event-memory `row` (cache/pins on disk), or None."""
+        norms = {i.get('headline_norm') for i in row.get('identities') or []}
+        for path in ("/data/gemini_classifications.json",
+                     getattr(self, 'pinned_store_file', "/data/pinned_stories.json")):
+            try:
+                if not os.path.exists(path):
+                    continue
+                with open(path, 'r') as f:
+                    raw = json.load(f)
+                recs = (raw.items() if isinstance(raw, dict)
+                        else ((c.get('headline', ''), c) for c in raw if isinstance(c, dict)) if isinstance(raw, list) else ())
+                for h, c in recs:
+                    if (isinstance(c, dict) and c.get('tier') == 1 and c.get('relevant')
+                            and not c.get('event_folded') and c.get('direction') in ('bullish', 'bearish')
+                            and _event_headline_norm(h) in norms):
+                        return c['direction']
+            except Exception:
+                continue
+        return None
+
+    def _geo_t1_reject_recheck(self, source_items, classifications, label):
+        """Before the hard keep and event rules: a Haiku reject (relevant
+        false or confidence < 0.75) whose headline/feed description shares a
+        named actor (not the generic 'us') or a WHERE word with a LIVE Tier 1
+        card (_event_scored_today == 1) AND names an action or escalation path
+        is re-routed as a Tier 1 first_print of that card's event, so
+        _apply_event_rules() / _geo_t1_reject_recheck_settle() fold it with no
+        vote unless it carries a new escalation class. Haiku's summary is
+        not read (it described the bad text). Mutates in place; never raises."""
+        try:
+            rejects = []
+            for r in classifications or []:
+                if not isinstance(r, dict) or 'id' not in r or r.get('drop_reason'):
+                    continue
+                idx = r['id'] - 1
+                if 0 <= idx < len(source_items) and (not r.get('relevant') or (r.get('confidence') or 0) < 0.75):
+                    rejects.append((r, source_items[idx]))
+            if not rejects:
+                return
+            with self._event_memory_lock:
+                mem, _ = self._load_event_memory()
+            today = datetime.now(timezone.utc).astimezone(_EVENT_TZ).date()
+            live = {k for k, t in self._event_scored_today(mem, today).items() if t == 1}
+            if not live:
+                return
+            for r, art in rejects:
+                headline = art.get('headline', '')
+                desc = art.get('description') or ''
+                if self._is_ec_survey_recap({'headline': headline, 'description': desc, 'summary': ''}):
+                    continue
+                ident = _event_identity(self._event_ctx(headline, '', desc, '', '', art.get('link'), art), today)
+                actors = set(ident.get('actors') or []) - {'us'}
+                where, kinds = self._event_t1_where(ident), set(ident.get('kinds') or [])
+                path = self._T1_RECHECK_PATH_RE.search(' '.join([headline, desc]).lower())
+                best = None
+                for rkey in sorted(live):
+                    row = mem.get(rkey) or {}
+                    for st in (_event_identity_of(x) for x in row.get('identities') or []):
+                        sa = sorted(actors & set(st.get('actors') or []))
+                        sw = sorted(where & self._event_t1_where(st))
+                        if not (sa or sw) or not (kinds & set(st.get('kinds') or []) or path):
+                            continue
+                        cand = (len(sa) + len(sw), rkey, sa, sw)
+                        if best is None or cand[0] > best[0]:
+                            best = cand
+                if best is None:
+                    continue
+                _, rkey, sa, sw = best
+                direction = self._geo_live_t1_direction(mem[rkey])
+                if direction is None:
+                    continue
+                prev = f"relevant={r.get('relevant')} conf={r.get('confidence')}"
+                r['relevant'] = True
+                r['confidence'] = max(r.get('confidence') or 0, 0.75)
+                r['tier'], r['direction'], r['kind'] = 1, direction, 'first_print'
+                r['t1_reject_recheck'] = rkey
+                why = 'action' if kinds else f"path '{path.group(0)}'" if path else 'action'
+                pulse_logger.log(
+                    f"GEO T1 REJECT RECHECK | overrides=haiku_reject ({prev}){label} | vs live T1 key={rkey} | "
+                    f"shared actor={','.join(sa) or '-'} where={','.join(sw) or '-'} {why} | "
+                    f"routed as Tier 1 first_print {direction} to t1_live fold/new-fact | "
+                    f"matched=\"{(mem[rkey].get('sample_headline') or '')[:90]}\" | headline={headline[:90]}")
+        except Exception as e:
+            pulse_logger.log(f"⚠️ T1 reject recheck failed — rejects left as Haiku returned them: {e}", level="WARNING")
+
+    def _geo_t1_reject_recheck_settle(self, source_items, classifications, label):
+        """After _apply_event_rules(): a rechecked reject that the event rules
+        did not fold is folded onto the matched live card (no vote, card's
+        clock) unless it names a new escalation class (_T1_ESCALATION_CLASSES)
+        the card never named. A new headline actor alone does NOT keep a vote
+        on this path (normal t1_live behaviour is unchanged).
+        Mutates in place; never raises."""
+        try:
+            todo = [r for r in classifications or [] if isinstance(r, dict) and r.get('t1_reject_recheck')]
+            if not todo:
+                return
+            with self._event_memory_lock:
+                mem, _ = self._load_event_memory()
+            today = datetime.now(timezone.utc).astimezone(_EVENT_TZ).date()
+            for r in todo:
+                idx = r['id'] - 1
+                art = source_items[idx] if 0 <= idx < len(source_items) else {}
+                headline = art.get('headline', '')
+                rkey = r['t1_reject_recheck']
+                if r.get('event_folded'):
+                    pulse_logger.log(f"GEO T1 REJECT RECHECK | folded into live Tier 1 event {r.get('event_key')} | "
+                                     f"no vote{label} | headline={headline[:90]}")
+                    continue
+                row = mem.get(rkey)
+                ident = _event_identity(self._event_ctx(headline, '', art.get('description'), '', '',
+                                                        art.get('link'), art), today)
+                why = self._event_t1_new_fact(ident, row, _event_headline_norm(headline)) if row else None
+                # On this path only a new escalation class earns a vote; a new
+                # headline actor alone folds (Pierre, 10/13).
+                actor_only = bool(why and why.startswith('new actor'))
+                if actor_only:
+                    esc = self._event_t1_new_fact(dict(ident, hl_actors=[]), row, _event_headline_norm(headline))
+                    why, actor_note = esc, f" | ignored {why} (reject path: escalation class only)"
+                else:
+                    actor_note = ''
+                if why or row is None:
+                    pulse_logger.log(f"GEO T1 REJECT RECHECK | kept own vote ({why or 'event row gone'}){actor_note} | "
+                                     f"Tier {r.get('tier')} {r.get('kind')} {r.get('direction')}{label} | headline={headline[:90]}")
+                    continue
+                r['event_folded'] = True
+                r['event_key'] = rkey
+                r['clock_anchor'] = row.get('clock_start') or row.get('first_seen')
+                r['clock_hours'] = row.get('clock_hours') or (
+                    24 if row.get('haiku_kind_on_first_seen') == 'follow_up' else MAX_ARTICLE_AGE_HOURS)
+                r['t1_live_fold'] = True
+                r['pre_rule_kind'] = r.get('pre_rule_kind') or r.get('kind')
+                r['pre_rule_tier'] = r.get('pre_rule_tier') or r.get('tier')
+                r['kind'] = 'follow_up'
+                r['event_rule'] = '+'.join(x for x in (r.get('event_rule'), 't1_reject_recheck') if x)
+                pulse_logger.log(f"GEO T1 REJECT RECHECK | folded into live Tier 1 event {rkey} | no new escalation class, no vote"
+                                 f"{actor_note}{label} | clock=original {r['clock_anchor']} +{r['clock_hours']}h | headline={headline[:90]}")
+        except Exception as e:
+            pulse_logger.log(f"⚠️ T1 reject recheck settle failed: {e}", level="WARNING")
 
     def _geo_hard_keep_rejects(self, source_items, classifications, label):
         """Before event rules run: a Haiku reject (relevant false or
@@ -4336,9 +4551,11 @@ CONTEXT: {context}"""
                         # cap r['tier']) in place BEFORE new_class is built, the
                         # cache is written, update_pinned_store() runs (which
                         # already skips kind == follow_up), and anything scores.
+                        self._geo_t1_reject_recheck(new_items, classifications, '')
                         self._geo_hard_keep_rejects(new_items, classifications, '')
                         self._geo_stock_move_excludes(new_items, classifications, '')
                         self._apply_event_rules(self._event_rule_entries_for_fresh(new_items, classifications))
+                        self._geo_t1_reject_recheck_settle(new_items, classifications, '')
                         for r in classifications:
                             idx = r['id'] - 1
                             if idx < len(new_items):
@@ -4383,7 +4600,8 @@ CONTEXT: {context}"""
                                     'classified_at': datetime.now(timezone.utc).isoformat()
                                 }
                                 for f in ('event_rule', 'pre_rule_kind', 'pre_rule_tier',
-                                          'event_folded', 'event_key', 'clock_anchor', 'clock_hours', 'hard_keep', 'drop_reason'):
+                                          'event_folded', 'event_key', 'clock_anchor', 'clock_hours', 'hard_keep', 'drop_reason',
+                                          't1_reject_recheck'):
                                     if f in r:
                                         new_class[f] = r[f]
 
@@ -4900,9 +5118,11 @@ CONTEXT: {context}"""
                 classifications = self.classify_relevance_batch(pending)
                 if not classifications:
                     return
+                self._geo_t1_reject_recheck(pending, classifications, ' (fallback reclassification)')
                 self._geo_hard_keep_rejects(pending, classifications, ' (fallback reclassification)')
                 self._geo_stock_move_excludes(pending, classifications, ' (fallback reclassification)')
                 self._apply_event_rules(self._event_rule_entries_for_fresh(pending, classifications))
+                self._geo_t1_reject_recheck_settle(pending, classifications, ' (fallback reclassification)')
                 for r in classifications:
                     idx = r['id'] - 1
                     if 0 <= idx < len(pending):
@@ -4938,7 +5158,8 @@ CONTEXT: {context}"""
                             'classified_at': datetime.now(timezone.utc).isoformat()
                         }
                         for f in ('event_rule', 'pre_rule_kind', 'pre_rule_tier',
-                                  'event_folded', 'event_key', 'clock_anchor', 'clock_hours', 'hard_keep', 'drop_reason'):
+                                  'event_folded', 'event_key', 'clock_anchor', 'clock_hours', 'hard_keep', 'drop_reason',
+                                          't1_reject_recheck'):
                             if f in r:
                                 gc[headline][f] = r[f]
                         if not gc[headline]['relevant'] or (gc[headline].get('confidence') or 0) < 0.75:
