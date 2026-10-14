@@ -676,8 +676,10 @@ _GEO_CAMPAIGN_TARGET_CLASSES = (
     'jet', 'jets', 'drone', 'drones', 'missile', 'missiles',
     'submarine', 'submarines', 'embassy', 'embassies',
     'nuclear site', 'nuclear sites', 'nuclear facility', 'nuclear facilities',
+    'military site', 'military sites',
     'oil field', 'oil fields', 'convoy', 'convoys',
     'checkpoint', 'checkpoints', 'airport', 'airports', 'power grid',
+    'diesel', 'oil', 'energy', 'crude', 'gasoline', 'fuel',
 )
 _GEO_CAMPAIGN_PLACES = (
     'strait of hormuz', 'hormuz', 'red sea', 'gaza', 'west bank', 'rafah',
@@ -690,12 +692,21 @@ _GEO_CAMPAIGN_PLACES = (
     'sudan', 'khartoum', 'myanmar', 'somalia', 'mogadishu',
     'libya', 'tripoli', 'afghanistan', 'kabul', 'kashmir',
     'mali', 'niger', 'ethiopia', 'tigray',
+    'u.s.', 'u.s.a.', 'united states', 'america',
 )
+# Energy-commodity synonyms: diesel/oil/crude/gasoline/fuel all key as the
+# same 'energy' target so one campaign's write-ups link together.
+_GEO_CAMPAIGN_TARGET_SYNONYMS = {
+    'diesel': 'energy', 'oil': 'energy', 'crude': 'energy',
+    'gasoline': 'energy', 'fuel': 'energy',
+}
 
 
 def _geo_campaign_phrase_re(phrases):
+    # Trailing periods are stripped for matching ('u.s.' matches "U.S." text:
+    # a regex \b after a literal '.' can never match).
     return re.compile(
-        r'\b(?:' + '|'.join(re.escape(p) for p in sorted(phrases, key=len, reverse=True)) + r')\b')
+        r'\b(?:' + '|'.join(re.escape(p.rstrip('.')) for p in sorted(phrases, key=len, reverse=True)) + r')\b')
 
 
 _GEO_CAMPAIGN_ACTOR_RE = _geo_campaign_phrase_re(_GEO_CAMPAIGN_ACTORS)
@@ -704,8 +715,11 @@ _GEO_CAMPAIGN_PLACE_RE = _geo_campaign_phrase_re(_GEO_CAMPAIGN_PLACES)
 
 
 def _geo_campaign_canonical(phrase, known):
-    """Normalize a matched phrase to its singular base so singular/plural
-    variants share one campaign key ('tankers' -> 'tanker')."""
+    """Normalize a matched phrase to its campaign key form: energy-commodity
+    synonyms collapse to 'energy'; plural variants share the singular base
+    ('tankers' -> 'tanker')."""
+    if phrase in _GEO_CAMPAIGN_TARGET_SYNONYMS:
+        return _GEO_CAMPAIGN_TARGET_SYNONYMS[phrase]
     known = set(known)
     if phrase.endswith('ies') and phrase[:-3] + 'y' in known:
         return phrase[:-3] + 'y'
@@ -829,8 +843,8 @@ def _geo_campaign_apply(records, headline, description, current_kind, tier, sour
     2. Campaign record: a matched actor|target|place campaign with no new
        fact -> follow_up (recap; last_seen NOT advanced). A real NEW FACT
        advances last_seen; kind itself is never upgraded here.
-    3. No record: seed from an accepted Tier 1 first_print; otherwise keep
-       Haiku's kind (unlisted actor/target/place falls back to Haiku).
+    3. No record: seed from an accepted Tier 1 or Tier 2 first_print; otherwise
+       keep Haiku's kind (unlisted actor/target/place falls back to Haiku).
 
     Returns (kind, log_line_or_None). Mutates records (seed / advance)."""
     word = _is_pure_talk(headline, description)
@@ -845,7 +859,7 @@ def _geo_campaign_apply(records, headline, description, current_kind, tier, sour
     now_iso = datetime.now(timezone.utc).isoformat()
     rec = records.get(key)
     if rec is None:
-        if tier == 1 and kind == 'first_print':
+        if tier in (1, 2) and kind == 'first_print':
             records[key] = _geo_campaign_seed(key, headline, description, now_iso)
             return 'first_print', f"GEO CAMPAIGN SEED | key={key}{source} | headline={(headline or '')[:90]}"
         return kind, None
