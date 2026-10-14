@@ -542,6 +542,331 @@ _EVENT_NEW_ROUND_RE = re.compile(
 # the speaker's title and is not part of the item's OBJECT.
 _EVENT_SPEECH_VERBS = (r'(?i:says|said|say|warns|warned|warn|told|tells|repeated|repeats|reiterated|reiterates|'
                        r'argued|argues|added|adds|noted|notes|insisted|insists|claims|claimed|stated|states)')
+
+# ---------------------------------------------------------------------------
+# Pure-talk time-marker rule.
+# A talk headline (a speech verb in the headline's main clause) is pure talk
+# unless the full text carries a concrete fact. A casualty number or a finite
+# action verb counts as a concrete fact ONLY when its own clause also carries
+# a current time marker (overnight / today / this morning / a weekday name /
+# just / hours ago); an old marker (last week / a week after / earlier this
+# month / previously / days ago / ...) in that clause cancels the fact.
+# Escalation classes and target classes count as concrete facts exactly as
+# before — no time marker required.
+# ---------------------------------------------------------------------------
+_TALK_WORD_RE = re.compile(r'\b' + _EVENT_SPEECH_VERBS + r'\b')
+
+_TALK_CURRENT_MARKER_RE = re.compile(
+    r'\b(?:overnight|today|this morning|monday|tuesday|wednesday|thursday|'
+    r'friday|saturday|sunday|just|hours ago)\b', re.IGNORECASE)
+_TALK_OLD_MARKER_RE = re.compile(
+    r'\b(?:last week|a week after|earlier this month|previously|days ago|'
+    r'last month|weeks ago|months ago|years ago)\b', re.IGNORECASE)
+
+_TALK_CASUALTY_RE = re.compile(
+    r'\b\d[\d,]*(?:\.\d+)?\b.{0,40}?\b(?:killed|kills|dead|deaths|death toll|'
+    r'fatalities|casualties|wounded|injured|injuries)\b'
+    r'|\b(?:killed|kills|dead|deaths|death toll|fatalities|casualties|'
+    r'wounded|injured|injuries)\b.{0,40}?\b\d[\d,]*(?:\.\d+)?\b',
+    re.IGNORECASE)
+
+_TALK_ACTION_VERBS = (
+    'strike', 'strikes', 'struck', 'striking',
+    'attack', 'attacks', 'attacked', 'attacking',
+    'launch', 'launches', 'launched', 'launching',
+    'deploy', 'deploys', 'deployed', 'deploying',
+    'invade', 'invades', 'invaded', 'invading', 'invasion',
+    'bomb', 'bombs', 'bombed', 'bombing',
+    'shell', 'shelled', 'shelling',
+    'fire', 'fires', 'fired', 'firing',
+    'seize', 'seizes', 'seized', 'seizing',
+    'capture', 'captures', 'captured',
+    'sink', 'sinks', 'sunk', 'sinking',
+    'shoot', 'shoots', 'shot', 'shooting',
+    'kill', 'kills', 'killed', 'killing',
+    'hit', 'hits', 'pound', 'pounds', 'pounded', 'pounding',
+    'bombard', 'bombards', 'bombarded',
+    'assault', 'assaults', 'assaulted',
+    'raid', 'raids', 'raided', 'raiding',
+    'detain', 'detains', 'detained',
+    'arrest', 'arrests', 'arrested',
+    'impose', 'imposes', 'imposed', 'imposing',
+    'sign', 'signs', 'signed', 'signing',
+    'veto', 'vetoes', 'vetoed',
+    'order', 'orders', 'ordered', 'ordering',
+    'mobilize', 'mobilizes', 'mobilized',
+    'evacuate', 'evacuates', 'evacuated',
+    'retaliate', 'retaliates', 'retaliated',
+)
+_TALK_ACTION_VERB_RE = re.compile(r'\b(?:' + '|'.join(_TALK_ACTION_VERBS) + r')\b', re.IGNORECASE)
+
+_TALK_TARGET_CLASSES = (
+    'tanker', 'tankers', 'carrier', 'carriers', 'troop', 'troops',
+    'soldier', 'soldiers', 'base', 'bases', 'refinery', 'refineries',
+    'pipeline', 'pipelines', 'warship', 'warships', 'destroyer', 'destroyers',
+    'jet', 'jets', 'drone', 'drones', 'missile', 'missiles',
+    'submarine', 'submarines', 'embassy', 'embassies', 'consulate', 'consulates',
+    'checkpoint', 'checkpoints', 'convoy', 'convoys',
+)
+_TALK_TARGET_CLASS_RE = re.compile(r'\b(?:' + '|'.join(_TALK_TARGET_CLASSES) + r')\b', re.IGNORECASE)
+
+
+def _talk_main_clause(headline):
+    """The headline's main clause: text before the first clause boundary."""
+    return re.split(r'[,;:—–]', headline or '', maxsplit=1)[0]
+
+
+def _talk_clauses(text):
+    """Clause-level split for the time-marker rule (commas included: a time
+    marker must share the casualty number / action verb's own clause)."""
+    return [c.strip() for c in re.split(r'[.,;:!?—–]+', text or '') if c.strip()]
+
+
+def _is_pure_talk(headline, description):
+    """Talk word in the headline's main clause and no concrete fact in the
+    full text. A casualty number or finite action verb is a concrete fact
+    only when its clause also carries a current time marker; an old marker
+    in that clause cancels it. Escalation classes (the _T1_ESCALATION_CLASSES
+    patterns) and target classes count as before, marker or not.
+    Returns the triggering talk word, or None when not pure talk."""
+    m = _TALK_WORD_RE.search(_talk_main_clause(headline))
+    if not m:
+        return None
+    word = m.group(0).lower()
+    text = ' '.join(t for t in (headline, description) if t)
+    for clause in _talk_clauses(text):
+        if any(rx.search(clause) for _, rx in _T1_ESCALATION_CLASSES):
+            return None
+        if _TALK_TARGET_CLASS_RE.search(clause):
+            return None
+        if _TALK_CASUALTY_RE.search(clause) or _TALK_ACTION_VERB_RE.search(clause):
+            if _TALK_OLD_MARKER_RE.search(clause):
+                continue  # old marker cancels the fact in this clause
+            if _TALK_CURRENT_MARKER_RE.search(clause):
+                return None  # current marker: a genuine concrete fact
+            # No marker at all: not a concrete fact.
+    return word
+
+
+# ---------------------------------------------------------------------------
+# Campaign-record layer — the single owner of the first_print vs follow_up
+# kind decision (the talk check is folded into _geo_campaign_apply, not a
+# separate pass). Records live in /data/geo_campaigns.json on the Railway
+# volume, keyed by actor|target|place, with 30-day retention from last_seen.
+# last_seen advances ONLY on seeding from an accepted Tier 1 first_print or
+# on a real NEW FACT — recaps never keep a campaign alive.
+# ---------------------------------------------------------------------------
+_GEO_CAMPAIGN_STORE = "/data/geo_campaigns.json"
+_GEO_CAMPAIGN_RETENTION_DAYS = 30
+
+# Hand-written actor / target-class / place lists. An article whose actor,
+# target class, or place is not listed gets no campaign key and falls back
+# to Haiku's kind.
+_GEO_CAMPAIGN_ACTORS = (
+    'trump', 'biden', 'netanyahu', 'putin', 'zelensky', 'zelenskiy',
+    'xi jinping', 'khamenei', 'erdogan', 'modi', 'kim jong un',
+    'israel', 'iran', 'russia', 'ukraine', 'china', 'north korea',
+    'south korea', 'taiwan', 'hamas', 'hezbollah', 'houthis',
+    'kremlin', 'white house', 'pentagon', 'idf',
+)
+_GEO_CAMPAIGN_TARGET_CLASSES = (
+    'tanker', 'tankers', 'carrier', 'carriers', 'troop', 'troops',
+    'soldier', 'soldiers', 'base', 'bases', 'refinery', 'refineries',
+    'pipeline', 'pipelines', 'warship', 'warships', 'destroyer', 'destroyers',
+    'jet', 'jets', 'drone', 'drones', 'missile', 'missiles',
+    'submarine', 'submarines', 'embassy', 'embassies',
+    'nuclear site', 'nuclear sites', 'nuclear facility', 'nuclear facilities',
+    'oil field', 'oil fields', 'convoy', 'convoys',
+    'checkpoint', 'checkpoints', 'airport', 'airports', 'power grid',
+)
+_GEO_CAMPAIGN_PLACES = (
+    'strait of hormuz', 'hormuz', 'red sea', 'gaza', 'west bank', 'rafah',
+    'tel aviv', 'jerusalem', 'haifa', 'golan', 'lebanon', 'beirut',
+    'syria', 'damascus', 'idlib', 'iraq', 'baghdad', 'yemen', "sana'a",
+    'sanaa', 'iran', 'tehran', 'israel', 'ukraine', 'kyiv', 'kiev',
+    'donetsk', 'kharkiv', 'kherson', 'zaporizhzhia', 'crimea',
+    'russia', 'moscow', 'taiwan', 'taipei', 'south china sea',
+    'north korea', 'pyongyang', 'china', 'beijing',
+    'sudan', 'khartoum', 'myanmar', 'somalia', 'mogadishu',
+    'libya', 'tripoli', 'afghanistan', 'kabul', 'kashmir',
+    'mali', 'niger', 'ethiopia', 'tigray',
+)
+
+
+def _geo_campaign_phrase_re(phrases):
+    return re.compile(
+        r'\b(?:' + '|'.join(re.escape(p) for p in sorted(phrases, key=len, reverse=True)) + r')\b')
+
+
+_GEO_CAMPAIGN_ACTOR_RE = _geo_campaign_phrase_re(_GEO_CAMPAIGN_ACTORS)
+_GEO_CAMPAIGN_TARGET_RE = _geo_campaign_phrase_re(_GEO_CAMPAIGN_TARGET_CLASSES)
+_GEO_CAMPAIGN_PLACE_RE = _geo_campaign_phrase_re(_GEO_CAMPAIGN_PLACES)
+
+
+def _geo_campaign_canonical(phrase, known):
+    """Normalize a matched phrase to its singular base so singular/plural
+    variants share one campaign key ('tankers' -> 'tanker')."""
+    known = set(known)
+    if phrase.endswith('ies') and phrase[:-3] + 'y' in known:
+        return phrase[:-3] + 'y'
+    if phrase.endswith('s') and phrase[:-1] in known:
+        return phrase[:-1]
+    return phrase
+
+_GEO_CAMPAIGN_CASUALTY_NUM_RE = re.compile(
+    r'\b(\d[\d,]*)\b.{0,40}?\b(?:killed|kills|dead|deaths|death toll|'
+    r'fatalities|casualties|wounded|injured|injuries|toll)\b'
+    r'|\b(?:killed|kills|dead|deaths|death toll|'
+    r'fatalities|casualties|wounded|injured|injuries|toll)\b.{0,40}?\b(\d[\d,]*)\b',
+    re.IGNORECASE)
+_GEO_CAMPAIGN_NEW_ROUND_RE = re.compile(
+    r'\b(?:fresh (?:strikes?|attacks?|offensive)|second wave|another wave|'
+    r'renewed (?:strikes?|attacks?|offensive|assault)|new wave of)\b',
+    re.IGNORECASE)
+
+
+def _geo_campaign_key(headline, description):
+    """actor|target|place key for the article, or None when any of the three
+    is not on the hand-written lists (falls back to Haiku's kind). The place
+    is the most specific listed place that is not the actor itself."""
+    text = f"{headline or ''} {description or ''}".lower()
+    actor_m = _GEO_CAMPAIGN_ACTOR_RE.search(text)
+    target_m = _GEO_CAMPAIGN_TARGET_RE.search(text)
+    if not (actor_m and target_m):
+        return None
+    actor = _geo_campaign_canonical(actor_m.group(0), _GEO_CAMPAIGN_ACTORS)
+    place = None
+    for m in _GEO_CAMPAIGN_PLACE_RE.finditer(text):
+        cand = _geo_campaign_canonical(m.group(0), _GEO_CAMPAIGN_PLACES)
+        if cand != actor:
+            place = cand
+            break
+    if place is None:
+        return None
+    target = _geo_campaign_canonical(target_m.group(0), _GEO_CAMPAIGN_TARGET_CLASSES)
+    return f"{actor}|{target}|{place}"
+
+
+def _geo_campaign_casualty_numbers(text):
+    nums = []
+    for m in _GEO_CAMPAIGN_CASUALTY_NUM_RE.finditer(text or ''):
+        raw = m.group(1) or m.group(2)
+        try:
+            nums.append(int(raw.replace(',', '')))
+        except (ValueError, AttributeError):
+            continue
+    return nums
+
+
+def _geo_campaign_new_fact(rec, headline, description):
+    """Reason string when the article carries a real NEW FACT vs the record,
+    else None. Death-toll updates that raise the known number count."""
+    text = f"{headline or ''} {description or ''}"
+    known = rec.get('casualties')
+    higher = [n for n in _geo_campaign_casualty_numbers(text)
+              if known is None or n > known]
+    if higher:
+        return f"new_casualties {max(higher)} (was {known})"
+    seen = set(rec.get('escalation_classes') or [])
+    new_classes = [n for n, rx in _T1_ESCALATION_CLASSES
+                   if rx.search(text) and n not in seen]
+    if new_classes:
+        return f"new escalation class {new_classes[0]}"
+    if _GEO_CAMPAIGN_NEW_ROUND_RE.search(text):
+        return "new act/round cue"
+    return None
+
+
+def _geo_campaign_seed(key, headline, description, now_iso):
+    text = f"{headline or ''} {description or ''}"
+    nums = _geo_campaign_casualty_numbers(text)
+    return {
+        'key': key,
+        'first_seen': now_iso,
+        'last_seen': now_iso,
+        'sample_headline': (headline or '')[:120],
+        'casualties': max(nums) if nums else None,
+        'escalation_classes': [n for n, rx in _T1_ESCALATION_CLASSES if rx.search(text)],
+    }
+
+
+def _geo_load_campaigns():
+    """Campaign records, pruned to 30-day retention from last_seen."""
+    try:
+        if os.path.exists(_GEO_CAMPAIGN_STORE):
+            with open(_GEO_CAMPAIGN_STORE) as f:
+                records = json.load(f)
+        else:
+            return {}
+    except Exception:
+        return {}
+    cutoff = datetime.now(timezone.utc) - timedelta(days=_GEO_CAMPAIGN_RETENTION_DAYS)
+    kept = {}
+    for k, rec in (records or {}).items():
+        try:
+            seen = datetime.fromisoformat(rec.get('last_seen', ''))
+            if seen.tzinfo is None:
+                seen = seen.replace(tzinfo=timezone.utc)
+            if seen >= cutoff:
+                kept[k] = rec
+        except Exception:
+            continue
+    return kept
+
+
+def _geo_save_campaigns(records):
+    try:
+        atomic_write_json(_GEO_CAMPAIGN_STORE, records)
+    except Exception as e:
+        pulse_logger.log(f"⚠️ Campaign records save failed: {e}", level="WARNING")
+
+
+def _geo_campaign_apply(records, headline, description, current_kind, tier, source):
+    """The single owner of the first_print vs follow_up kind decision.
+
+    1. Talk check (folded in, not a separate pass): pure talk -> follow_up,
+       24h clock, no pin.
+    2. Campaign record: a matched actor|target|place campaign with no new
+       fact -> follow_up (recap; last_seen NOT advanced). A real NEW FACT
+       advances last_seen; kind itself is never upgraded here.
+    3. No record: seed from an accepted Tier 1 first_print; otherwise keep
+       Haiku's kind (unlisted actor/target/place falls back to Haiku).
+
+    Returns (kind, log_line_or_None). Mutates records (seed / advance)."""
+    word = _is_pure_talk(headline, description)
+    if word:
+        return 'follow_up', (
+            f"GEO CAMPAIGN TALK FORCE FOLLOW_UP | word={word} | clock=24h | "
+            f"no pin | headline={(headline or '')[:90]}")
+    kind = current_kind if current_kind in ('first_print', 'follow_up') else 'first_print'
+    key = _geo_campaign_key(headline, description)
+    if key is None:
+        return kind, None
+    now_iso = datetime.now(timezone.utc).isoformat()
+    rec = records.get(key)
+    if rec is None:
+        if tier == 1 and kind == 'first_print':
+            records[key] = _geo_campaign_seed(key, headline, description, now_iso)
+            return 'first_print', f"GEO CAMPAIGN SEED | key={key}{source} | headline={(headline or '')[:90]}"
+        return kind, None
+    why = _geo_campaign_new_fact(rec, headline, description)
+    if why:
+        rec['last_seen'] = now_iso
+        rec['sample_headline'] = (headline or '')[:120]
+        nums = _geo_campaign_casualty_numbers(f"{headline or ''} {description or ''}")
+        if nums:
+            prev = rec.get('casualties') or 0
+            rec['casualties'] = max([prev] + nums)
+        seen = set(rec.get('escalation_classes') or [])
+        for n, rx in _T1_ESCALATION_CLASSES:
+            if rx.search(f"{headline or ''} {description or ''}") and n not in seen:
+                rec.setdefault('escalation_classes', []).append(n)
+        return kind, f"GEO CAMPAIGN NEW FACT | {why} | key={key}{source} | headline={(headline or '')[:90]}"
+    if kind == 'first_print':
+        return 'follow_up', (
+            f"GEO CAMPAIGN FOLLOW_UP | no new fact | key={key}{source} | "
+            f"headline={(headline or '')[:90]}")
+    return kind, None
 _EVENT_SPEAKER_RE = re.compile(
     r"((?:[A-Z][\w'\u2019\-]*\.?\s+){0,5}?([A-Z][\w\-]+))(?:'s|\u2019s)?\s+" + _EVENT_SPEECH_VERBS + r"\b")
 # Unnamed / generic speakers are commentary, not a named source.
@@ -3558,12 +3883,13 @@ CONTEXT: {context}"""
                             'clock_hours': clock_hours}
                     if t1_live:
                         fold['t1_live'] = True
-                    if kind != 'follow_up':
-                        row['forced_follow_up_count'] = int(row.get('forced_follow_up_count', 0)) + 1
-                    kind = 'follow_up'
+                    # RULE A KIND OVERRIDE DISABLED — the campaign record owns
+                    # kind now (see _geo_campaign_apply). The fold itself
+                    # (clock inheritance via event_folded) is unchanged; only
+                    # the forced kind flip is removed.
                     rules.append('event_memory')
                     logs.append(
-                        f"FORCE FOLLOW_UP | key={row_key} | core={sim[0]} overlap={sim[1]:.2f} | "
+                        f"EVENT MEMORY FOLD (kind kept) | key={row_key} | core={sim[0]} overlap={sim[1]:.2f} | "
                         f"haiku_kind={haiku_kind} | clock=original {fold['clock_anchor']} +{clock_hours}h | "
                         f"matched=\"{row.get('sample_headline', '')[:90]}\"{t1_note} | headline={short}"
                     )
@@ -3921,7 +4247,10 @@ CONTEXT: {context}"""
                 prev = f"relevant={r.get('relevant')} conf={r.get('confidence')}"
                 r['relevant'] = True
                 r['confidence'] = max(r.get('confidence') or 0, 0.75)
-                r['tier'], r['direction'], r['kind'] = 1, direction, 'first_print'
+                # Reject-recheck KIND line disabled — the campaign record owns
+                # kind now (see _geo_campaign_apply). Tier/direction routing
+                # is unchanged.
+                r['tier'], r['direction'] = 1, direction
                 r['t1_reject_recheck'] = rkey
                 why = 'action' if kinds else f"path '{path.group(0)}'" if path else 'action'
                 pulse_logger.log(
@@ -4012,6 +4341,30 @@ CONTEXT: {context}"""
             r['hard_keep'] = hk['reason']
             pulse_logger.log(f"GEO KEEP | hard_keep={hk['reason']} | overrides=haiku_reject ({prev}){label} | "
                              f"Tier {hk['tier']} | {hk['direction']} | headline={art.get('headline', '')[:90]}")
+
+    def _geo_campaign_apply_fresh(self, source_items, classifications, source=''):
+        """Run _geo_campaign_apply as the single kind decision for each
+        scoring-eligible classification (talk check folded in, not a separate
+        pass). Loads the campaign records, applies the decision, saves."""
+        records = _geo_load_campaigns()
+        try:
+            for r in classifications or []:
+                if not isinstance(r, dict) or 'id' not in r:
+                    continue
+                if not r.get('relevant') or (r.get('confidence') or 0) < 0.75:
+                    continue
+                idx = r['id'] - 1
+                if not (0 <= idx < len(source_items)):
+                    continue
+                art = source_items[idx]
+                kind, logline = _geo_campaign_apply(
+                    records, art.get('headline', ''), art.get('description', ''),
+                    r.get('kind'), r.get('tier'), source)
+                r['kind'] = kind
+                if logline:
+                    pulse_logger.log(logline)
+        finally:
+            _geo_save_campaigns(records)
 
     def _apply_event_rules(self, entries, log_loaded=False):
         """Rule B (14-day after-action cap) then Rule A (7-day event memory)
@@ -4554,6 +4907,7 @@ CONTEXT: {context}"""
                         self._geo_t1_reject_recheck(new_items, classifications, '')
                         self._geo_hard_keep_rejects(new_items, classifications, '')
                         self._geo_stock_move_excludes(new_items, classifications, '')
+                        self._geo_campaign_apply_fresh(new_items, classifications)
                         self._apply_event_rules(self._event_rule_entries_for_fresh(new_items, classifications))
                         self._geo_t1_reject_recheck_settle(new_items, classifications, '')
                         for r in classifications:
@@ -5121,6 +5475,7 @@ CONTEXT: {context}"""
                 self._geo_t1_reject_recheck(pending, classifications, ' (fallback reclassification)')
                 self._geo_hard_keep_rejects(pending, classifications, ' (fallback reclassification)')
                 self._geo_stock_move_excludes(pending, classifications, ' (fallback reclassification)')
+                self._geo_campaign_apply_fresh(pending, classifications, ' (fallback reclassification)')
                 self._apply_event_rules(self._event_rule_entries_for_fresh(pending, classifications))
                 self._geo_t1_reject_recheck_settle(pending, classifications, ' (fallback reclassification)')
                 for r in classifications:
