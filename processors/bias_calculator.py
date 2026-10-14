@@ -18,7 +18,69 @@ def _neutral_mode():
         return 'quarter'
     return 'half' if mode == 'half' else 'quarter'
 
+
+def _direction_of(score):
+    """Directional signal using the same ±0.15 bands as the agreement math."""
+    if score > 0.15:
+        return 'bullish'
+    if score < -0.15:
+        return 'bearish'
+    return 'neutral'
+
+
 class BiasCalculator:
+    # Effective-weight floor below which a decayed institutional (COT) reading
+    # loses its vote when it stands alone against the other pillars.
+    # COT decay schedule on the base-25 weight: Mon 25.0 / Tue 21.25 /
+    # Wed 17.5 / Thu 13.75 / Fri 13.75 (pre-3:30 PM). Below 20 = Wed–Fri,
+    # when the print is 8+ days stale.
+    COT_VETO_FLOOR = 20
+
+    def _institutional_weight(self, base_weight, pillar_data):
+        """COT decay — stale weekly data weighs less as the week progresses.
+        Returns the decay-adjusted effective weight. Extracted verbatim from
+        compute() so the veto pre-pass and the main loop share one source."""
+        weight = base_weight
+        now = datetime.now(pytz.timezone(TIMEZONE))
+        today = now.weekday()
+        if today in [5, 6]:  # Weekend — COT data maximally stale, contribute nothing
+            weight = 0
+            pulse_logger.log("📉 COT decay — weekend, institutional weight zeroed")
+        else:
+            if today == 4:  # Friday — 55% floor until 3:30 PM EST; full weight once COT posts
+                cutoff = now.replace(hour=15, minute=30, second=0, microsecond=0)
+                decay_factor = 1.0 if now >= cutoff else 0.55
+            else:
+                # Mon=0: 100%, Tue=1: 85%, Wed=2: 70%, Thu=3: 55%
+                decay_factor = {0: 1.0, 1: 0.85, 2: 0.70, 3: 0.55}[today]
+
+            # Monday freshness guard — full weight only if this cycle's data has landed.
+            # If the Monday re-fetch hasn't succeeded (status=stale or timestamp still
+            # from last Friday), hold the 55% floor rather than granting 100% to data
+            # the decay schedule already discounted last week.
+            if today == 0 and decay_factor == 1.0:
+                cot_status = pillar_data.get('status', '')
+                cot_ts = pillar_data.get('timestamp', '')
+                is_stale_on_monday = cot_status == 'stale'
+                if not is_stale_on_monday and cot_ts:
+                    try:
+                        cached_dt = datetime.fromisoformat(cot_ts)
+                        if cached_dt.tzinfo is None:
+                            cached_dt = cached_dt.replace(tzinfo=pytz.timezone(TIMEZONE))
+                        is_stale_on_monday = cached_dt.weekday() == 4  # Friday-stamped = last week
+                    except Exception:
+                        pass
+                if is_stale_on_monday:
+                    decay_factor = 0.55
+                    pulse_logger.log(f"📉 COT freshness guard — Monday but data is last week's ({cot_status or 'Friday timestamp'}), holding 55% floor")
+
+            weight = weight * decay_factor
+            if decay_factor < 1.0:
+                pulse_logger.log(f"📉 COT decay applied — {int(decay_factor * 100)}% of {base_weight}% base = {weight:.1f}% effective")
+            elif today == 0:
+                pulse_logger.log(f"✅ COT weight — Monday, full {base_weight}% effective")
+        return weight
+
     def compute(self, formatted_data, bias_threshold=0.5):
         total_score = 0.0
         total_weight_used = 0.0   # sum of base_weight for genuinely-reporting pillars only
@@ -36,6 +98,38 @@ class BiasCalculator:
             'macro': 'macro_sentiment'
         }
 
+        # Veto pre-pass — directional signals for every reporting pillar, so a
+        # decayed institutional print is judged before it gets to vote.
+        pre_signals = {}
+        for data_key, config_key in weight_map.items():
+            pdata = formatted_data.get(data_key, {})
+            if pdata.get('status', 'unavailable') == 'unavailable':
+                continue
+            pre_signals[config_key] = _direction_of(pdata.get('pillar_score', 0) or 0)
+
+        inst_weight = self._institutional_weight(
+            weights.get('institutional', 0),
+            formatted_data.get('institutional', {}),
+        )
+
+        # Decayed-COT veto override — an institutional reading decayed below
+        # the floor (Wed–Fri) is treated as silent for this cycle when it
+        # disagrees with two or more other pillars that agree with each other.
+        # Stale, ambiguous positioning data must not single-handedly block
+        # fresh, directionally-clear pillars. Displayed, not counted.
+        cot_veto_override = False
+        inst_dir = pre_signals.get('institutional')
+        if inst_weight < self.COT_VETO_FLOOR and inst_dir in ('bullish', 'bearish'):
+            blockers = [k for k, s in pre_signals.items()
+                        if k != 'institutional' and s != 'neutral' and s != inst_dir]
+            if len(blockers) >= 2:
+                cot_veto_override = True
+                pulse_logger.log(
+                    f"🗳️ COT veto overridden — institutional decayed to {inst_weight:.1f}% "
+                    f"({inst_dir}) vs {len(blockers)} aligned pillars "
+                    f"({', '.join(sorted(blockers))}) — excluded from bias this cycle"
+                )
+
         for data_key, config_key in weight_map.items():
             pillar_data = formatted_data.get(data_key, {})
             score = pillar_data.get('pillar_score', 0)
@@ -43,46 +137,10 @@ class BiasCalculator:
             weight = base_weight
             status = pillar_data.get('status', 'unavailable')
 
-            # COT decay — stale weekly data weighs less as the week progresses
+            # COT effective weight — computed once in the veto pre-pass above
+            # (single source of truth with the veto check).
             if config_key == 'institutional':
-                now = datetime.now(pytz.timezone(TIMEZONE))
-                today = now.weekday()
-                if today in [5, 6]:  # Weekend — COT data maximally stale, contribute nothing
-                    weight = 0
-                    pulse_logger.log("📉 COT decay — weekend, institutional weight zeroed")
-                else:
-                    if today == 4:  # Friday — 55% floor until 3:30 PM EST; full weight once COT posts
-                        cutoff = now.replace(hour=15, minute=30, second=0, microsecond=0)
-                        decay_factor = 1.0 if now >= cutoff else 0.55
-                    else:
-                        # Mon=0: 100%, Tue=1: 85%, Wed=2: 70%, Thu=3: 55%
-                        decay_factor = {0: 1.0, 1: 0.85, 2: 0.70, 3: 0.55}[today]
-
-                    # Monday freshness guard — full weight only if this cycle's data has landed.
-                    # If the Monday re-fetch hasn't succeeded (status=stale or timestamp still
-                    # from last Friday), hold the 55% floor rather than granting 100% to data
-                    # the decay schedule already discounted last week.
-                    if today == 0 and decay_factor == 1.0:
-                        cot_status = pillar_data.get('status', '')
-                        cot_ts = pillar_data.get('timestamp', '')
-                        is_stale_on_monday = cot_status == 'stale'
-                        if not is_stale_on_monday and cot_ts:
-                            try:
-                                cached_dt = datetime.fromisoformat(cot_ts)
-                                if cached_dt.tzinfo is None:
-                                    cached_dt = cached_dt.replace(tzinfo=pytz.timezone(TIMEZONE))
-                                is_stale_on_monday = cached_dt.weekday() == 4  # Friday-stamped = last week
-                            except Exception:
-                                pass
-                        if is_stale_on_monday:
-                            decay_factor = 0.55
-                            pulse_logger.log(f"📉 COT freshness guard — Monday but data is last week's ({cot_status or 'Friday timestamp'}), holding 55% floor")
-
-                    weight = weight * decay_factor
-                    if decay_factor < 1.0:
-                        pulse_logger.log(f"📉 COT decay applied — {int(decay_factor * 100)}% of {base_weight}% base = {weight:.1f}% effective")
-                    elif today == 0:
-                        pulse_logger.log(f"✅ COT weight — Monday, full {base_weight}% effective")
+                weight = inst_weight
 
             # True silence — no fetch succeeded, no cached fallback available this
             # cycle (data_formatter.py forces status='unavailable' for a None
@@ -93,7 +151,7 @@ class BiasCalculator:
             # toward Neutral would itself be an unearned directional statement.
             # A genuinely-computed 0.0 (status='live'/'cached'/'stale'/'pinned_only')
             # is real signal and keeps contributing/counting exactly as before.
-            is_silent = status == 'unavailable'
+            is_silent = status == 'unavailable' or (config_key == 'institutional' and cot_veto_override)
 
             if not is_silent:
                 contribution = score * (weight / 100)
