@@ -843,8 +843,8 @@ def _geo_campaign_apply(records, headline, description, current_kind, tier, sour
     2. Campaign record: a matched actor|target|place campaign with no new
        fact -> follow_up (recap; last_seen NOT advanced). A real NEW FACT
        advances last_seen; kind itself is never upgraded here.
-    3. No record: seed from an accepted Tier 1 first_print; otherwise keep
-       Haiku's kind (unlisted actor/target/place falls back to Haiku).
+    3. No record: seed from an accepted Tier 1 or Tier 2 first_print; otherwise
+       keep Haiku's kind (unlisted actor/target/place falls back to Haiku).
 
     Returns (kind, log_line_or_None). Mutates records (seed / advance)."""
     word = _is_pure_talk(headline, description)
@@ -859,7 +859,7 @@ def _geo_campaign_apply(records, headline, description, current_kind, tier, sour
     now_iso = datetime.now(timezone.utc).isoformat()
     rec = records.get(key)
     if rec is None:
-        if tier == 1 and kind == 'first_print':
+        if tier in (1, 2) and kind == 'first_print':
             records[key] = _geo_campaign_seed(key, headline, description, now_iso)
             return 'first_print', f"GEO CAMPAIGN SEED | key={key}{source} | headline={(headline or '')[:90]}"
         return kind, None
