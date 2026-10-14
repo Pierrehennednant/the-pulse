@@ -2473,6 +2473,8 @@ Pass if it involves: Federal Reserve policy or official commentary, geopolitical
 
 Fail if it involves: opinion or commentary on past market moves, investment advice or tips, personal finance stories, single company news unless systemically important, celebrity investor quotes, lifestyle or consumer behavior stories, retail shopping guides or consumer deal/discount roundups (e.g. "back to school savings," "extra deals," holiday shopping tips, or similar listicle-style consumer spending content — even if framed around tariffs or prices), prediction-market or betting-market odds and probability content (e.g. Kalshi, Polymarket, or PredictIt contract prices or probability shifts on a geopolitical or economic outcome) — a market's aggregated probability estimate is not itself a new event, even when the underlying outcome concerns something market-moving like a nuclear deal, election, or rate decision, newsletter recap formats, or anything that describes what already happened rather than new information AND cannot be tied to an identifiable already-scored event still within its FOLLOW_UP window (see the FIRST_PRINT/FOLLOW_UP step above — a same-story restatement that IS tied to a still-live event is FOLLOW_UP, not a DECISION 1 failure).
 
+DOMESTIC REGULATORY EXCLUSION — explicit rule: domestic regulatory actions (fines, penalties, settlements, consent orders) against a single named company are not geopolitical. Drop them (relevant: false) unless the article also contains a war, tariff, sanctions, export-control, or cross-border fact. The presence of the word "Treasury" or a dollar amount does not make it geopolitical.
+
 Before passing any article, run it through these six filters. If it fails any one of them, reject it:
 
 FILTER 1 — SOURCE VS ECHO
