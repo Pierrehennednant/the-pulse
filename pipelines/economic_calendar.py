@@ -215,54 +215,53 @@ class EconomicCalendarPipeline:
         return title.lower().strip() in self.INFLATION_METRICS
 
     # Plain-English definitions of each data point, shown on the dashboard
-    # cards in place of the "came in hot / beat forecast" narrative. Written in
-    # a professional but accessible register — what the indicator measures and
-    # why it matters. Keyed by lowercase title.
+    # cards in place of the "came in hot / beat forecast" narrative. Written so
+    # it reads once and clicks — plain, direct, no jargon. Keyed by lowercase title.
     EVENT_DEFINITIONS = {
         # Inflation
-        'cpi m/m': 'The Consumer Price Index measures the average change in prices paid for everyday goods and services, such as food, housing, and fuel. This release compares this month to last month.',
-        'cpi y/y': 'The Consumer Price Index measures the average change in prices paid for everyday goods and services, such as food, housing, and fuel. This release compares to the same month last year.',
-        'core cpi m/m': 'Core CPI measures the same basket of consumer prices but excludes food and energy, which are prone to sharp swings.',
-        'core cpi y/y': 'Core CPI measures the same basket of consumer prices but excludes food and energy, which are prone to sharp swings.',
-        'ppi m/m': 'The Producer Price Index measures the average change in prices businesses pay for raw materials and inputs. Rising producer prices often pass through to consumers later.',
-        'ppi y/y': 'The Producer Price Index measures the average change in prices businesses pay for raw materials and inputs, compared to a year ago.',
-        'core ppi m/m': 'Core PPI measures the same business input prices, excluding food and energy.',
-        'core ppi y/y': 'Core PPI measures the same business input prices, excluding food and energy.',
-        'pce price index m/m': "The Personal Consumption Expenditures index is the Federal Reserve's preferred gauge of inflation.",
-        'core pce price index m/m': "Core PCE is the Federal Reserve's preferred inflation gauge, excluding food and energy.",
+        'cpi m/m': 'CPI tracks the cost of everyday life — food, rent, gas. This one compares this month to last month: when it rises, your money buys less.',
+        'cpi y/y': 'CPI tracks the cost of everyday life — food, rent, gas. This one compares to the same month last year: when it rises, your money buys less.',
+        'core cpi m/m': 'Same as CPI, but leaves out food and energy — those prices jump around too much to read the trend.',
+        'core cpi y/y': 'Same as CPI, but leaves out food and energy — those prices jump around too much to read the trend.',
+        'ppi m/m': "PPI tracks what businesses pay for raw materials. When their costs rise, higher prices for you usually follow.",
+        'ppi y/y': "PPI tracks what businesses pay for raw materials, compared to a year ago. When their costs rise, higher prices for you usually follow.",
+        'core ppi m/m': 'Same as PPI, minus food and energy.',
+        'core ppi y/y': 'Same as PPI, minus food and energy.',
+        'pce price index m/m': "The Fed's favorite inflation measure — like CPI, but this is the one the Fed actually watches.",
+        'core pce price index m/m': "The Fed's favorite inflation measure, minus food and energy.",
         # Jobs
-        'non-farm employment change': 'The net number of jobs added across the economy in a month — the headline employment figure.',
-        'unemployment rate': 'The percentage of the labor force actively seeking work but unable to find it.',
-        'average hourly earnings m/m': 'The growth of average worker wages — a key driver of consumer spending and inflation.',
-        'unemployment claims': 'New filings for unemployment benefits each week — a timely read on layoffs.',
-        'preliminary benchmark payrolls revision': 'A revision to previously reported payroll figures, correcting the official record of jobs added.',
-        'jolts job openings': 'The number of open positions employers are trying to fill — a read on labor market tightness.',
-        'adp non-farm employment change': 'A private-sector estimate of monthly job growth, released ahead of the official government report.',
+        'non-farm employment change': 'How many new jobs were added this month — the headline jobs number.',
+        'unemployment rate': "The share of workers who want a job but can't find one.",
+        'average hourly earnings m/m': 'How fast paychecks are growing — bigger raises can push prices up too.',
+        'unemployment claims': 'How many people filed for unemployment this week — a quick read on layoffs.',
+        'preliminary benchmark payrolls revision': 'A correction to old jobs data — how many jobs were really added.',
+        'jolts job openings': 'How many jobs are sitting open — shows how hungry employers are for workers.',
+        'adp non-farm employment change': "A private early guess at the month's job gains, out before the official number.",
         # Spending and growth
-        'retail sales m/m': 'Total consumer spending at stores and online — a primary gauge of consumer demand.',
-        'core retail sales m/m': 'Retail sales excluding automobiles, whose purchases can swing sharply month to month.',
-        'advance gdp q/q': 'The first estimate of gross domestic product — the total value of goods and services produced, and the broadest read on economic growth.',
-        'prelim gdp q/q': 'The second estimate of gross domestic product — the total value of goods and services produced.',
-        'final gdp q/q': 'The final estimate of gross domestic product — the total value of goods and services produced.',
+        'retail sales m/m': 'How much people spent shopping — when it climbs, consumers are feeling good.',
+        'core retail sales m/m': 'Same, minus car sales, which swing too much month to month.',
+        'advance gdp q/q': 'The first read on the size of the whole economy — how much the country made and sold this quarter.',
+        'prelim gdp q/q': 'The second read on the size of the whole economy this quarter.',
+        'final gdp q/q': 'The final read on the size of the whole economy last quarter.',
         # Surveys
-        'ism manufacturing pmi': 'A monthly survey of manufacturing purchasing managers — readings above 50 signal expansion, below signal contraction.',
-        'ism services pmi': 'A monthly survey of service-sector purchasing managers — readings above 50 signal expansion, below signal contraction.',
+        'ism manufacturing pmi': 'A survey of factory managers — over 50 means factories are growing, under means shrinking.',
+        'ism services pmi': 'A survey of service businesses — over 50 means growing, under means shrinking.',
         # Consumer mood
-        'prelim uom consumer sentiment': 'A survey measuring how consumers feel about the economy and their personal finances.',
-        'revised uom consumer sentiment': 'The final reading of the survey on how consumers feel about the economy and their personal finances.',
-        'cb consumer confidence': 'A survey of consumer attitudes toward business conditions, employment, and spending plans.',
+        'prelim uom consumer sentiment': 'A survey of how regular people feel about the economy and their wallets.',
+        'revised uom consumer sentiment': 'The final version of that survey on how regular people feel about the economy.',
+        'cb consumer confidence': 'A survey of how confident shoppers feel about jobs and spending.',
         # Housing
-        'building permits': 'New residential building permits issued — an early indicator of future construction activity.',
-        'housing starts': 'The number of new homes on which construction has begun.',
-        'new home sales': 'The number of newly built homes sold during the month.',
-        'existing home sales': 'The number of previously owned homes sold during the month.',
-        'pending home sales m/m': 'Signed contracts for home purchases — a leading indicator of closed sales.',
+        'building permits': 'Permits issued for new homes — a sneak peek at future building.',
+        'housing starts': 'New homes builders actually started.',
+        'new home sales': 'Brand-new homes sold this month.',
+        'existing home sales': 'Previously owned homes sold this month.',
+        'pending home sales m/m': 'Home deals signed but not closed yet — shows where sales are headed.',
         # Fed
-        'federal funds rate': 'The interest rate set by the Federal Reserve — it influences borrowing costs across the economy, from mortgages to credit cards.',
-        'fomc statement': "The Federal Open Market Committee's official statement accompanying its interest-rate decision.",
-        'fomc press conference': "The Fed chair's live remarks and Q&A following the rate decision.",
-        'fomc meeting minutes': "The detailed record of the Fed's policy meeting, released three weeks afterward.",
-        'fomc economic projections': "The Federal Reserve's own forecasts for interest rates, inflation, growth, and unemployment.",
+        'federal funds rate': 'The interest rate the Fed sets — it flows into mortgages, car loans, and credit cards.',
+        'fomc statement': "The Fed's written explanation of its rate decision.",
+        'fomc press conference': 'The Fed chair explains the decision live and takes questions.',
+        'fomc meeting minutes': "The notes from the Fed's meeting, released a few weeks later.",
+        'fomc economic projections': "The Fed's own forecast for rates, prices, and jobs.",
     }
 
     def _event_definition(self, title):
