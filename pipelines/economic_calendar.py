@@ -214,7 +214,70 @@ class EconomicCalendarPipeline:
     def is_inflation_metric(self, title):
         return title.lower().strip() in self.INFLATION_METRICS
 
+    # Plain-English definitions of each data point, shown on the dashboard
+    # cards in place of the "came in hot / beat forecast" narrative. One
+    # sentence each, kept deliberately simple. Keyed by lowercase title.
+    EVENT_DEFINITIONS = {
+        # Inflation
+        'cpi m/m': 'How much everyday prices went up this month compared to last month.',
+        'cpi y/y': 'How much everyday prices went up compared to the same month last year.',
+        'core cpi m/m': 'Like CPI, but leaves out food and energy, whose prices jump around.',
+        'core cpi y/y': 'Like CPI, but leaves out food and energy, whose prices jump around.',
+        'ppi m/m': 'How much prices went up for businesses buying materials, vs last month.',
+        'ppi y/y': 'How much prices went up for businesses buying materials, vs last year.',
+        'core ppi m/m': 'Like PPI, but leaves out food and energy.',
+        'core ppi y/y': 'Like PPI, but leaves out food and energy.',
+        'pce price index m/m': "The Fed's favorite inflation gauge: how much prices went up this month.",
+        'core pce price index m/m': "The Fed's favorite inflation gauge, minus food and energy.",
+        # Jobs
+        'non-farm employment change': 'How many new jobs the economy added this month.',
+        'unemployment rate': "What share of workers want a job but can't find one.",
+        'average hourly earnings m/m': "How much workers' paychecks grew this month.",
+        'unemployment claims': 'How many people filed for jobless benefits this week.',
+        'preliminary benchmark payrolls revision': 'A correction to old jobs numbers: how many jobs were really added.',
+        'jolts job openings': 'How many job openings employers are trying to fill.',
+        'adp non-farm employment change': 'A private early estimate of how many jobs were added this month.',
+        # Spending and growth
+        'retail sales m/m': 'How much shoppers spent at stores and online this month vs last.',
+        'core retail sales m/m': 'Like retail sales, but leaves out cars, whose sales swing wildly.',
+        'advance gdp q/q': 'First reading of how much the whole economy grew this quarter.',
+        'prelim gdp q/q': 'Second reading of how much the whole economy grew this quarter.',
+        'final gdp q/q': 'Final reading of how much the whole economy grew last quarter.',
+        # Surveys
+        'ism manufacturing pmi': 'A survey of factory managers. Above 50 means factories are growing.',
+        'ism services pmi': "A survey of service businesses. Above 50 means they're growing.",
+        # Consumer mood
+        'prelim uom consumer sentiment': 'A survey of how everyday people feel about the economy.',
+        'revised uom consumer sentiment': 'The final version of that survey on how people feel about the economy.',
+        'cb consumer confidence': 'A survey of how confident shoppers feel about jobs and spending.',
+        # Housing
+        'building permits': 'How many permits were issued to build new homes.',
+        'housing starts': 'How many new homes builders actually started.',
+        'new home sales': 'How many brand-new homes were sold this month.',
+        'existing home sales': 'How many previously-owned homes were sold this month.',
+        'pending home sales m/m': 'How many home purchase contracts were signed this month.',
+        # Fed
+        'federal funds rate': "The Fed's decision on where to set interest rates.",
+        'fomc statement': "The Fed's written explanation of its decision.",
+        'fomc press conference': 'The Fed chair explains the decision and takes questions.',
+        'fomc meeting minutes': "The notes from the Fed's last meeting, released weeks later.",
+        'fomc economic projections': "The Fed's own forecast for rates, inflation, and jobs.",
+    }
+
+    def _event_definition(self, title):
+        """Plain-English definition of a data point, or None if unknown."""
+        return self.EVENT_DEFINITIONS.get(title.lower().strip())
+
+
     def get_market_implication(self, title, actual, forecast, previous, priced_action=None):
+        """Verdict and direction come from the scoring logic below; the display
+        text is the plain-English definition of the data point when we have one,
+        falling back to the old narrative for unknown events."""
+        verdict, direction, narrative = self._get_market_implication_detail(
+            title, actual, forecast, previous, priced_action)
+        return verdict, direction, self._event_definition(title) or narrative
+
+    def _get_market_implication_detail(self, title, actual, forecast, previous, priced_action=None):
         if actual in ['hawkish', 'dovish', 'neutral', 'bearish', 'bullish']:
             if actual in ['hawkish', 'bearish']:
                 return 'bearish', 'bearish', f"{title} — Bearish tone detected. Rate fears or hawkish stance, bearish for equities."
