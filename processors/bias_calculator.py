@@ -130,6 +130,55 @@ class BiasCalculator:
         # Renormalize against only genuinely-reporting pillars' base weight. If
         # every pillar is silent this cycle, final_score is 0.0 (Neutral) rather
         # than a division by zero.
+        #
+        # Agreement override — when two or more non-neutral pillars agree
+        # strongly enough to clear the bias bar on their own weight, a lone
+        # dissenting institutional (COT) vote is excluded from the score and
+        # the weight base. Breadth beats a single loud dissenter: the lean is
+        # real even without it. Fires only when the agreeing pillars alone
+        # clear the bar — "strongly" is measured, not felt. This replaces the
+        # earlier staleness-based veto: the trigger is agreement strength,
+        # not COT decay, so it works on Mondays with fresh COT too.
+        _agreement_override_fired = False
+        _inst = pillar_contributions.get('institutional', {})
+        if not _inst.get('silent', True) and _inst.get('weight', 0) > 0:
+            _inst_sig = pillar_signal_map.get('institutional')
+            if _inst_sig in ('bullish', 'bearish'):
+                for _bias, _sig in (('Bullish', 'bullish'), ('Bearish', 'bearish')):
+                    if _inst_sig == _sig:
+                        continue
+                    _agreeing = [k for k, s in pillar_signal_map.items()
+                                 if k != 'institutional' and s == _sig]
+                    if len(_agreeing) >= 2:
+                        _agree_contrib = sum(
+                            pillar_contributions[k]['raw_score']
+                            * (pillar_contributions[k]['weight'] / 100)
+                            for k in _agreeing)
+                        _agree_base = sum(
+                            pillar_contributions[k]['base_weight'] for k in _agreeing)
+                        _standalone = _agree_contrib / (_agree_base / 100) if _agree_base else 0.0
+                        _clears = (_standalone >= bias_threshold) if _bias == 'Bullish' \
+                            else (_standalone <= -bias_threshold)
+                        if _clears:
+                            # Exclude the dissenter: exact unrounded contribution
+                            # out of the score, base weight out of the base.
+                            total_score -= _inst['raw_score'] * (_inst['weight'] / 100)
+                            total_weight_used -= _inst['base_weight']
+                            active_pillars -= 1
+                            active_pillar_weights.pop('institutional', None)
+                            pillar_signal_map.pop('institutional', None)
+                            pillar_signals = [pillar_signal_map[k] for k in
+                                              ('economic_calendar', 'geopolitical',
+                                               'institutional', 'macro_sentiment')
+                                              if k in pillar_signal_map]
+                            _inst['contribution'] = 0.0
+                            _inst['override_excluded'] = True
+                            _agreement_override_fired = True
+                            pulse_logger.log(
+                                f"🗳️ Agreement override — {_bias} {_sig} stands on "
+                                f"{len(_agreeing)} pillars (standalone {_standalone:+.3f}); "
+                                f"institutional dissent excluded")
+                        break
         if total_weight_used > 0:
             final_score = round(total_score / (total_weight_used / 100), 3)
         else:
