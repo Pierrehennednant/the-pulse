@@ -316,8 +316,8 @@
         document.getElementById('gauge-score-text').textContent = '';
     }
 
-    function scoreClass(s) { return s > 0.3 ? 'score-bullish' : s < -0.3 ? 'score-bearish' : 'score-neutral'; }
-    function scoreLabel(s) { return s > 0.3 ? '↑ Bullish' : s < -0.3 ? '↓ Bearish' : '→ Neutral'; }
+    function scoreClass(s) { return s > 0.15 ? 'score-bullish' : s < -0.15 ? 'score-bearish' : 'score-neutral'; }
+    function scoreLabel(s) { return s > 0.15 ? '↑ Bullish' : s < -0.15 ? '↓ Bearish' : '→ Neutral'; }
     function valClass(s) {
         if (s === 'strongly_bullish' || s === 'mildly_bullish' || s === 'bullish') return 'value-bullish';
         if (s === 'strongly_bearish' || s === 'mildly_bearish' || s === 'bearish') return 'value-bearish';
