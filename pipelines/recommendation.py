@@ -19,9 +19,8 @@ class PropFirmRecommendationEngine:
 
       Bias threshold         ±0.30 quiet week (≤1 red folder day) / ±0.33 standard week (≥2)
       Show-card confidence     55%
-      Quarter-entry confidence 55%–59%
-      Normal-entry confidence  60%–69%
-      Aggressive-entry confidence  ≥70%
+      Quarter-entry confidence 55%–69%
+      Normal-entry confidence  ≥70%
       Pillar alignment         ≥45% of total week weight must agree with bias
                                Quiet week: EC 15%, total 85%, threshold ≥38.25%
                                Standard week: EC 30%, total 100%, threshold ≥45%
@@ -272,12 +271,12 @@ class PropFirmRecommendationEngine:
             else:
                 pulse_logger.log(f"📅 Standard week — {red_folder_days} red folder {day_s} — EC {ec_weight}%, bias ±{bias_threshold}")
 
-            final_score = (bias_data.get('final_score', 0) or 0) if bias_data else 0
-            if final_score >= bias_threshold:
-                bias = 'Bullish'
-            elif final_score <= -bias_threshold:
-                bias = 'Bearish'
-            else:
+            # Use the engine's already-computed bias. The engine applies a 0.50
+            # fallback bar when EC is fully unresolved; re-deriving bias here from
+            # final_score with the weekly 0.30/0.33 bar would print a different
+            # answer than the engine on the same screen.
+            bias = (bias_data.get('bias') or 'Neutral') if bias_data else 'Neutral'
+            if bias not in ('Bullish', 'Bearish'):
                 return self._no_rec(week_info)
 
             pillar_weights = self._WEEK_WEIGHTS['quiet' if is_quiet else 'standard']
