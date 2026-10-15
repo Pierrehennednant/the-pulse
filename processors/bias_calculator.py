@@ -7,16 +7,11 @@ from utils.logger import pulse_logger
 NEUTRAL_MODE_FILE = "/data/neutral_mode.json"
 
 
-def _neutral_mode():
-    """Allowed Neutral size from the Railway volume, read fresh every time.
-    {"mode": "half"} -> 'half'; anything else (missing, unreadable, bad JSON,
-    unknown value, wrong type) -> 'quarter'."""
-    try:
-        with open(NEUTRAL_MODE_FILE, 'r') as f:
-            mode = json.load(f).get('mode')
-    except Exception:
-        return 'quarter'
-    return 'half' if mode == 'half' else 'quarter'
+# Neutral-day sizing is locked to Quarter (Pierre, Oct 15 2026: per-day rule,
+# no rolling window, no automatic promotion). neutral_mode.json is no longer
+# read here, so it cannot force Half. Half on a Neutral day would need an
+# explicit per-day override for that session; none exists yet.
+# NEUTRAL_MODE_FILE stays defined only because ui/dashboard.py imports it.
 
 class BiasCalculator:
     def compute(self, formatted_data, bias_threshold=0.5):
@@ -246,7 +241,7 @@ class BiasCalculator:
             directive = "⚫ No Trade – No Data"
             directive_color = "#7a8fa8"
         elif bias == 'Neutral':
-            directive = "🟡 Half size" if _neutral_mode() == 'half' else "🟡 Quarter size"
+            directive = "🟡 Quarter size"
             directive_color = "#f39c12"
         elif confidence >= 70:
             if bias == 'Bearish':
