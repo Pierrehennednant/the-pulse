@@ -4292,15 +4292,84 @@ CONTEXT: {context}"""
                 continue
         return None
 
+    # Reject-recheck confidence gate. On a Haiku reject (relevant=false) the
+    # confidence is Haiku's confidence that the item is NOT relevant. Every
+    # override in the logs since Oct 13 was a relevant=false reject at
+    # 0.88-0.95 and every one was a false positive or explainer (ransomware
+    # 0.88, Houthi explainer 0.92, ambassador explainer 0.92, MOAB explainer
+    # 0.95, helium 0.95). Only a borderline reject is eligible; >= 0.90 is
+    # never overridden (the hard ceiling holds at any threshold <= 0.90).
+    _T1_RECHECK_MAX_REJECT_CONF = 0.80
+    _T1_RECHECK_NEVER_CONF = 0.90
+
+    @staticmethod
+    def _t1_recheck_now():
+        """Current UTC time (patchable in tests)."""
+        return datetime.now(timezone.utc)
+
+    @staticmethod
+    def _t1_recheck_expiry(row):
+        """Hard expiry of a live Tier 1 event row: clock_start (or
+        first_seen) + clock_hours (default MAX_ARTICLE_AGE_HOURS). None if
+        the row has no parseable clock (caller fails closed)."""
+        start = _event_parse_iso((row or {}).get('clock_start') or (row or {}).get('first_seen'))
+        if start is None:
+            return None
+        return start + timedelta(hours=(row or {}).get('clock_hours') or MAX_ARTICLE_AGE_HOURS)
+
+    def _t1_recheck_expired(self, row):
+        exp = self._t1_recheck_expiry(row)
+        return exp is None or self._t1_recheck_now() >= exp
+
+    def _t1_recheck_conf_eligible(self, r):
+        """Borderline only. relevant=false: reject confidence must be <
+        _T1_RECHECK_MAX_REJECT_CONF (and never >= _T1_RECHECK_NEVER_CONF).
+        relevant=true but conf < 0.75 (a low-confidence keep, not a reject)
+        stays eligible as before."""
+        conf = r.get('confidence') or 0
+        if not r.get('relevant'):
+            return conf < min(self._T1_RECHECK_MAX_REJECT_CONF, self._T1_RECHECK_NEVER_CONF)
+        return conf < 0.75
+
+    def _t1_recheck_strict_match(self, ident, row):
+        """Same-event gate: some stored identity of the live row shares a
+        named actor (not the generic 'us'), a core action class (identity
+        kinds, not the loose path regex) AND a real place/target
+        (_event_places, not headline word stems — 'launc' matched the
+        ransomware story), and the item names no headline actor the row
+        lacks. Returns (actors, kinds, places) or None."""
+        mine_actors = set(ident.get('actors') or []) - {'us'}
+        mine_hl = set(ident.get('hl_actors') or []) - {'us'}
+        mine_kinds, mine_places = set(ident.get('kinds') or []), self._event_places(ident)
+        if not (mine_actors and mine_kinds and mine_places):
+            return None
+        stored = [_event_identity_of(x) for x in (row or {}).get('identities') or []]
+        row_actors = set()
+        for s in stored:
+            row_actors |= set(s.get('actors') or [])
+        if mine_hl - row_actors:
+            return None
+        for s in stored:
+            if s.get('legacy'):
+                continue  # rebuilt from a bare headline: too thin to prove same event
+            sa = mine_actors & set(s.get('actors') or [])
+            sk = mine_kinds & set(s.get('kinds') or [])
+            sp = mine_places & self._event_places(s)
+            if sa and sk and sp:
+                return sorted(sa), sorted(sk), sorted(sp)
+        return None
+
     def _geo_t1_reject_recheck(self, source_items, classifications, label):
-        """Before the hard keep and event rules: a Haiku reject (relevant
-        false or confidence < 0.75) whose headline/feed description shares a
-        named actor (not the generic 'us') or a WHERE word with a LIVE Tier 1
-        card (_event_scored_today == 1) AND names an action or escalation path
-        is re-routed as a Tier 1 first_print of that card's event, so
-        _apply_event_rules() / _geo_t1_reject_recheck_settle() fold it with no
-        vote unless it carries a new escalation class. Haiku's summary is
-        not read (it described the bad text). Mutates in place; never raises."""
+        """Before the hard keep and event rules: a BORDERLINE Haiku reject
+        (relevant false with reject conf < _T1_RECHECK_MAX_REJECT_CONF, or
+        relevant true with confidence < 0.75) that is clearly the SAME EVENT
+        as a LIVE, UNEXPIRED Tier 1 card (same actor AND action class AND
+        place, _t1_recheck_strict_match) is re-routed as a Tier 1 first_print
+        of that card's event, so _apply_event_rules() /
+        _geo_t1_reject_recheck_settle() fold it with no vote unless it carries
+        a new escalation class. A row past clock_start + clock_hours is
+        refused with no grace. An ambiguous match (more than one live event)
+        fails closed. Haiku's summary is not read. Mutates in place; never raises."""
         try:
             rejects = []
             for r in classifications or []:
@@ -4322,39 +4391,46 @@ CONTEXT: {context}"""
                 desc = art.get('description') or ''
                 if self._is_ec_survey_recap({'headline': headline, 'description': desc, 'summary': ''}):
                     continue
+                if not self._t1_recheck_conf_eligible(r):
+                    pulse_logger.log(
+                        f"GEO T1 REJECT RECHECK | skip not borderline (relevant={r.get('relevant')} "
+                        f"conf={r.get('confidence')}){label} | headline={headline[:90]}")
+                    continue
                 ident = _event_identity(self._event_ctx(headline, '', desc, '', '', art.get('link'), art), today)
-                actors = set(ident.get('actors') or []) - {'us'}
-                where, kinds = self._event_t1_where(ident), set(ident.get('kinds') or [])
-                path = self._T1_RECHECK_PATH_RE.search(' '.join([headline, desc]).lower())
-                best = None
+                hits = []
                 for rkey in sorted(live):
                     row = mem.get(rkey) or {}
-                    for st in (_event_identity_of(x) for x in row.get('identities') or []):
-                        sa = sorted(actors & set(st.get('actors') or []))
-                        sw = sorted(where & self._event_t1_where(st))
-                        if not (sa or sw) or not (kinds & set(st.get('kinds') or []) or path):
-                            continue
-                        cand = (len(sa) + len(sw), rkey, sa, sw)
-                        if best is None or cand[0] > best[0]:
-                            best = cand
-                if best is None:
+                    m = self._t1_recheck_strict_match(ident, row)
+                    if m is None:
+                        continue
+                    if self._t1_recheck_expired(row):
+                        pulse_logger.log(
+                            f"GEO T1 REJECT RECHECK | skip expired live T1 key={rkey} | "
+                            f"expiry={self._t1_recheck_expiry(row)}{label} | headline={headline[:90]}")
+                        continue
+                    hits.append((rkey, m))
+                if not hits:
                     continue
-                _, rkey, sa, sw = best
+                if len(hits) > 1:
+                    pulse_logger.log(
+                        f"GEO T1 REJECT RECHECK | skip ambiguous ({len(hits)} live T1 events: "
+                        f"{','.join(k for k, _ in hits)}){label} | headline={headline[:90]}")
+                    continue
+                rkey, (sa, sk, sp) = hits[0]
                 direction = self._geo_live_t1_direction(mem[rkey])
                 if direction is None:
                     continue
                 prev = f"relevant={r.get('relevant')} conf={r.get('confidence')}"
+                r['t1_recheck_prev'] = {k: r.get(k) for k in ('relevant', 'confidence', 'tier', 'direction')}
                 r['relevant'] = True
                 r['confidence'] = max(r.get('confidence') or 0, 0.75)
                 # Reject-recheck KIND line disabled — the campaign record owns
-                # kind now (see _geo_campaign_apply). Tier/direction routing
-                # is unchanged.
+                # kind now (see _geo_campaign_apply).
                 r['tier'], r['direction'] = 1, direction
                 r['t1_reject_recheck'] = rkey
-                why = 'action' if kinds else f"path '{path.group(0)}'" if path else 'action'
                 pulse_logger.log(
                     f"GEO T1 REJECT RECHECK | overrides=haiku_reject ({prev}){label} | vs live T1 key={rkey} | "
-                    f"shared actor={','.join(sa) or '-'} where={','.join(sw) or '-'} {why} | "
+                    f"shared actor={','.join(sa)} action={','.join(sk)} where={','.join(sp)} strict | "
                     f"routed as Tier 1 first_print {direction} to t1_live fold/new-fact | "
                     f"matched=\"{(mem[rkey].get('sample_headline') or '')[:90]}\" | headline={headline[:90]}")
         except Exception as e:
@@ -4384,6 +4460,14 @@ CONTEXT: {context}"""
                                      f"no vote{label} | headline={headline[:90]}")
                     continue
                 row = mem.get(rkey)
+                if row is None or self._t1_recheck_expired(row):
+                    prev = r.pop('t1_recheck_prev', None) or {}
+                    for k, v in prev.items():
+                        r[k] = v
+                    r.pop('t1_reject_recheck', None)
+                    pulse_logger.log(f"GEO T1 REJECT RECHECK | skip expired live T1 key={rkey} | "
+                                     f"Haiku reject restored{label} | headline={headline[:90]}")
+                    continue
                 ident = _event_identity(self._event_ctx(headline, '', art.get('description'), '', '',
                                                         art.get('link'), art), today)
                 why = self._event_t1_new_fact(ident, row, _event_headline_norm(headline)) if row else None
