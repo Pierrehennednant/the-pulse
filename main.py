@@ -47,6 +47,7 @@ from pipelines.recommendation import prop_firm_engine
 from processors.data_formatter import data_formatter
 from processors.bias_calculator import bias_calculator
 from processors.snapshot_generator import snapshot_generator
+from processors.pulse_refresh import compute_and_save
 
 from utils.error_handler import error_handler
 from utils.cache import cache
@@ -101,29 +102,9 @@ def run_pulse():
             'geopolitical': geo_data
         })
 
-        # Derive bias_threshold from EC pipeline's weak_ec_week flag — same canonical source
-        # as _get_weekly_threshold(), eliminates stale cache read before compute_prop_firm()
-        _ec_weak = formatted_data.get('economic', {}).get('weak_ec_week')
-        if _ec_weak is True:
-            bias_threshold = 0.30
-        elif _ec_weak is False:
-            bias_threshold = 0.33
-        else:
-            bias_threshold = 0.50
-
-        bias_score = bias_calculator.compute(formatted_data, bias_threshold=bias_threshold)
-
-        prop_recommendation = prop_firm_engine.compute_prop_firm(
-            bias_score,
-            formatted_data.get('geopolitical', {}),
-            formatted_data.get('macro', {}),
-            formatted_data.get('economic', {}),
-        )
-        bias_score['recommendation_prop'] = prop_recommendation
-
-        weekly_summary_pipeline.fetch(formatted_data=formatted_data, bias=bias_score)
-        snapshot_id = snapshot_generator.save(bias_score, formatted_data)
-        pulse_logger.log(f"✅ Pulse updated | {bias_score['bias_emoji']} {bias_score['bias']} | Confidence: {bias_score['confidence']}% | Snapshot: {snapshot_id}")
+        # Single shared recompute path (processors/pulse_refresh.py) — also
+        # used by the on-demand refresh after a manual Yahoo pull.
+        snapshot_id, bias_score = compute_and_save(formatted_data)
 
         now_est = datetime.now(pytz.timezone(TIMEZONE))
 

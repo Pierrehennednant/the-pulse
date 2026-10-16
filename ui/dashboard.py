@@ -611,11 +611,22 @@ def macro_manual_pull():
     yfinance VIX/VXN pull outside the scheduled 09:40/09:45/09:55/10:30 ET
     slots. The value is stored under a separate session key the schedule
     never touches, so the scheduled pulls keep working exactly as before.
-    No automatic/scheduled version — this route is the only trigger surface."""
+    On success the macro pillar is recomputed immediately (same shared
+    path as the scheduled run) so the dashboard reflects the pull without
+    waiting for the next 5-minute cycle. No automatic/scheduled version —
+    this route is the only trigger surface."""
     from pipelines.macro_sentiment import macro_sentiment_pipeline
+    from processors.pulse_refresh import refresh_macro_now
     result = macro_sentiment_pipeline.run_manual_pull()
     if not result.get('ok'):
         return jsonify({'error': result.get('error', 'Manual pull failed')}), 400
+    snapshot_id, bias_score = refresh_macro_now()
+    if snapshot_id:
+        result['snapshot_id'] = snapshot_id
+        result['bias'] = bias_score.get('bias')
+        result['confidence'] = bias_score.get('confidence')
+    else:
+        result['refresh_warning'] = 'Pull stored, but immediate recompute unavailable — next 5-minute cycle will pick it up'
     return jsonify(result)
 
 @app.route('/api/ai_lens')
