@@ -517,8 +517,29 @@
         html += `
             <div class="data-row"><span class="data-label">VIX</span><span class="data-value" style="color:${macroColor(vix.signal)}">${vix.value || '--'} <small>(${vix.change >= 0 ? '+' : ''}${vix.change || 0})</small>${manualTag}</span></div>
             <div class="data-row"><span class="data-label">VXN</span><span class="data-value" style="color:${macroColor(vxn.signal)}">${vxn.value || '--'} <small>(${vxn.change >= 0 ? '+' : ''}${vxn.change || 0})</small></span></div>
-            <div class="data-row"><span class="data-label">Fear & Greed</span><span class="data-value" style="color:${macroColor(fg.signal)}">${fg.score || '--'} — ${signalLabel(fg.signal) || fg.rating || 'N/A'}</span></div>`;
+            <div class="data-row"><span class="data-label">Fear & Greed</span><span class="data-value" style="color:${macroColor(fg.signal)}">${fg.score || '--'} — ${signalLabel(fg.signal) || fg.rating || 'N/A'}</span></div>
+            <div class="data-row"><span class="data-label">Yahoo</span><span class="data-value"><button onclick="manualYahooPull(this)" style="cursor:pointer">Force Yahoo pull</button> <small id="manual-pull-result" style="color:#7a8fa8"></small></span></div>`;
         return html;
+    }
+
+    async function manualYahooPull(btn) {
+        const label = document.getElementById('manual-pull-result');
+        if (btn) btn.disabled = true;
+        if (label) label.textContent = 'pulling…';
+        try {
+            const response = await fetch('/api/macro/manual_pull', {method: 'POST'});
+            const j = await response.json();
+            if (response.ok) {
+                if (label) label.textContent = `VIX ${j.vix.value} · VXN ${j.vxn.value} — refreshing…`;
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                if (label) label.textContent = `failed: ${j.error || 'unknown'}`;
+                if (btn) btn.disabled = false;
+            }
+        } catch (e) {
+            if (label) label.textContent = 'failed: network error';
+            if (btn) btn.disabled = false;
+        }
     }
 
     function renderGeopolitical(data) {
