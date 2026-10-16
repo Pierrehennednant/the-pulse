@@ -524,8 +524,9 @@
 
     async function manualYahooPull(btn) {
         const label = document.getElementById('manual-pull-result');
-        if (btn) btn.disabled = true;
-        if (label) label.textContent = 'pulling…';
+        const originalText = btn ? btn.textContent : '';
+        lockCardActions('card-macro', btn, 'pulling…');
+        if (label) label.textContent = '';
         try {
             const response = await fetch('/api/macro/manual_pull', {method: 'POST'});
             const j = await response.json();
@@ -534,11 +535,11 @@
                 setTimeout(() => location.reload(), 1500);
             } else {
                 if (label) label.textContent = `failed: ${j.error || 'unknown'}`;
-                if (btn) btn.disabled = false;
+                unlockCardActions('card-macro', btn, originalText);
             }
         } catch (e) {
             if (label) label.textContent = 'failed: network error';
-            if (btn) btn.disabled = false;
+            unlockCardActions('card-macro', btn, originalText);
         }
     }
 
@@ -871,30 +872,38 @@
         return false;
     }
 
-    function lockEcActions(activeBtn, loadingText) {
-        document.querySelectorAll('#card-economic button').forEach(b => {
+    function lockCardActions(cardId, activeBtn, loadingText) {
+        document.querySelectorAll('#' + cardId + ' button').forEach(b => {
             b.disabled = true;
             b.style.opacity = '0.4';
             b.style.cursor = 'not-allowed';
         });
-        document.querySelectorAll('#card-economic input').forEach(i => {
+        document.querySelectorAll('#' + cardId + ' input').forEach(i => {
             i.disabled = true;
             i.style.opacity = '0.5';
         });
         if (activeBtn) { activeBtn.textContent = loadingText || '…'; activeBtn.style.opacity = '0.6'; }
     }
 
-    function unlockEcActions(activeBtn, originalText) {
-        document.querySelectorAll('#card-economic button').forEach(b => {
+    function unlockCardActions(cardId, activeBtn, originalText) {
+        document.querySelectorAll('#' + cardId + ' button').forEach(b => {
             b.disabled = false;
             b.style.opacity = '';
             b.style.cursor = '';
         });
-        document.querySelectorAll('#card-economic input').forEach(i => {
+        document.querySelectorAll('#' + cardId + ' input').forEach(i => {
             i.disabled = false;
             i.style.opacity = '';
         });
         if (activeBtn && originalText) { activeBtn.textContent = originalText; activeBtn.style.opacity = '1'; }
+    }
+
+    function lockEcActions(activeBtn, loadingText) {
+        lockCardActions('card-economic', activeBtn, loadingText);
+    }
+
+    function unlockEcActions(activeBtn, originalText) {
+        unlockCardActions('card-economic', activeBtn, originalText);
     }
 
     async function submitActual(eventTitle, eventId, presetActual, btn, eventDate) {
