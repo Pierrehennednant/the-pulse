@@ -610,6 +610,19 @@ _TALK_TARGET_CLASSES = (
 )
 _TALK_TARGET_CLASS_RE = re.compile(r'\b(?:' + '|'.join(_TALK_TARGET_CLASSES) + r')\b', re.IGNORECASE)
 
+# Preparation verbs — planning/preparing/considering/weighing is not action.
+# "Prepares plans to strike" (even via anonymous sources) is talk about a
+# possible future action, not the action itself. These trigger the talk rule
+# just like speech verbs when no concrete fact is present.
+_TALK_PREP_VERBS = (
+    'prepare', 'prepares', 'prepared', 'preparing',
+    'plan', 'plans', 'planned', 'planning',
+    'consider', 'considers', 'considered', 'considering',
+    'weigh', 'weighs', 'weighed', 'weighing',
+    'mull', 'mulls', 'mulled', 'mulling',
+)
+_TALK_PREP_RE = re.compile(r'\b(?:' + '|'.join(_TALK_PREP_VERBS) + r')\b', re.IGNORECASE)
+
 
 def _talk_main_clause(headline):
     """The headline's main clause: text before the first clause boundary."""
@@ -623,16 +636,24 @@ def _talk_clauses(text):
 
 
 def _is_pure_talk(headline, description):
-    """Talk word in the headline's main clause and no concrete fact in the
+    """Talk word in the headline and no concrete fact in the
     full text. A casualty number or finite action verb is a concrete fact
     only when its clause also carries a current time marker; an old marker
     in that clause cancels it. Escalation classes (the _T1_ESCALATION_CLASSES
     patterns) and target classes count as before, marker or not.
     Returns the triggering talk word, or None when not pure talk."""
-    m = _TALK_WORD_RE.search(_talk_main_clause(headline))
-    if not m:
-        return None
-    word = m.group(0).lower()
+    # Attribution ("sources say") is detected anywhere in the headline, not
+    # just the main clause — a claim is a claim regardless of comma placement.
+    # Preparation verbs (prepares/plans/considers/weighs/mulls) also trigger,
+    # since planning is not action.
+    m = _TALK_WORD_RE.search(headline or '')
+    if m:
+        word = m.group(0).lower()
+    else:
+        pm = _TALK_PREP_RE.search(headline or '')
+        if not pm:
+            return None
+        word = pm.group(0).lower()
     text = ' '.join(t for t in (headline, description) if t)
     for clause in _talk_clauses(text):
         if any(rx.search(clause) for _, rx in _T1_ESCALATION_CLASSES):
