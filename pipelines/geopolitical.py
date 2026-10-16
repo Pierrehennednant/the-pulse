@@ -1796,6 +1796,25 @@ class GeopoliticalPipeline:
         r'\b(?:tariffs?|sanctions?|ban(?:s|ned)?|strikes?|missiles?|ceasefire|troops|embargo|'
         r'executive order|export controls?|blockade|invasion)\b')
 
+    # Scheduled EC data prints are EC-owned like the survey and jobs prints
+    # above: never a geo card, never geo identity, never a geo vote. Covers
+    # the print families the survey and jobs rules miss — inflation (CPI/PPI/
+    # PCE), spending (retail sales), growth (GDP), housing, and the jobs
+    # prints the NFP regex misses (unemployment rate, hourly earnings).
+    # Kept only when the same text reports a NEW geo/policy action the print
+    # merely accompanies. (Oct 15: a PPI-print news article scored geo Tier 2
+    # bearish — the EC pillar owns the print, not geo.)
+    _EC_DATA_PRINT_RE = re.compile(
+        r'\b(?:cpi|ppi|core (?:cpi|ppi)|pce)\b'
+        r'|\b(?:consumer|producer) price index\b'
+        r'|\bwholesale inflation\b'
+        r'|\binflation (?:report|data|print|reading|figures)\b'
+        r'|\bretail sales\b'
+        r'|\bgross domestic product\b|\bgdp\b'
+        r'|\b(?:building permits|housing starts|(?:new|existing|pending) home sales)\b'
+        r'|\bunemployment rate\b'
+        r'|\baverage hourly earnings\b')
+
     def _is_ec_survey_recap(self, item):
         if not isinstance(item, dict):
             text = str(item or '').lower()
@@ -1809,6 +1828,8 @@ class GeopoliticalPipeline:
         if not text.strip():
             return False
         if self._EC_JOBS_PRINT_RE.search(text) and not self._EC_JOBS_PRINT_VETO_RE.search(text):
+            return True
+        if self._EC_DATA_PRINT_RE.search(text) and not self._EC_JOBS_PRINT_VETO_RE.search(text):
             return True
         if not any(p in text for p in self._EC_SURVEY_PHRASES):
             return False
