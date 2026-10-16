@@ -169,6 +169,13 @@ def run_scheduler():
 if __name__ == '__main__':
     pulse_logger.log("🚀 The Pulse is starting...")
 
+    # Self-heal: align stored geo tiers with affirmative tier claims in
+    # their own reasoning text (e.g. Oct 14 Houthis/Saudi pin). Idempotent.
+    try:
+        geopolitical_pipeline.reconcile_stored_tier_claims()
+    except Exception as e:
+        pulse_logger.log(f"⚠️ Startup tier reconcile failed: {e}", level="WARNING")
+
     port = int(os.environ.get('PORT', 8080))
 
     # Start first pulse refresh in background so Flask starts immediately

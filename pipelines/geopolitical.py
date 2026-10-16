@@ -1933,6 +1933,32 @@ class GeopoliticalPipeline:
             return 3
         return tier
 
+    # Tier-claim patterns for the reasoning/tier consistency check.
+    _TIER_CLAIM_RE = re.compile(r'\btier\s*([123])\b', re.IGNORECASE)
+    _TIER_NEG_RE = re.compile(r'\b(?:not|n\'t|no|never)\b[\w\s]{0,14}$', re.IGNORECASE)
+
+    @staticmethod
+    def _reasoning_tier_claim(reasoning):
+        """Affirmative tier claim in Haiku's free-text reasoning, if any.
+
+        Haiku returns both a structured `tier` and free-text `reasoning`;
+        the two have disagreed in production ("Tier 1 catalyst" prose with
+        tier=2 on the Oct 14 Houthis/Saudi pin). A bare regex would misread
+        negations ("Not Tier 1 because no active kinetic conflict"), so a
+        claim only counts when not negated in the preceding words. When
+        several affirmative claims exist, the last one wins — reasoning
+        typically concludes with the final tier ("downgraded from Tier 1
+        to Tier 2"). Returns 1, 2, 3, or None.
+        """
+        text = str(reasoning or '')
+        claimed = None
+        for m in GeopoliticalPipeline._TIER_CLAIM_RE.finditer(text):
+            before = text[max(0, m.start() - 18):m.start()]
+            if GeopoliticalPipeline._TIER_NEG_RE.search(before):
+                continue
+            claimed = int(m.group(1))
+        return claimed
+
     def _reevaluate_pinned_ec_folds(self):
         """Code-only pass over currently-pinned stories, run on every
         fetch() call regardless of whether a live TheNewsAPI fetch happens
@@ -3057,6 +3083,59 @@ Articles to classify:
                     return
         except Exception as e:
             pulse_logger.log(f"⚠️ Pin refresh failed: {e}", level="WARNING")
+
+    def reconcile_stored_tier_claims(self):
+        """Startup self-heal: align stored tiers with affirmative tier claims
+        in their own reasoning text. Covers pinned_stories.json and the
+        gemini_classifications.json cache — records that predate the
+        background_classify() consistency check (e.g. the Oct 14
+        Houthis/Saudi pin: "Tier 1 catalyst" prose, tier=2). Idempotent;
+        runs at startup. Every change is loudly logged."""
+        changed = 0
+        try:
+            pins = self.load_pinned_stories()
+            pins_changed = False
+            for pin in pins:
+                claimed = self._reasoning_tier_claim(pin.get('tier_reasoning', ''))
+                if claimed is not None and pin.get('tier') != claimed:
+                    old = pin.get('tier')
+                    pin['tier'] = claimed
+                    pins_changed = True
+                    changed += 1
+                    pulse_logger.log(
+                        f"🧭 Startup tier reconcile (pin) — reasoning claims Tier {claimed}, "
+                        f"stored={old} | using {claimed} | '{(pin.get('headline') or '')[:60]}'",
+                        level="WARNING")
+            if pins_changed:
+                self.save_pinned_stories(pins)
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Startup tier reconcile (pins) failed: {e}", level="WARNING")
+        try:
+            cache_file = "/data/gemini_classifications.json"
+            if os.path.exists(cache_file):
+                with open(cache_file, 'r') as f:
+                    cache_data = json.load(f) or {}
+                cache_changed = False
+                for headline, rec in cache_data.items():
+                    if not isinstance(rec, dict):
+                        continue
+                    claimed = self._reasoning_tier_claim(rec.get('tier_reasoning', ''))
+                    if claimed is not None and rec.get('tier') != claimed:
+                        old = rec.get('tier')
+                        rec['tier'] = claimed
+                        cache_changed = True
+                        changed += 1
+                        pulse_logger.log(
+                            f"🧭 Startup tier reconcile (cache) — reasoning claims Tier {claimed}, "
+                            f"stored={old} | using {claimed} | '{headline[:60]}'",
+                            level="WARNING")
+                if cache_changed:
+                    atomic_write_json(cache_file, cache_data)
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Startup tier reconcile (cache) failed: {e}", level="WARNING")
+        if changed:
+            pulse_logger.log(f"🧭 Startup tier reconcile — {changed} record(s) aligned to reasoning claims")
+        return changed
 
     def is_same_story(self, new_headline, other_headline):
         """Ask Haiku whether two headlines cover the same underlying story.
@@ -4935,6 +5014,22 @@ CONTEXT: {context}"""
                                     if tier is not None:
                                         pulse_logger.log(f"⚠️ Haiku returned malformed tier '{tier}' for '{headline[:60]}' — falling back to keyword tiering", level="WARNING")
                                     tier = None
+                                # Tier/reasoning consistency — Haiku's prose has
+                                # named a different tier than its structured
+                                # field (Oct 14 Houthis/Saudi pin: "Tier 1
+                                # catalyst" prose with tier=2). The affirmative
+                                # prose claim wins: it's the analyzed judgment;
+                                # the structured field is the summary most
+                                # likely mis-set. Written back to r so
+                                # update_pinned_store() and the cache see it.
+                                claimed = self._reasoning_tier_claim(r.get('reasoning', ''))
+                                if claimed is not None and claimed != tier:
+                                    pulse_logger.log(
+                                        f"🧭 Tier/reasoning mismatch — reasoning claims Tier {claimed}, "
+                                        f"structured tier={tier} | using {claimed} | '{headline[:60]}'",
+                                        level="WARNING")
+                                    tier = claimed
+                                    r['tier'] = claimed
                                 kind = r.get('kind')
                                 kind_defaulted = kind not in ('first_print', 'follow_up')
                                 if kind_defaulted:
