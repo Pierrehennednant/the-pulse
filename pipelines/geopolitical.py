@@ -1796,25 +1796,6 @@ class GeopoliticalPipeline:
         r'\b(?:tariffs?|sanctions?|ban(?:s|ned)?|strikes?|missiles?|ceasefire|troops|embargo|'
         r'executive order|export controls?|blockade|invasion)\b')
 
-    # Scheduled EC data prints are EC-owned like the survey and jobs prints
-    # above: never a geo card, never geo identity, never a geo vote. Covers
-    # the print families the survey and jobs rules miss — inflation (CPI/PPI/
-    # PCE), spending (retail sales), growth (GDP), housing, and the jobs
-    # prints the NFP regex misses (unemployment rate, hourly earnings).
-    # Kept only when the same text reports a NEW geo/policy action the print
-    # merely accompanies. (Oct 15: a PPI-print news article scored geo Tier 2
-    # bearish — the EC pillar owns the print, not geo.)
-    _EC_DATA_PRINT_RE = re.compile(
-        r'\b(?:cpi|ppi|core (?:cpi|ppi)|pce)\b'
-        r'|\b(?:consumer|producer) price index\b'
-        r'|\bwholesale inflation\b'
-        r'|\binflation (?:report|data|print|reading|figures)\b'
-        r'|\bretail sales\b'
-        r'|\bgross domestic product\b|\bgdp\b'
-        r'|\b(?:building permits|housing starts|(?:new|existing|pending) home sales)\b'
-        r'|\bunemployment rate\b'
-        r'|\baverage hourly earnings\b')
-
     def _is_ec_survey_recap(self, item):
         if not isinstance(item, dict):
             text = str(item or '').lower()
@@ -1828,8 +1809,6 @@ class GeopoliticalPipeline:
         if not text.strip():
             return False
         if self._EC_JOBS_PRINT_RE.search(text) and not self._EC_JOBS_PRINT_VETO_RE.search(text):
-            return True
-        if self._EC_DATA_PRINT_RE.search(text) and not self._EC_JOBS_PRINT_VETO_RE.search(text):
             return True
         if not any(p in text for p in self._EC_SURVEY_PHRASES):
             return False
@@ -2523,6 +2502,8 @@ Fail if it involves: opinion or commentary on past market moves, investment advi
 DOMESTIC REGULATORY EXCLUSION — explicit rule: domestic regulatory actions (fines, penalties, settlements, consent orders) against a single named company are not geopolitical. Drop them (relevant: false) unless the article also contains a war, tariff, sanctions, export-control, or cross-border fact. The presence of the word "Treasury" or a dollar amount does not make it geopolitical.
 
 SINGLE-COMPANY MARKET-MOVE EXCLUSION — explicit rule: a single company's market or credit moves are not geopolitical — CDS spread moves, stock price moves, earnings beats/misses, debt offerings, credit rating changes, analyst actions. This holds no matter how large the company is or how "systemically important" the move is framed for equity valuations. "Systemically important" in DECISION 1 means geopolitically systemic: a state actor taking cross-border action, or a war/tariff/sanctions/export-control fact. Market significance alone never qualifies. This does not touch the TECH/AI MEGA-DEAL RULES above (actual deals and capex commitments, not price moves). Drop market-move stories (relevant: false) unless the article also contains a war, tariff, sanctions, export-control, or cross-border state action.
+
+FORECAST/ANALYSIS EXCLUSION — explicit rule: a forecast revision, analyst prediction, or opinion piece is not itself a geopolitical event — agency forecast revisions (e.g. IEA/OPEC demand outlooks), analyst notes, think-tank projections, op-eds, scenario pieces. A pin needs an event or action behind it: something that happened or is happening (a strike, a sanction imposed, troops moved, a deal signed, an attack launched). Drop forecast/analysis stories (relevant: false) unless the article also reports a NEW geopolitical event or action — in that case the event is the story, not the forecast. A forecast revision that merely cites an already-known situation as background does not qualify.
 
 Before passing any article, run it through these six filters. If it fails any one of them, reject it:
 
