@@ -563,7 +563,7 @@
             combined.forEach(item => {
                 if (item._type === 'flag') {
                     html += `<div class="flag-item">
-                        <div class="flag-title">${item.title}</div>
+                        <div class="flag-title">${(item.pinned || item.pin_active) ? '📌 ' : ''}${item.title}</div>
                         <div class="flag-meta">
                             <span class="flag-status status-developing">${item.status}</span>
                             <span class="flag-source">${item.source}</span>
@@ -578,7 +578,7 @@
                     const dirClass = item.gemini_direction ? valClass(item.gemini_direction) : '';
                     const dirLabel = item.gemini_direction ? item.gemini_direction.toUpperCase() : '';
                     html += `<div class="flag-item">
-                        <div class="flag-title">${item.headline}</div>
+                        <div class="flag-title">${(item.pinned || item.pin_active) ? '📌 ' : ''}${item.headline}</div>
                         <div class="flag-meta">
                             <span class="flag-source">${item.source}</span>
                             <span class="flag-source">${item.timestamp}</span>

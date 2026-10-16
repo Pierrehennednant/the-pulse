@@ -4929,6 +4929,16 @@ CONTEXT: {context}"""
             current_headlines.add(pin_headline)
             injected += 1
 
+        # Display-only: mark every item whose headline is in the pin file
+        # (live copies AND injected pins) so the board can show the pin icon
+        # while the live article is still in the feed. Not read by scoring,
+        # tiers, clocks, the add-back loop above, or the Haiku re-send gate;
+        # the existing `pinned` flag is left untouched.
+        pin_headlines = {p.get('headline', '') for p in pinned_stories if p.get('headline')}
+        for i in immediately_available:
+            if i.get('headline', '') in pin_headlines:
+                i['pin_active'] = True
+
         # Hard age cutoff — drop stale articles before scoring. published_at
         # is not populated on live item dicts by this point in the pipeline
         # (safe_parse() never sets it — real age enforcement already
@@ -5348,7 +5358,9 @@ CONTEXT: {context}"""
                     'link': item['link'],
                     'sentiment': item['sentiment_score'],
                     'predicted_impact': predicted_impact,
-                    'context': item.get('description', '')
+                    'context': item.get('description', ''),
+                    # Display-only pin marker carried onto the flag card.
+                    'pin_active': bool(item.get('pinned') or item.get('pin_active'))
                 })
 
         flags.sort(key=lambda x: x['priority'], reverse=True)
