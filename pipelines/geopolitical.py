@@ -2501,6 +2501,8 @@ Fail if it involves: opinion or commentary on past market moves, investment advi
 
 DOMESTIC REGULATORY EXCLUSION — explicit rule: domestic regulatory actions (fines, penalties, settlements, consent orders) against a single named company are not geopolitical. Drop them (relevant: false) unless the article also contains a war, tariff, sanctions, export-control, or cross-border fact. The presence of the word "Treasury" or a dollar amount does not make it geopolitical.
 
+SINGLE-COMPANY MARKET-MOVE EXCLUSION — explicit rule: a single company's market or credit moves are not geopolitical — CDS spread moves, stock price moves, earnings beats/misses, debt offerings, credit rating changes, analyst actions. This holds no matter how large the company is or how "systemically important" the move is framed for equity valuations. "Systemically important" in DECISION 1 means geopolitically systemic: a state actor taking cross-border action, or a war/tariff/sanctions/export-control fact. Market significance alone never qualifies. This does not touch the TECH/AI MEGA-DEAL RULES above (actual deals and capex commitments, not price moves). Drop market-move stories (relevant: false) unless the article also contains a war, tariff, sanctions, export-control, or cross-border state action.
+
 Before passing any article, run it through these six filters. If it fails any one of them, reject it:
 
 FILTER 1 — SOURCE VS ECHO
