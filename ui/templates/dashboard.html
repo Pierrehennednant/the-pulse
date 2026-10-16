@@ -513,9 +513,8 @@
         const vix = data.vix || {};
         const vxn = data.vxn || {};
         const fg = data.fear_greed || {};
-        const manualTag = (vix.source === 'manual' || vxn.source === 'manual') ? ' <small style="color:#7a8fa8">· manual pull</small>' : '';
         html += `
-            <div class="data-row"><span class="data-label">VIX</span><span class="data-value" style="color:${macroColor(vix.signal)}">${vix.value || '--'} <small>(${vix.change >= 0 ? '+' : ''}${vix.change || 0})</small>${manualTag}</span></div>
+            <div class="data-row"><span class="data-label">VIX</span><span class="data-value" style="color:${macroColor(vix.signal)}">${vix.value || '--'} <small>(${vix.change >= 0 ? '+' : ''}${vix.change || 0})</small></span></div>
             <div class="data-row"><span class="data-label">VXN</span><span class="data-value" style="color:${macroColor(vxn.signal)}">${vxn.value || '--'} <small>(${vxn.change >= 0 ? '+' : ''}${vxn.change || 0})</small></span></div>
             <div class="data-row"><span class="data-label">Fear & Greed</span><span class="data-value" style="color:${macroColor(fg.signal)}">${fg.score || '--'} — ${signalLabel(fg.signal) || fg.rating || 'N/A'}</span></div>
             <div class="data-row"><span class="data-label">Yahoo</span><span class="data-value"><button onclick="manualYahooPull(this)" style="cursor:pointer">Force Yahoo pull</button> <small id="manual-pull-result" style="color:#7a8fa8"></small></span></div>`;
@@ -524,9 +523,8 @@
 
     async function manualYahooPull(btn) {
         const label = document.getElementById('manual-pull-result');
-        const originalText = btn ? btn.textContent : '';
-        lockCardActions('card-macro', btn, 'pulling…');
-        if (label) label.textContent = '';
+        if (btn) btn.disabled = true;
+        if (label) label.textContent = 'pulling…';
         try {
             const response = await fetch('/api/macro/manual_pull', {method: 'POST'});
             const j = await response.json();
@@ -535,11 +533,11 @@
                 setTimeout(() => location.reload(), 1500);
             } else {
                 if (label) label.textContent = `failed: ${j.error || 'unknown'}`;
-                unlockCardActions('card-macro', btn, originalText);
+                if (btn) btn.disabled = false;
             }
         } catch (e) {
             if (label) label.textContent = 'failed: network error';
-            unlockCardActions('card-macro', btn, originalText);
+            if (btn) btn.disabled = false;
         }
     }
 
@@ -872,38 +870,30 @@
         return false;
     }
 
-    function lockCardActions(cardId, activeBtn, loadingText) {
-        document.querySelectorAll('#' + cardId + ' button').forEach(b => {
+    function lockEcActions(activeBtn, loadingText) {
+        document.querySelectorAll('#card-economic button').forEach(b => {
             b.disabled = true;
             b.style.opacity = '0.4';
             b.style.cursor = 'not-allowed';
         });
-        document.querySelectorAll('#' + cardId + ' input').forEach(i => {
+        document.querySelectorAll('#card-economic input').forEach(i => {
             i.disabled = true;
             i.style.opacity = '0.5';
         });
         if (activeBtn) { activeBtn.textContent = loadingText || '…'; activeBtn.style.opacity = '0.6'; }
     }
 
-    function unlockCardActions(cardId, activeBtn, originalText) {
-        document.querySelectorAll('#' + cardId + ' button').forEach(b => {
+    function unlockEcActions(activeBtn, originalText) {
+        document.querySelectorAll('#card-economic button').forEach(b => {
             b.disabled = false;
             b.style.opacity = '';
             b.style.cursor = '';
         });
-        document.querySelectorAll('#' + cardId + ' input').forEach(i => {
+        document.querySelectorAll('#card-economic input').forEach(i => {
             i.disabled = false;
             i.style.opacity = '';
         });
         if (activeBtn && originalText) { activeBtn.textContent = originalText; activeBtn.style.opacity = '1'; }
-    }
-
-    function lockEcActions(activeBtn, loadingText) {
-        lockCardActions('card-economic', activeBtn, loadingText);
-    }
-
-    function unlockEcActions(activeBtn, originalText) {
-        unlockCardActions('card-economic', activeBtn, originalText);
     }
 
     async function submitActual(eventTitle, eventId, presetActual, btn, eventDate) {
