@@ -604,6 +604,20 @@ def geo_force_reclassify():
         return jsonify({'error': result.get('error', 'Reclassification failed')}), 400
     return jsonify(result)
 
+@app.route('/api/macro/manual_pull', methods=['POST'])
+@require_auth
+def macro_manual_pull():
+    """Manual trigger for MacroSentimentPipeline.run_manual_pull() — a live
+    yfinance VIX/VXN pull outside the scheduled 09:40/09:45/09:55/10:30 ET
+    slots. The value is stored under a separate session key the schedule
+    never touches, so the scheduled pulls keep working exactly as before.
+    No automatic/scheduled version — this route is the only trigger surface."""
+    from pipelines.macro_sentiment import macro_sentiment_pipeline
+    result = macro_sentiment_pipeline.run_manual_pull()
+    if not result.get('ok'):
+        return jsonify({'error': result.get('error', 'Manual pull failed')}), 400
+    return jsonify(result)
+
 @app.route('/api/ai_lens')
 @require_auth
 def api_ai_lens():

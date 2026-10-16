@@ -328,6 +328,47 @@ class MacroSentimentPipeline:
 
             self._save_session(session_file, session)
 
+    def run_manual_pull(self):
+        """On-demand live yfinance pull for VIX/VXN, outside the scheduled
+        slots. Triggered only via POST /api/macro/manual_pull (dashboard
+        auth) — there is no scheduled caller.
+
+        The fresh value is stored under session['manual'], a key the
+        scheduled slots (09:40/09:45/09:55/10:30) never read or write, so
+        the schedule keeps working exactly as before. _read_intraday_value()
+        prefers today's manual reading when it is newer than the
+        slot/frozen candidate (most-recent-wins).
+
+        No fallback substitution: if yfinance fails the caller gets the
+        failure plainly instead of a stale value dressed up as fresh.
+        Returns {'ok': True, 'vix': {...}, 'vxn': {...}} or
+        {'ok': False, 'error': ...}."""
+        if datetime.now(self.timezone).weekday() >= 5:
+            return {'ok': False, 'error': 'Market closed (weekend) — no live data to pull'}
+        now = datetime.now(self.timezone)
+        out = {'ok': True}
+        for symbol, ticker, session_file in (
+            ('VIX', '^VIX', VIX_SESSION_FILE),
+            ('VXN', '^VXN', VXN_SESSION_FILE),
+        ):
+            value = self._yfinance_pull(ticker, f"{symbol} manual")
+            if value is None:
+                out['ok'] = False
+                out.setdefault('errors', {})[symbol] = 'yfinance pull failed'
+                continue
+            session = self._load_session(session_file)
+            session['manual'] = {
+                'value': value,
+                'timestamp': now.isoformat(),
+                'source': 'manual',
+            }
+            self._save_session(session_file, session)
+            out[symbol.lower()] = {'value': value, 'timestamp': now.isoformat()}
+            pulse_logger.log(f"✓ {symbol} — manual yfinance pull: {value}")
+        if not out['ok']:
+            out['error'] = '; '.join(f"{k} {v}" for k, v in out['errors'].items())
+        return out
+
     def _read_intraday_value(self, symbol, session_file, fred_cache_loader, signal_fn):
         """Passive read for the normal 5-minute refresh cycle — never calls
         yfinance or FRED live. Reports today's frozen value, or the most recent
@@ -338,17 +379,20 @@ class MacroSentimentPipeline:
         fred_key = 'vix' if symbol == 'VIX' else 'vxn'
         previous = fred_file.get(fred_key, {}).get('value') if fred_file else None
 
+        value = None
+        source = None
+        current_ts = None
         if session.get('frozen'):
             value = session['frozen_value']
             source = 'frozen'
+            current_ts = session.get('frozen_at')
         else:
-            value = None
-            source = None
             for slot in reversed(INTRADAY_SLOTS):
                 entry = session['slots'].get(slot)
                 if entry:
                     value = entry['value']
                     source = entry['source']
+                    current_ts = entry.get('timestamp')
                     break
             if value is None:
                 if previous is not None:
@@ -357,6 +401,31 @@ class MacroSentimentPipeline:
                 else:
                     value = 20.0
                     source = 'default'
+
+        # Manual on-demand pull (POST /api/macro/manual_pull): today's manual
+        # reading wins when it is newer than the slot/frozen candidate
+        # (most-recent-wins). The scheduled slots never touch the manual key,
+        # so the schedule is unaffected either way.
+        manual = session.get('manual') or {}
+        if manual.get('value') is not None and manual.get('timestamp'):
+            try:
+                mdt = datetime.fromisoformat(manual['timestamp'])
+                if mdt.tzinfo is None:
+                    mdt = mdt.replace(tzinfo=self.timezone)
+                if mdt.date() == datetime.now(self.timezone).date():
+                    cdt = None
+                    if current_ts:
+                        try:
+                            cdt = datetime.fromisoformat(current_ts)
+                            if cdt.tzinfo is None:
+                                cdt = cdt.replace(tzinfo=self.timezone)
+                        except Exception:
+                            cdt = None
+                    if cdt is None or mdt > cdt:
+                        value = manual['value']
+                        source = 'manual'
+            except Exception:
+                pass
 
         is_stale = False
         if source == 'fred-prior-day' and fred_file:
