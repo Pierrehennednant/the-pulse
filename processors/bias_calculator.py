@@ -241,7 +241,7 @@ class BiasCalculator:
             directive = "⚫ No Trade – No Data"
             directive_color = "#7a8fa8"
         elif bias == 'Neutral':
-            directive = "🟡 Quarter size"
+            directive = "🟡 Very low edge — don't force anything."
             directive_color = "#f39c12"
         elif confidence >= 70:
             if bias == 'Bearish':
