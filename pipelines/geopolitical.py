@@ -4067,6 +4067,19 @@ CONTEXT: {context}"""
                                                  f"(would have: {sc_reason}) | headline={short}")
                             sc_reason = None
                         if sc_reason:
+                            # Generality: don't rely solely on the campaign's
+                            # talk_forced flag — check for pure talk directly.
+                            # A headline that's all talk (speech/preparation
+                            # verbs, no concrete current fact) is never a new
+                            # strike, even if it mentions one in passing.
+                            talk_word = _is_pure_talk(headline, ctx.get('description', ''))
+                            if talk_word:
+                                self._event_log_once('strike_clock_blocked', identity['headline_norm'],
+                                                     f"STRIKE CLOCK BLOCKED | pure-talk follow_up kept | "
+                                                     f"reason=talk word '{talk_word}'; no attributed new strike signal "
+                                                     f"(would have: {sc_reason}) | headline={short}")
+                                sc_reason = None
+                        if sc_reason:
                             kind = 'first_print'
                             rules.append('strike_clock')
                             logs.append(f"STRIKE CLOCK | haiku_kind=follow_up -> first_print {MAX_ARTICLE_AGE_HOURS}h | "
