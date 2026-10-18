@@ -235,8 +235,8 @@ class BiasCalculator:
 
         # Trading Directive — confidence-based only
         if low_conviction_override:
-            directive = "⚫ No Trade – Low Conviction."
-            directive_color = "#7a8fa8"
+            directive = "🟡 Very low edge — don't force anything."
+            directive_color = "#f39c12"
         elif active_pillars == 0:
             directive = "⚫ No Trade – No Data"
             directive_color = "#7a8fa8"
