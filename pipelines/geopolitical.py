@@ -4761,7 +4761,7 @@ CONTEXT: {context}"""
             return []
         categories = ['business', 'politics', 'tech']
         search_queries = [
-            'federal reserve OR tariff OR war OR iran OR sanctions OR recession OR trump'
+            '"federal reserve" | tariff | tariffs | war | iran | sanctions | recession | trump'
         ]
 
         def _news_get(url, label, retries=3, backoff=2, timeout=10):
