@@ -3012,6 +3012,34 @@ Articles to classify:
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to save pinned stories: {e}", level="WARNING")
 
+    def unpin_story(self, headline):
+        """Manual, on-demand lever: remove the pin from a pinned story.
+
+        The article itself is NOT blocked or deleted — it stays in the
+        classification cache and lives out its normal 24h/48h clock like
+        any unpinned card. Only the pin record is removed.
+
+        Returns {'ok': True, 'headline': ...} on success,
+        {'ok': False, 'error': ...} if not found or on failure.
+        """
+        try:
+            if not os.path.exists(self.pinned_store_file):
+                return {'ok': False, 'error': 'No pinned stories file'}
+            with open(self.pinned_store_file, 'r') as f:
+                pinned = json.load(f)
+            original_count = len(pinned)
+            remaining = [s for s in pinned
+                         if s.get('headline', '').strip().lower() != headline.strip().lower()]
+            if len(remaining) == original_count:
+                return {'ok': False, 'error': 'Headline not found in pinned stories'}
+            self.save_pinned_stories(remaining)
+            pulse_logger.log(f"📌 Unpinned | {headline[:80]} | {original_count} → {len(remaining)} pinned")
+            return {'ok': True, 'headline': headline,
+                    'pinned_before': original_count, 'pinned_after': len(remaining)}
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Unpin failed: {e}", level="WARNING")
+            return {'ok': False, 'error': str(e)}
+
     # Fields a same-story merge never copies from an incoming follow_up onto
     # an original first_print survivor (see _guarded_duplicate_merge()):
     # kind and classified_at drive the survivor's 48h clock (classified_at is

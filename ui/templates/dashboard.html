@@ -569,6 +569,7 @@
                             <span class="flag-source">${item.source}</span>
                             <span class="flag-source">${item.timestamp}</span>
                             <button class="geo-block-btn" data-title="${encodeURIComponent(item.title)}" style="margin-left:auto;background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
+                            ${(item.pinned || item.pin_active) ? `<button class="geo-unpin-btn" data-title="${encodeURIComponent(item.title)}" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6;margin-left:4px" title="Unpin (keep article on normal clock)">📍</button>` : ''}
                         </div>
                         <div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${valClass(item.predicted_impact)}">${(item.predicted_impact || '').toUpperCase()}</span></div>
                         ${item.context ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${item.context}</div>` : ''}
@@ -583,6 +584,7 @@
                             <span class="flag-source">${item.source}</span>
                             <span class="flag-source">${item.timestamp}</span>
                             <button class="geo-block-btn" data-title="${encodeURIComponent(item.headline)}" style="margin-left:auto;background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
+                            ${(item.pinned || item.pin_active) ? `<button class="geo-unpin-btn" data-title="${encodeURIComponent(item.headline)}" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6;margin-left:4px" title="Unpin (keep article on normal clock)">📍</button>` : ''}
                         </div>
                         ${dirLabel ? `<div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${dirClass}">${dirLabel}</span></div>` : ''}
                         ${item.description ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${item.description}</div>` : ''}
@@ -1058,8 +1060,7 @@
         return body;
     }
 
-    async function blockGeoArticle(title, btn) {
-        if (!confirm('Block "' + title + '" from the Political & Geopolitical pillar?')) return;
+    async function blockGeoArticle(title, btn) {        if (!confirm('Block "' + title + '" from the Political & Geopolitical pillar?')) return;
         lockGeoActions(btn, '…');
         try {
             await _blocklistAction('/api/geo-blocklist', 'POST', title);
@@ -1075,6 +1076,19 @@
             alert(`Failed to block "${title}": ${e.message}\n\nThe article was NOT blocked. Please try again.`);
         } finally {
             unlockGeoActions(btn, '✕');
+        }
+    }
+
+    async function unpinGeoArticle(title, btn) {
+        if (!confirm('Unpin "' + title + '"? The article stays on the board on its normal clock.')) return;
+        lockGeoActions(btn, '…');
+        try {
+            await _blocklistAction('/api/geo-unpin', 'POST', title);
+            setTimeout(() => { fetchData(); scheduleRefresh(); }, 500);
+        } catch(e) {
+            alert(`Failed to unpin "${title}": ${e.message}\n\nThe article is still pinned. Please try again.`);
+        } finally {
+            unlockGeoActions(btn, '📍');
         }
     }
 
@@ -1261,6 +1275,12 @@
             if (blockBtn) {
                 const title = decodeURIComponent(blockBtn.getAttribute('data-title') || '');
                 if (title) blockGeoArticle(title, blockBtn);
+                return;
+            }
+            const unpinBtn = e.target.closest('.geo-unpin-btn');
+            if (unpinBtn) {
+                const title = decodeURIComponent(unpinBtn.getAttribute('data-title') || '');
+                if (title) unpinGeoArticle(title, unpinBtn);
                 return;
             }
             const unblockBtn = e.target.closest('.geo-unblock-btn');

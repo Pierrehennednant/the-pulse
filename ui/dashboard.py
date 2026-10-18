@@ -604,6 +604,24 @@ def geo_force_reclassify():
         return jsonify({'error': result.get('error', 'Reclassification failed')}), 400
     return jsonify(result)
 
+@app.route('/api/geo-unpin', methods=['POST'])
+@require_auth
+def geo_unpin():
+    """Manual trigger for GeopoliticalPipeline.unpin_story() — removes the
+    pin from a pinned story WITHOUT blocking or deleting the article.
+    The article stays in the classification cache and lives out its normal
+    24h/48h clock. No automatic/scheduled version — this route is the only
+    trigger surface."""
+    data = request.get_json()
+    headline = data.get('headline') if data else None
+    if not isinstance(headline, str) or not headline.strip():
+        return jsonify({'error': 'Missing headline'}), 400
+    from pipelines.geopolitical import geopolitical_pipeline
+    result = geopolitical_pipeline.unpin_story(headline.strip())
+    if not result.get('ok'):
+        return jsonify({'error': result.get('error', 'Unpin failed')}), 400
+    return jsonify(result)
+
 @app.route('/api/macro/manual_pull', methods=['POST'])
 @require_auth
 def macro_manual_pull():
