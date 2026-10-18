@@ -4026,6 +4026,18 @@ CONTEXT: {context}"""
                     if (kind == 'follow_up' and haiku_kind == 'follow_up' and not rules
                             and 'attack' in (ident.get('kinds') or [])):
                         sc_reason = self._event_strike_clock_reason(ident, mem, new_facts, today)
+                        if sc_reason and target.get('talk_forced'):
+                            # A talk-forced follow_up (statement/threat headline,
+                            # no concrete current fact) is never promoted: no
+                            # structured attribution/recap signal exists to
+                            # prove an attributed new strike.
+                            # Logged directly: kind is unchanged, so no decision
+                            # (and no decision logs) is returned for this item.
+                            self._event_log_once('strike_clock_blocked', identity['headline_norm'],
+                                                 f"STRIKE CLOCK BLOCKED | talk-forced follow_up kept | "
+                                                 f"reason=talk force set follow_up; no attributed new strike signal "
+                                                 f"(would have: {sc_reason}) | headline={short}")
+                            sc_reason = None
                         if sc_reason:
                             kind = 'first_print'
                             rules.append('strike_clock')
@@ -4569,6 +4581,10 @@ CONTEXT: {context}"""
                     records, art.get('headline', ''), art.get('description', ''),
                     r.get('kind'), r.get('tier'), source)
                 r['kind'] = kind
+                if logline and logline.startswith('GEO CAMPAIGN TALK FORCE FOLLOW_UP'):
+                    # Transient marker (not in the cache whitelist): tells
+                    # _event_decide()'s STRIKE CLOCK not to undo the talk force.
+                    r['talk_forced'] = True
                 if logline:
                     pulse_logger.log(logline)
         finally:
