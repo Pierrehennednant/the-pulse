@@ -568,8 +568,10 @@
                             <span class="flag-status status-developing">${item.status}</span>
                             <span class="flag-source">${item.source}</span>
                             <span class="flag-source">${item.timestamp}</span>
-                            <button class="geo-block-btn" data-title="${encodeURIComponent(item.title)}" style="margin-left:auto;background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
-                            ${(item.pinned || item.pin_active) ? `<button class="geo-unpin-btn" data-title="${encodeURIComponent(item.title)}" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6;margin-left:4px" title="Unpin (keep article on normal clock)">📍</button>` : ''}
+                            <span style="margin-left:auto;display:inline-flex;gap:4px;">
+                            <button class="geo-block-btn" data-title="${encodeURIComponent(item.title)}" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
+                            ${(item.pinned || item.pin_active) ? `<button class="geo-unpin-btn" data-title="${encodeURIComponent(item.title)}" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Unpin (keep article on normal clock)">📍</button>` : ''}
+                            </span>
                         </div>
                         <div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${valClass(item.predicted_impact)}">${(item.predicted_impact || '').toUpperCase()}</span></div>
                         ${item.context ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${item.context}</div>` : ''}
@@ -583,8 +585,10 @@
                         <div class="flag-meta">
                             <span class="flag-source">${item.source}</span>
                             <span class="flag-source">${item.timestamp}</span>
-                            <button class="geo-block-btn" data-title="${encodeURIComponent(item.headline)}" style="margin-left:auto;background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
-                            ${(item.pinned || item.pin_active) ? `<button class="geo-unpin-btn" data-title="${encodeURIComponent(item.headline)}" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6;margin-left:4px" title="Unpin (keep article on normal clock)">📍</button>` : ''}
+                            <span style="margin-left:auto;display:inline-flex;gap:4px;">
+                            <button class="geo-block-btn" data-title="${encodeURIComponent(item.headline)}" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
+                            ${(item.pinned || item.pin_active) ? `<button class="geo-unpin-btn" data-title="${encodeURIComponent(item.headline)}" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Unpin (keep article on normal clock)">📍</button>` : ''}
+                            </span>
                         </div>
                         ${dirLabel ? `<div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${dirClass}">${dirLabel}</span></div>` : ''}
                         ${item.description ? `<div style="font-size:12px;color:#7a8fa8;margin-top:6px;line-height:1.4">${item.description}</div>` : ''}
