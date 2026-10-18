@@ -4722,6 +4722,9 @@ CONTEXT: {context}"""
                              level="WARNING")
 
     def fetch_news(self):
+        # Logging-only per-cycle fetch stats (read by fetch() to explain an
+        # empty result). Never read by any filter, score, or return value.
+        self._geo_fetch_stats = None
         # EC-survey recaps (Conference Board / UMich / JOLTS / claims / ADP /
         # ISM) are EC-owned — neutralize any cached classification for one
         # once per cycle so it can never come back as a Tier 1 Geo card.
@@ -4797,6 +4800,25 @@ CONTEXT: {context}"""
                 raise RuntimeError(f"fetch_with_retry exhausted {retries} attempts with no response for TheNewsAPI {label}")
             return last_response
 
+        def _log_feed_result(label, response, data):
+            # Logging only: article count and any quota / rate-limit headers.
+            # Never logs the URL (it carries the API key); header values are
+            # masked for the key just in case.
+            try:
+                n = len(data.get('data') or []) if isinstance(data, dict) else 0
+                hdrs = []
+                for hk, hv in (getattr(response, 'headers', None) or {}).items():
+                    hkl = str(hk).lower()
+                    if 'remaining' in hkl or 'limit' in hkl or 'quota' in hkl:
+                        hv = str(hv)
+                        if THENEWS_API_KEY:
+                            hv = hv.replace(THENEWS_API_KEY, "***")
+                        hdrs.append(f"{hk}={hv}")
+                pulse_logger.log(
+                    f"📥 TheNewsAPI {label} | articles={n} | quota headers: {', '.join(hdrs) if hdrs else 'none'}")
+            except Exception as e:
+                pulse_logger.log(f"⚠️ TheNewsAPI {label} result logging failed: {type(e).__name__}", level="WARNING")
+
         def fetch_category(category):
             url = (
                 f"https://api.thenewsapi.com/v1/news/top"
@@ -4811,7 +4833,9 @@ CONTEXT: {context}"""
             if not response.ok:
                 pulse_logger.log(f"⚠️ TheNewsAPI top stories returned {response.status_code} — skipping", level="WARNING")
                 return {}
-            return response.json()
+            data = response.json()
+            _log_feed_result(f"top/{category}", response, data)
+            return data
 
         def fetch_query(query):
             url = (
@@ -4828,21 +4852,28 @@ CONTEXT: {context}"""
             if not response.ok:
                 pulse_logger.log(f"⚠️ TheNewsAPI query '{query}' returned {response.status_code} — skipping", level="WARNING")
                 return {}
-            return response.json()
+            data = response.json()
+            _log_feed_result("query", response, data)
+            return data
 
         items = []
         seen_titles = set()
         seen_lock = threading.Lock()
+        # Logging-only counters (no condition below reads them).
+        parse_stats = {'raw': 0, 'no_title': 0, 'not_relevant': 0, 'too_old': 0, 'duplicate': 0}
 
         def safe_parse(data):
             local_items = []
             for article in data.get('data', []):
+                parse_stats['raw'] += 1
                 title = article.get('title', '')
                 if not title:
+                    parse_stats['no_title'] += 1
                     continue
                 description = article.get('description', '') or ''
                 full_check_text = f"{title} {description}"
                 if not self.is_market_relevant(full_check_text):
+                    parse_stats['not_relevant'] += 1
                     continue
                 published = article.get('published_at', '')
                 try:
@@ -4853,6 +4884,7 @@ CONTEXT: {context}"""
                     timestamp = _et_display(dt)
                     date = est.strftime('%Y-%m-%d')
                     if self.is_article_too_old(published):
+                        parse_stats['too_old'] += 1
                         continue
                 except Exception as e:
                     pulse_logger.log(f"⚠️ Failed to parse article date in parallel fetch: {e}", level="WARNING")
@@ -4887,11 +4919,19 @@ CONTEXT: {context}"""
                                 if item['headline'] not in seen_titles:
                                     seen_titles.add(item['headline'])
                                     items.append(item)
+                                else:
+                                    parse_stats['duplicate'] += 1
                     except Exception as e:
                         pulse_logger.log(f"⚠️ Parallel fetch failed: {e}", level="WARNING")
             except concurrent.futures.TimeoutError:
                 pending = sum(1 for f in all_futures if not f.done())
                 pulse_logger.log(f"⚠️ Geo futures timeout — {pending} fetch(es) did not complete; using {len(items)} articles collected so far", level="WARNING")
+
+        pulse_logger.log(
+            f"🧮 Geo parse | raw={parse_stats['raw']} | kept={len(items)} | dropped: "
+            f"no_title={parse_stats['no_title']} not_relevant={parse_stats['not_relevant']} "
+            f"too_old_48h={parse_stats['too_old']} duplicate_title={parse_stats['duplicate']}")
+        self._geo_fetch_stats = {'raw': parse_stats['raw'], 'parsed': len(items)}
 
         if not items:
             pulse_logger.log("⚠️ All parallel fetches returned empty", level="WARNING")
@@ -4963,10 +5003,14 @@ CONTEXT: {context}"""
         # Split into already classified vs new
         new_items = [i for i in items if i['headline'] not in gemini_cache]
         known_relevant = []
+        # Logging-only counters (no condition below reads them).
+        cache_stats = {'haiku_rejected': 0, 'low_conf': 0, 'clock_expired': 0,
+                       'kw_not_relevant': 0, 'kw_blocklisted': 0, 'kw_too_old': 0}
         for i in items:
             cached = gemini_cache.get(i['headline'], {})
             if cached.get('relevant') and cached.get('confidence', 0) >= 0.75:
                 if self._clock_expired(cached):
+                    cache_stats['clock_expired'] += 1
                     continue
                 if cached.get('direction'):
                     direction = cached['direction']
@@ -4975,6 +5019,11 @@ CONTEXT: {context}"""
                     i['description'] = cached['summary']
                 self._apply_classification_fields(i, cached)
                 known_relevant.append(i)
+            elif i['headline'] in gemini_cache:
+                if not cached.get('relevant'):
+                    cache_stats['haiku_rejected'] += 1
+                else:
+                    cache_stats['low_conf'] += 1
 
         # Articles not yet classified — use keyword filter as temporary pass
         # Apply blocklist and age filter before allowing keyword fallback articles
@@ -4982,12 +5031,14 @@ CONTEXT: {context}"""
         keyword_passed = []
         for i in new_items:
             if not self.is_market_relevant(i['headline']):
+                cache_stats['kw_not_relevant'] += 1
                 continue
             headline_lower = i['headline'].lower()
             if kw_blocklist:
                 matched = [b for b in kw_blocklist if b in headline_lower]
                 if matched:
                     pulse_logger.log(f"🚫 Blocked by blocklist (keyword fallback): {i['headline'][:80]} | matched: {matched[0][:60]}")
+                    cache_stats['kw_blocklisted'] += 1
                     continue
             # published_at is not populated on live item dicts at this point
             # in the pipeline (safe_parse() never sets it — real age
@@ -4997,6 +5048,7 @@ CONTEXT: {context}"""
             kw_published_at = i.get('published_at', '')
             if kw_published_at and self.is_article_too_old(kw_published_at):
                 pulse_logger.log(f"🕐 Age cutoff (keyword fallback): {i['headline'][:80]}")
+                cache_stats['kw_too_old'] += 1
                 continue
             # Explicit marker (not inferred from missing haiku_tier/gemini_direction,
             # which a genuinely Haiku-confirmed item can also lack in rare malformed-
@@ -5009,6 +5061,15 @@ CONTEXT: {context}"""
         # No same-story dedup here: every classified article scores independently,
         # regardless of whether Haiku judges it related to another live article.
         immediately_available = known_relevant + keyword_passed
+        pulse_logger.log(
+            f"🧮 Geo cache check | after_blocklists={len(items)} | cached={len(items) - len(new_items)} "
+            f"new={len(new_items)} | known_relevant={len(known_relevant)} | skipped: "
+            f"haiku_rejected={cache_stats['haiku_rejected']} conf_below_0.75={cache_stats['low_conf']} "
+            f"clock_expired={cache_stats['clock_expired']} | keyword_fallback: passed={len(keyword_passed)} "
+            f"not_relevant={cache_stats['kw_not_relevant']} blocklisted={cache_stats['kw_blocklisted']} "
+            f"too_old={cache_stats['kw_too_old']} | sent_to_haiku={len(new_items)}")
+        if self._geo_fetch_stats is not None:
+            self._geo_fetch_stats['after_blocklists'] = len(items)
 
         # Inject pinned stories not already covered by a live article.
         # Only an exact headline match skips injection — a same-story judgment
@@ -5958,7 +6019,16 @@ CONTEXT: {context}"""
             items = self.fetch_news()
 
             if not items:
-                pulse_logger.log("↺ Geopolitical — fetch empty, using last cache")
+                st = getattr(self, '_geo_fetch_stats', None)
+                if not st:
+                    why = "no fetch stats (API key missing or fetch raised)"
+                elif st.get('raw', 0) == 0:
+                    why = "news API returned 0 articles"
+                else:
+                    why = (f"all {st.get('raw', 0)} fetched articles filtered out — "
+                           f"parse kept {st.get('parsed', 0)}, after blocklists "
+                           f"{st.get('after_blocklists', st.get('parsed', 0))}, served 0")
+                pulse_logger.log(f"↺ Geopolitical — fetch empty ({why}), using last cache")
                 if existing:
                     self._reclassify_cached_pending(existing['data'].get('all_items', existing['data'].get('news_items', [])))
                     existing['data']['status'] = 'cached'
