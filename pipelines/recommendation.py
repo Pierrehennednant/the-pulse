@@ -19,8 +19,8 @@ class PropFirmRecommendationEngine:
 
       Bias threshold         ±0.30 quiet week (≤1 red folder day) / ±0.33 standard week (≥2)
       Show-card confidence     55%
-      Quarter-entry confidence 55%–69%
-      Normal-entry confidence  ≥70%
+      Moderate-edge confidence 55%–69%
+      Strong-edge confidence   ≥70%
       Pillar alignment         ≥45% of total week weight must agree with bias
                                Quiet week: EC 15%, total 85%, threshold ≥38.25%
                                Standard week: EC 30%, total 100%, threshold ≥45%
@@ -298,15 +298,15 @@ class PropFirmRecommendationEngine:
             if confidence >= 70:
                 return self._rec(week_info,
                     mode='normal',
-                    label=f'Prop Firm — {bias}, Normal entry',
+                    label=f'Prop Firm — {bias}, strong edge',
                     reason=f'{aligned_weight}% of {total_w}% weight aligned · Confidence {confidence}%',
                     strength='strong',
                     bias=bias,
                 )
             return self._rec(week_info,
                 mode='quarter',
-                label=f'Prop Firm — {bias}, Quarter entry',
-                reason=f'Confidence {confidence}% — building toward Normal',
+                label=f'Prop Firm — {bias}, moderate edge',
+                reason=f'Confidence {confidence}% · edge present',
                 strength='moderate',
                 bias=bias,
             )

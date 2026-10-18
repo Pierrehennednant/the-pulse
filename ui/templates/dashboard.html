@@ -636,25 +636,21 @@
         if (!biasDir || biasDir === 'Neutral' || confidence < 55) return null;
         if (confidence < 60) {
             return {
-                main: 'Low conviction — Quarter size.',
+                main: 'Weak edge.',
                 scaling: null,
                 tier1: tier1Active
             };
         }
         if (confidence < 70) {
             return {
-                main: 'Moderate conviction — Half size.',
-                scaling: tier1Active
-                    ? 'Scale to full only on very clean confirmation.'
-                    : 'Scale to full on clean structure confirmation.',
+                main: 'Moderate edge.',
+                scaling: null,
                 tier1: tier1Active
             };
         }
         return {
-            main: 'High conviction — Half size.',
-            scaling: tier1Active
-                ? 'More cautious scaling — confirm clean structure before adding size.'
-                : 'Aggressive scaling to full on clean structure.',
+            main: 'Strong edge.',
+            scaling: null,
             tier1: tier1Active
         };
     }

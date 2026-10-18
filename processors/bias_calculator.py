@@ -245,24 +245,24 @@ class BiasCalculator:
             directive_color = "#f39c12"
         elif confidence >= 70:
             if bias == 'Bearish':
-                directive = "🔴 Bearish — Half size — scale to Full on confirmation."
+                directive = "🔴 Bearish — strong edge."
                 directive_color = "#e74c3c"
             else:
-                directive = "🟢 Bullish — Half size — scale to Full on confirmation."
+                directive = "🟢 Bullish — strong edge."
                 directive_color = "#2ecc71"
         elif confidence >= 60:
             if bias == 'Bearish':
-                directive = "🔴 Bearish — Half size — look for confirmation before scaling to Full."
+                directive = "🔴 Bearish — moderate edge."
                 directive_color = "#e74c3c"
             else:
-                directive = "🟢 Bullish — Half size — look for confirmation before scaling to Full."
+                directive = "🟢 Bullish — moderate edge."
                 directive_color = "#2ecc71"
         else:
             if bias == 'Bearish':
-                directive = "🔴 Bearish — Quarter size."
+                directive = "🔴 Bearish — weak edge."
                 directive_color = "#e74c3c"
             else:
-                directive = "🟢 Bullish — Quarter size."
+                directive = "🟢 Bullish — weak edge."
                 directive_color = "#2ecc71"
 
         # Gauge needle — signed confidence (direction x magnitude), not final_score.
