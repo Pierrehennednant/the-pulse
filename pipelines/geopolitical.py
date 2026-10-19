@@ -2681,9 +2681,9 @@ Articles to classify:
                 results = json.loads(text)
                 count = article_count if article_count is not None else len(results)
                 if attempt:
-                    pulse_logger.log(f"✅ Claude Haiku classified {count} articles (succeeded on attempt {attempt + 1}/{RETRIES})")
+                    pulse_logger.log(f"✅ Claude Haiku classified {count} articles (succeeded on attempt {attempt + 1}/{RETRIES}, model={response.model})")
                 else:
-                    pulse_logger.log(f"✅ Claude Haiku classified {count} articles")
+                    pulse_logger.log(f"✅ Claude Haiku classified {count} articles (model={response.model})")
                 return results
             except Exception as e:
                 last_exc = e
