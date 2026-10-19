@@ -612,14 +612,23 @@ def geo_unpin():
     The article stays in the classification cache and lives out its normal
     24h/48h clock. No automatic/scheduled version — this route is the only
     trigger surface."""
-    data = request.get_json()
-    headline = data.get('headline') if data else None
+    data = request.get_json(silent=True)
+    data = data if isinstance(data, dict) else {}
+    # The dashboard's shared _blocklistAction() helper sends {title: ...};
+    # accept `headline` first, then `title`, so either caller shape works.
+    headline = data.get('headline')
+    if not isinstance(headline, str) or not headline.strip():
+        headline = data.get('title')
+    link = data.get('link')
+    link = link.strip() if isinstance(link, str) else ''
     if not isinstance(headline, str) or not headline.strip():
         return jsonify({'error': 'Missing headline'}), 400
     from pipelines.geopolitical import geopolitical_pipeline
-    result = geopolitical_pipeline.unpin_story(headline.strip())
+    result = geopolitical_pipeline.unpin_story(headline.strip(), link=link)
     if not result.get('ok'):
         return jsonify({'error': result.get('error', 'Unpin failed')}), 400
+    # _blocklistAction() only accepts status 'added'/'removed' as success.
+    result['status'] = 'removed'
     return jsonify(result)
 
 @app.route('/api/macro/manual_pull', methods=['POST'])

@@ -3012,12 +3012,27 @@ Articles to classify:
         except Exception as e:
             pulse_logger.log(f"⚠️ Failed to save pinned stories: {e}", level="WARNING")
 
-    def unpin_story(self, headline):
+    @staticmethod
+    def _unpin_headline_key(text):
+        """Comparison key for unpin matching: HTML entities decoded, curly
+        quotes/apostrophes folded to ASCII, whitespace collapsed, casefolded."""
+        import html as _html
+        t = _html.unescape(text or '')
+        t = (t.replace('\u2018', "'").replace('\u2019', "'").replace('\u201b', "'")
+              .replace('\u2032', "'").replace('`', "'")
+              .replace('\u201c', '"').replace('\u201d', '"').replace('\u201f', '"'))
+        return ' '.join(t.split()).casefold()
+
+    def unpin_story(self, headline, link=None):
         """Manual, on-demand lever: remove the pin from a pinned story.
 
         The article itself is NOT blocked or deleted — it stays in the
         classification cache and lives out its normal 24h/48h clock like
         any unpinned card. Only the pin record is removed.
+
+        Matching: the pin's stored `link` (stable key) when the caller sends
+        one, else the headline compared via _unpin_headline_key(). Exactly
+        ONE pin record is removed (the first match).
 
         Returns {'ok': True, 'headline': ...} on success,
         {'ok': False, 'error': ...} if not found or on failure.
@@ -3028,13 +3043,24 @@ Articles to classify:
             with open(self.pinned_store_file, 'r') as f:
                 pinned = json.load(f)
             original_count = len(pinned)
-            remaining = [s for s in pinned
-                         if s.get('headline', '').strip().lower() != headline.strip().lower()]
-            if len(remaining) == original_count:
+            want_key = self._unpin_headline_key(headline)
+            want_link = (link or '').strip()
+            hl_hits = [i for i, s in enumerate(pinned)
+                       if self._unpin_headline_key(s.get('headline', '')) == want_key]
+            link_hits = [i for i, s in enumerate(pinned)
+                         if want_link and (s.get('link') or '').strip() == want_link]
+            both = [i for i in link_hits if i in hl_hits]
+            hits = both or link_hits or hl_hits
+            if not hits:
                 return {'ok': False, 'error': 'Headline not found in pinned stories'}
+            idx = hits[0]
+            removed = pinned[idx]
+            remaining = pinned[:idx] + pinned[idx + 1:]
             self.save_pinned_stories(remaining)
-            pulse_logger.log(f"📌 Unpinned | {headline[:80]} | {original_count} → {len(remaining)} pinned")
-            return {'ok': True, 'headline': headline,
+            matched_by = 'link+headline' if both else ('link' if link_hits else 'headline')
+            pulse_logger.log(f"📌 Unpinned | {removed.get('headline', '')[:80]} | matched_by={matched_by} | {original_count} → {len(remaining)} pinned")
+            return {'ok': True, 'headline': removed.get('headline', headline),
+                    'matched_by': matched_by,
                     'pinned_before': original_count, 'pinned_after': len(remaining)}
         except Exception as e:
             pulse_logger.log(f"⚠️ Unpin failed: {e}", level="WARNING")

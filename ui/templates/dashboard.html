@@ -570,7 +570,7 @@
                             <span class="flag-source">${item.timestamp}</span>
                             <span style="margin-left:auto;display:inline-flex;gap:4px;">
                             <button class="geo-block-btn" data-title="${encodeURIComponent(item.title)}" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
-                            ${(item.pinned || item.pin_active) ? `<button class="geo-unpin-btn" data-title="${encodeURIComponent(item.title)}" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Unpin (keep article on normal clock)">📍</button>` : ''}
+                            ${(item.pinned || item.pin_active) ? `<button class="geo-unpin-btn" data-title="${encodeURIComponent(item.title)}" data-link="${encodeURIComponent(item.link || '')}" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Unpin (keep article on normal clock)">📍</button>` : ''}
                             </span>
                         </div>
                         <div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${valClass(item.predicted_impact)}">${(item.predicted_impact || '').toUpperCase()}</span></div>
@@ -587,7 +587,7 @@
                             <span class="flag-source">${item.timestamp}</span>
                             <span style="margin-left:auto;display:inline-flex;gap:4px;">
                             <button class="geo-block-btn" data-title="${encodeURIComponent(item.headline)}" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Block this article">✕</button>
-                            ${(item.pinned || item.pin_active) ? `<button class="geo-unpin-btn" data-title="${encodeURIComponent(item.headline)}" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Unpin (keep article on normal clock)">📍</button>` : ''}
+                            ${(item.pinned || item.pin_active) ? `<button class="geo-unpin-btn" data-title="${encodeURIComponent(item.headline)}" data-link="${encodeURIComponent(item.link || '')}" style="background:none;color:#2a3a55;border:1px solid #1e2d4a;border-radius:4px;padding:1px 7px;font-size:10px;cursor:pointer;line-height:1.6" title="Unpin (keep article on normal clock)">📍</button>` : ''}
                             </span>
                         </div>
                         ${dirLabel ? `<div class="data-row"><span class="data-label">Predicted Impact</span><span class="data-value ${dirClass}">${dirLabel}</span></div>` : ''}
@@ -1034,7 +1034,7 @@
     //   - always throws on any failure (network error, timeout, non-ok
     //     status, non-'added'/'removed' status body) so every caller's
     //     catch block is guaranteed to run — no path returns silently
-    async function _blocklistAction(url, method, title, timeoutMs) {
+    async function _blocklistAction(url, method, title, timeoutMs, extraBody) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs || 15000);
         let response;
@@ -1042,7 +1042,7 @@
             response = await fetch(url, {
                 method: method,
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({title: title}),
+                body: JSON.stringify(Object.assign({title: title}, extraBody || {})),
                 signal: controller.signal
             });
         } catch(e) {
@@ -1083,11 +1083,12 @@
         }
     }
 
-    async function unpinGeoArticle(title, btn) {
+    async function unpinGeoArticle(title, btn, link) {
         if (!confirm('Unpin "' + title + '"? The article stays on the board on its normal clock.')) return;
         lockGeoActions(btn, '…');
         try {
-            await _blocklistAction('/api/geo-unpin', 'POST', title);
+            // /api/geo-unpin reads `headline` (title kept for the shared helper); link is the stable key.
+            await _blocklistAction('/api/geo-unpin', 'POST', title, null, {headline: title, link: link || ''});
             setTimeout(() => { fetchData(); scheduleRefresh(); }, 500);
         } catch(e) {
             alert(`Failed to unpin "${title}": ${e.message}\n\nThe article is still pinned. Please try again.`);
@@ -1284,7 +1285,8 @@
             const unpinBtn = e.target.closest('.geo-unpin-btn');
             if (unpinBtn) {
                 const title = decodeURIComponent(unpinBtn.getAttribute('data-title') || '');
-                if (title) unpinGeoArticle(title, unpinBtn);
+                const link = decodeURIComponent(unpinBtn.getAttribute('data-link') || '');
+                if (title) unpinGeoArticle(title, unpinBtn, link);
                 return;
             }
             const unblockBtn = e.target.closest('.geo-unblock-btn');
