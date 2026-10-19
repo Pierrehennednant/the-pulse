@@ -42,6 +42,20 @@ _NY_TZ = ZoneInfo('America/New_York')
 _ET_LABEL_RE = re.compile(r'\s*\b(?:EST|EDT|ET)\s*$')
 
 
+def _first_text(response):
+    """Joined text of the response's text content blocks, or '' if none.
+    Models that return a thinking block first (claude-haiku-5-5) put a
+    ThinkingBlock (no .text attribute) ahead of the text block, so indexing
+    the first block's .text raised "'ThinkingBlock' object has no attribute
+    'text'". Callers treat '' exactly like the empty/bad response they
+    already handle."""
+    blocks = getattr(response, 'content', None) or []
+    return ''.join(
+        getattr(b, 'text', '') or '' for b in blocks
+        if getattr(b, 'type', None) == 'text'
+    )
+
+
 def _et_display(dt):
     """Aware datetime -> 'Mon DD, HH:MM AM EDT|EST' in New York time."""
     local = dt.astimezone(_NY_TZ)
@@ -2673,7 +2687,7 @@ Articles to classify:
                     max_tokens=8192,
                     messages=[{"role": "user", "content": prompt}]
                 )
-                text = response.content[0].text.strip()
+                text = _first_text(response).strip()
                 if '```' in text:
                     text = text.split('```')[1]
                     if text.startswith('json'):
@@ -2691,7 +2705,7 @@ Articles to classify:
                 raw_preview = None
                 if response is not None:
                     try:
-                        raw_preview = response.content[0].text[:200]
+                        raw_preview = _first_text(response)[:200]
                     except Exception:
                         raw_preview = None
                 pulse_logger.log(
@@ -3251,7 +3265,7 @@ Respond with only one word: SAME or DIFFERENT"""
                 max_tokens=10,
                 messages=[{"role": "user", "content": prompt}]
             )
-            result = response.content[0].text.strip().upper()
+            result = _first_text(response).strip().upper()
             return result == "SAME"
         except Exception as e:
             pulse_logger.log(f"⚠️ Haiku story comparison failed: {e}", level="WARNING")
@@ -3292,7 +3306,7 @@ Respond with only one word: DIVERGED or UNCHANGED"""
                 max_tokens=10,
                 messages=[{"role": "user", "content": prompt}]
             )
-            result = response.content[0].text.strip().upper()
+            result = _first_text(response).strip().upper()
             if result == "UNCHANGED":
                 return False
             # "DIVERGED", or anything malformed/unexpected — fail closed.
@@ -3529,7 +3543,7 @@ CONTEXT: {context}"""
                     max_tokens=512,
                     messages=[{"role": "user", "content": prompt}]
                 )
-                text = response.content[0].text.strip()
+                text = _first_text(response).strip()
                 if '```' in text:
                     text = text.split('```')[1]
                     if text.startswith('json'):

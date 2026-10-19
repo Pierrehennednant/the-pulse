@@ -536,7 +536,13 @@ class EconomicCalendarPipeline:
                 max_tokens=8,
                 messages=[{'role': 'user', 'content': prompt}]
             )
-            tier = response.content[0].text.strip().upper()
+            # Thinking-first models put a ThinkingBlock (no .text) ahead of
+            # the text block; join only text blocks ('' -> default T2 below).
+            text = ''.join(
+                getattr(b, 'text', '') or '' for b in (getattr(response, 'content', None) or [])
+                if getattr(b, 'type', None) == 'text'
+            )
+            tier = text.strip().upper()
             if tier not in ('T1', 'T2', 'T3'):
                 pulse_logger.log(f"⚠️ Haiku returned unexpected presidential tier '{tier}' — defaulting to T2", level="WARNING")
                 return 'T2'
