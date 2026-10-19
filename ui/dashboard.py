@@ -502,6 +502,50 @@ def _finish_geo_blocklist_post_actions(label):
         pulse_logger.log(f"⚠️ {label} partial refresh failed: {refresh_err}", level="WARNING")
 
 
+def _finish_geo_unpin_post_actions(label, headline, link):
+    """Unpin's background post-action. Unpin keeps the card, so first clear
+    its pin marker on the cached geo pillar (dropping an injected pin copy
+    only if its own 48h clock already expired) and recompute the geo score,
+    then hand off to the SAME post-action block uses
+    (_finish_geo_blocklist_post_actions: cache sync, pin scrub,
+    _run_partial_refresh -> fresh snapshot for /api/latest)."""
+    try:
+        from pipelines.geopolitical import geopolitical_pipeline as gp
+        from utils.cache import cache as _cache
+        key = gp._unpin_headline_key(headline)
+
+        def _is_target(item):
+            same_link = bool(link) and (item.get('link') or '').strip() == link
+            return same_link or gp._unpin_headline_key(
+                item.get('headline') or item.get('title') or '') == key
+
+        geo_cached = _cache.load('geopolitical')
+        data = geo_cached.get('data') if geo_cached else None
+        if isinstance(data, dict):
+            items = data.get('all_items', data.get('news_items', [])) or []
+            kept, cleared, dropped = [], 0, 0
+            for item in items:
+                if _is_target(item) and (item.get('pinned') or item.get('pin_active')):
+                    if item.get('pinned') and gp._pin_is_expired(item):
+                        dropped += 1          # injected pin copy past its clock
+                        continue
+                    item['pinned'] = False
+                    item['pin_active'] = False
+                    cleared += 1
+                kept.append(item)
+            if cleared or dropped:
+                flags = gp.identify_flags(kept)
+                score = gp.calculate_score(kept, flags)
+                data.update({'all_items': kept, 'news_items': kept[:10],
+                             'active_flags': flags, 'total_items': len(kept),
+                             'pillar_score': score})
+                _cache.save('geopolitical', data)
+                pulse_logger.log(f"📌 {label} — cache pin marker cleared={cleared} dropped_expired={dropped}, score recomputed: {score}")
+    except Exception as cache_err:
+        pulse_logger.log(f"⚠️ {label} cached pin-marker clear failed: {cache_err}", level="WARNING")
+    _finish_geo_blocklist_post_actions(label)
+
+
 @app.route('/api/geo-blocklist', methods=['POST'])
 @require_auth
 def add_geo_blocklist():
@@ -629,6 +673,13 @@ def geo_unpin():
         return jsonify({'error': result.get('error', 'Unpin failed')}), 400
     # _blocklistAction() only accepts status 'added'/'removed' as success.
     result['status'] = 'removed'
+    # Same post-response background refresh block gets (reuses its function).
+    threading.Thread(
+        target=_finish_geo_unpin_post_actions,
+        args=(f"geo-unpin | {result.get('headline', headline)[:40]}",
+              result.get('headline', headline), link),
+        daemon=True
+    ).start()
     return jsonify(result)
 
 @app.route('/api/macro/manual_pull', methods=['POST'])
