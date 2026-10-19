@@ -2669,7 +2669,7 @@ Articles to classify:
             response = None
             try:
                 response = self.anthropic_client.messages.create(
-                    model="claude-haiku-4-5-20251001",
+                    model="claude-haiku-5-5",
                     max_tokens=8192,
                     messages=[{"role": "user", "content": prompt}]
                 )
@@ -3221,7 +3221,7 @@ Examples of DIFFERENT story:
 Respond with only one word: SAME or DIFFERENT"""
 
             response = self.anthropic_client.messages.create(
-                model="claude-haiku-4-5-20251001",
+                model="claude-haiku-5-5",
                 max_tokens=10,
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -3262,7 +3262,7 @@ Despite matching direction/tier, has the underlying situation materially changed
 Respond with only one word: DIVERGED or UNCHANGED"""
 
             response = self.anthropic_client.messages.create(
-                model="claude-haiku-4-5-20251001",
+                model="claude-haiku-5-5",
                 max_tokens=10,
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -3499,7 +3499,7 @@ CONTEXT: {context}"""
 
             try:
                 response = self.anthropic_client.messages.create(
-                    model="claude-haiku-4-5-20251001",
+                    model="claude-haiku-5-5",
                     max_tokens=512,
                     messages=[{"role": "user", "content": prompt}]
                 )
