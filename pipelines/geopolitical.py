@@ -870,15 +870,19 @@ def _geo_save_campaigns(records):
         pulse_logger.log(f"⚠️ Campaign records save failed: {e}", level="WARNING")
 
 
-def _geo_campaign_apply(records, headline, description, current_kind, tier, source):
+def _geo_campaign_apply(records, headline, description, current_kind, tier, source, reaction_only=False):
     """The single owner of the first_print vs follow_up kind decision.
 
     1. Talk check (folded in, not a separate pass): pure talk -> follow_up,
        24h clock, no pin.
-    2. Campaign record: a matched actor|target|place campaign with no new
+    2. Price-reaction check: Haiku's reaction_only verdict (the article's
+       own news is a price move caused by a geo event, not a new event)
+       -> follow_up, 24h clock, no pin, never seeds a campaign; the
+       scorer excludes it as well: the event's own card carries the vote.
+    3. Campaign record: a matched actor|target|place campaign with no new
        fact -> follow_up (recap; last_seen NOT advanced). A real NEW FACT
        advances last_seen; kind itself is never upgraded here.
-    3. No record: seed from an accepted Tier 1 or Tier 2 first_print; otherwise
+    4. No record: seed from an accepted Tier 1 or Tier 2 first_print; otherwise
        keep Haiku's kind (unlisted actor/target/place falls back to Haiku).
 
     Returns (kind, log_line_or_None). Mutates records (seed / advance)."""
@@ -886,6 +890,10 @@ def _geo_campaign_apply(records, headline, description, current_kind, tier, sour
     if word:
         return 'follow_up', (
             f"GEO CAMPAIGN TALK FORCE FOLLOW_UP | word={word} | clock=24h | "
+            f"no pin | headline={(headline or '')[:90]}")
+    if reaction_only:
+        return 'follow_up', (
+            f"GEO CAMPAIGN REACTION FORCE FOLLOW_UP | price-reaction only | clock=24h | "
             f"no pin | headline={(headline or '')[:90]}")
     kind = current_kind if current_kind in ('first_print', 'follow_up') else 'first_print'
     key = _geo_campaign_key(headline, description)
@@ -1608,6 +1616,7 @@ class GeopoliticalPipeline:
         'uncertainty_score': 'uncertainty_score',
         'kind': 'kind',
         'gate_pass': 'haiku_gate_pass',
+        'reaction_only': 'reaction_only',
         # Event-identity fold (see _event_decide() Rule A): the item is the
         # same event as an earlier card — it rides that card's clock and is
         # never a separate vote in calculate_score().
@@ -2616,6 +2625,8 @@ Use kind as either "first_print" or "follow_up" for every relevant item, per the
 If relevant is false, still provide a summary field but it can be empty string.
 Use gate_pass: false ONLY for an item that fails the POLITICAL PRESSURE ON THE FED — GATE above — it stays relevant: true (still gets a kind and clock so it stays visible), but direction must be "neutral" and tier must be omitted, so it contributes zero score. Omit gate_pass entirely (or use true) for every other item — this field exists solely to mark that one gate-failure case as visible-but-non-scoring rather than dropped.
 
+Use reaction_only: true ONLY for an item capped by the PRICE-REACTION CAP above that reports no genuinely new event of its own. It stays relevant: true with its capped tier and direction, but the pipeline clocks it as a follow-up and excludes it from the score, because the event's own card carries the vote. Omit reaction_only entirely (or use false) for every other item.
+
 DECISION 4 — UNCERTAINTY SCORE
 Rate how much uncertainty and execution difficulty this event creates for a day trader on a scale of 0-100.
 This is NOT about how bearish or bullish the event is. This is ONLY about whether the event creates fragmented, unpredictable price action that makes clean entries difficult.
@@ -2653,7 +2664,7 @@ Key rules:
 - Prioritize actual market impact and context over headline keywords. The presence of words like "ceasefire" or "deal" does not automatically make something Tier 1 — evaluate whether a real, credible development occurred.
 - When uncertain between tiers, default to the lower tier.
 - FOLLOW-UP TIER RULE: When the article is a FOLLOW_UP (reaction, commentary, or interview about an already-covered event), tier based on what THIS article contributes — not the parent event's magnitude. A follow-up that introduces no new action, no new policy, and no new escalation is Tier 3, even if the event it reacts to was Tier 1 or Tier 2. The parent event's tier belongs to the parent's card; re-tiering the same event through its reactions is double-counting. Example: a leader's TV interview commenting on an already-scored sanctions decision is Tier 3 (secondary headline), not Tier 2, because the interview itself changes nothing — the sanctions decision was the Tier 2 event, and it already has its card.
-- Price-Reaction Cap: When an article's primary subject is a market price move — oil, gas, gold, equities, bonds, currencies, or volatility spiking or plunging — caused by a geopolitical event, rather than the event itself, cap the tier at Tier 2 even if the underlying event is Tier 1. The Tier 1 weight belongs to the event's own card; the price move is that event's market impact, not a second event. Scoring the same underlying risk at Tier 1 twice (once as the event, once as its price reaction) is double-counting. If the price move reveals a genuinely NEW event not already covered (e.g., the article reports a previously unknown attack as the cause), tier the new event on its own merits — but price action alone never upgrades it.
+- Price-Reaction Cap: When an article's primary subject is a market price move — oil, gas, gold, equities, bonds, currencies, or volatility spiking or plunging — caused by a geopolitical event, rather than the event itself, cap the tier at Tier 2 even if the underlying event is Tier 1. The Tier 1 weight belongs to the event's own card; the price move is that event's market impact, not a second event. Scoring the same underlying risk at Tier 1 twice (once as the event, once as its price reaction) is double-counting. If the price move reveals a genuinely NEW event not already covered (e.g., the article reports a previously unknown attack as the cause), tier the new event on its own merits — but price action alone never upgrades it. Also return "reaction_only": true when this cap applies and the article itself reports no genuinely new geopolitical event. The pipeline then keeps the article visible as a follow-up but gives it no score vote, because the event's own card carries the vote. Omit "reaction_only" (or set it false) whenever the article does report a genuinely new event.
 - De-escalation and peace developments are generally Bullish for US equities. Escalation and conflict are generally Bearish.
 - Oil/Energy Rule: Falling oil prices caused by geopolitical de-escalation or peace deals are Bullish for equities. Only classify oil price moves as Bearish when driven by demand destruction, recession fears, or oversupply.
 - EC PRINTS ARE NOT GEO. Reject as not relevant (relevant: false, no tier, no kind) when the article is primarily a scheduled US data print or household survey recap. This includes Conference Board Consumer Confidence / Expectations / Present Situation, University of Michigan consumer sentiment, JOLTS, Initial or Continuing Jobless Claims, ADP, ISM, PMI, Retail Sales, Housing Starts, Durable Goods, Existing or New Home Sales, Personal Income/Spending, and any "consumer optimism / household mood / confidence slides" write-up of those prints. NFP, CPI (any variant), Core PCE, and GDP are also EC-owned — if the article is only "the number came out," reject it. Geo may keep an article that uses a print as one sentence inside a NEW policy, war, tariff, or supply-chain action (example: "White House announces oil-export ban after CPI print") — the action is the event, not the print. Never use "50% relative deviation" or "Major Economic Data Exception." Those phrases are retired. Percent-miss math lives only in pipelines/economic_calendar.py.
@@ -2830,6 +2841,7 @@ Articles to classify:
         record['tier'] = tier
         record['kind'] = new_kind
         record['gate_pass'] = r.get('gate_pass', True)
+        record['reaction_only'] = bool(r.get('reaction_only'))
         record['tier_reasoning'] = r.get('reasoning', '')
         record['classified_at'] = new_classified_at
         record.pop('drop_reason', None)
@@ -3186,8 +3198,13 @@ Articles to classify:
         in their own reasoning text. Covers pinned_stories.json and the
         gemini_classifications.json cache — records that predate the
         background_classify() consistency check (e.g. the Oct 14
-        Houthis/Saudi pin: "Tier 1 catalyst" prose, tier=2). Idempotent;
-        runs at startup. Every change is loudly logged."""
+        Houthis/Saudi pin: "Tier 1 catalyst" prose, tier=2). Also flags
+        stored records whose own tier reasoning invoked the Price-Reaction
+        Cap ("price-reaction cap" / "price-reaction piece") as
+        reaction_only, demoting a first_print kind to follow_up: the
+        self-heal for pins scored before the reaction_only field existed
+        (e.g. the Oct 21 oil price-reaction card). Idempotent; runs at
+        startup. Every change is loudly logged."""
         changed = 0
         try:
             pins = self.load_pinned_stories()
@@ -3202,6 +3219,17 @@ Articles to classify:
                     pulse_logger.log(
                         f"🧭 Startup tier reconcile (pin) — reasoning claims Tier {claimed}, "
                         f"stored={old} | using {claimed} | '{(pin.get('headline') or '')[:60]}'",
+                        level="WARNING")
+                _rxn_reasoning = pin.get('tier_reasoning', '') or ''
+                if not pin.get('reaction_only') and re.search(r"price[- ]reaction (cap|piece)", _rxn_reasoning, re.IGNORECASE):
+                    pin['reaction_only'] = True
+                    if pin.get('kind') == 'first_print':
+                        pin['kind'] = 'follow_up'
+                    pins_changed = True
+                    changed += 1
+                    pulse_logger.log(
+                        f"🧭 Startup reaction reconcile (pin) — capped price-reaction piece marked "
+                        f"reaction_only, kind -> follow_up | '{(pin.get('headline') or '')[:60]}'",
                         level="WARNING")
             if pins_changed:
                 self.save_pinned_stories(pins)
@@ -3225,6 +3253,17 @@ Articles to classify:
                         pulse_logger.log(
                             f"🧭 Startup tier reconcile (cache) — reasoning claims Tier {claimed}, "
                             f"stored={old} | using {claimed} | '{headline[:60]}'",
+                            level="WARNING")
+                    _rxn_reasoning = rec.get('tier_reasoning', '') or ''
+                    if not rec.get('reaction_only') and re.search(r"price[- ]reaction (cap|piece)", _rxn_reasoning, re.IGNORECASE):
+                        rec['reaction_only'] = True
+                        if rec.get('kind') == 'first_print':
+                            rec['kind'] = 'follow_up'
+                        cache_changed = True
+                        changed += 1
+                        pulse_logger.log(
+                            f"🧭 Startup reaction reconcile (cache) — capped price-reaction piece marked "
+                            f"reaction_only, kind -> follow_up | '{headline[:60]}'",
                             level="WARNING")
                 if cache_changed:
                     atomic_write_json(cache_file, cache_data)
@@ -3524,7 +3563,7 @@ Key rules:
 - Prioritize actual market impact and context over headline keywords. The presence of words like "ceasefire" or "deal" does not automatically make something Tier 1 — evaluate whether a real, credible development occurred.
 - When uncertain between tiers, default to the lower tier.
 - FOLLOW-UP TIER RULE: When the article is a FOLLOW_UP (reaction, commentary, or interview about an already-covered event), tier based on what THIS article contributes — not the parent event's magnitude. A follow-up that introduces no new action, no new policy, and no new escalation is Tier 3, even if the event it reacts to was Tier 1 or Tier 2. The parent event's tier belongs to the parent's card; re-tiering the same event through its reactions is double-counting. Example: a leader's TV interview commenting on an already-scored sanctions decision is Tier 3 (secondary headline), not Tier 2, because the interview itself changes nothing — the sanctions decision was the Tier 2 event, and it already has its card.
-- Price-Reaction Cap: When an article's primary subject is a market price move — oil, gas, gold, equities, bonds, currencies, or volatility spiking or plunging — caused by a geopolitical event, rather than the event itself, cap the tier at Tier 2 even if the underlying event is Tier 1. The Tier 1 weight belongs to the event's own card; the price move is that event's market impact, not a second event. Scoring the same underlying risk at Tier 1 twice (once as the event, once as its price reaction) is double-counting. If the price move reveals a genuinely NEW event not already covered (e.g., the article reports a previously unknown attack as the cause), tier the new event on its own merits — but price action alone never upgrades it.
+- Price-Reaction Cap: When an article's primary subject is a market price move — oil, gas, gold, equities, bonds, currencies, or volatility spiking or plunging — caused by a geopolitical event, rather than the event itself, cap the tier at Tier 2 even if the underlying event is Tier 1. The Tier 1 weight belongs to the event's own card; the price move is that event's market impact, not a second event. Scoring the same underlying risk at Tier 1 twice (once as the event, once as its price reaction) is double-counting. If the price move reveals a genuinely NEW event not already covered (e.g., the article reports a previously unknown attack as the cause), tier the new event on its own merits — but price action alone never upgrades it. Also return "reaction_only": true when this cap applies and the article itself reports no genuinely new geopolitical event. The pipeline then keeps the article visible as a follow-up but gives it no score vote, because the event's own card carries the vote. Omit "reaction_only" (or set it false) whenever the article does report a genuinely new event.
 - De-escalation and peace developments are generally Bullish for US equities. Escalation and conflict are generally Bearish.
 - Oil/Energy Rule: Falling oil prices caused by geopolitical de-escalation or peace deals are Bullish for equities. Only classify oil price moves as Bearish when driven by demand destruction, recession fears, or oversupply.
 - EC PRINTS ARE NOT GEO. Reject as not relevant (relevant: false, no tier, no kind) when the article is primarily a scheduled US data print or household survey recap. This includes Conference Board Consumer Confidence / Expectations / Present Situation, University of Michigan consumer sentiment, JOLTS, Initial or Continuing Jobless Claims, ADP, ISM, PMI, Retail Sales, Housing Starts, Durable Goods, Existing or New Home Sales, Personal Income/Spending, and any "consumer optimism / household mood / confidence slides" write-up of those prints. NFP, CPI (any variant), Core PCE, and GDP are also EC-owned — if the article is only "the number came out," reject it. Geo may keep an article that uses a print as one sentence inside a NEW policy, war, tariff, or supply-chain action (example: "White House announces oil-export ban after CPI print") — the action is the event, not the print. Never use "50% relative deviation" or "Major Economic Data Exception." Those phrases are retired. Percent-miss math lives only in pipelines/economic_calendar.py.
@@ -4662,7 +4701,7 @@ CONTEXT: {context}"""
                 art = source_items[idx]
                 kind, logline = _geo_campaign_apply(
                     records, art.get('headline', ''), art.get('description', ''),
-                    r.get('kind'), r.get('tier'), source)
+                    r.get('kind'), r.get('tier'), source, reaction_only=bool(r.get('reaction_only')))
                 r['kind'] = kind
                 if logline and logline.startswith('GEO CAMPAIGN TALK FORCE FOLLOW_UP'):
                     # Transient marker (not in the cache whitelist): tells
@@ -5339,6 +5378,7 @@ CONTEXT: {context}"""
                                     # scored — see calculate_score()). Defaults true/absent-key-safe
                                     # for every other item, same as before this field existed.
                                     'gate_pass': r.get('gate_pass', True),
+                                    'reaction_only': bool(r.get('reaction_only')),
                                     'tier_reasoning': r.get('reasoning', ''),
                                     'text_source': text_source,
                                     # Stored source text for later force_reclassify() —
@@ -5705,6 +5745,7 @@ CONTEXT: {context}"""
         fallback_tier_count = 0
         pending_count = 0
         gate_failed_count = 0
+        reaction_only_count = 0
         folded_count = 0
         event_folded_count = 0
         tier_map = {1: (1.7, 4.0), 2: (0.75, 2.0), 3: (0.35, 1.0)}
@@ -5730,6 +5771,15 @@ CONTEXT: {context}"""
             # which can still be nonzero.
             if item.get('haiku_gate_pass') is False:
                 gate_failed_count += 1
+                continue
+            # Price-reaction-only items (Haiku's reaction_only verdict: the
+            # article's own news is a market price move caused by a geo event,
+            # not a new event) stay visible but NEVER contribute a score —
+            # the event's own card carries the vote (Price-Reaction Cap).
+            # Checked on the flag, not the kind, so no later kind promotion
+            # can restore the vote.
+            if item.get('reaction_only'):
+                reaction_only_count += 1
                 continue
             # App-layer EC fold (Sep 18 Warsh fix) — a recap/analysis article
             # about an FOMC event the EC pillar already scored never
@@ -5822,6 +5872,8 @@ CONTEXT: {context}"""
             pulse_logger.log(f"⏳ Geo — {pending_count} article(s) excluded from score, pending Haiku classification")
         if gate_failed_count:
             pulse_logger.log(f"🚪 Geo — {gate_failed_count} article(s) excluded from score, failed the political pressure gate (visible, non-scoring)")
+        if reaction_only_count:
+            pulse_logger.log(f"🚫 Geo — {reaction_only_count} article(s) excluded from score, price-reaction only (visible, non-scoring)")
         if folded_count:
             pulse_logger.log(f"🔗 Geo — {folded_count} article(s) excluded from score, folded into an existing EC event (visible, non-scoring)")
         if event_folded_count:
@@ -5903,6 +5955,7 @@ CONTEXT: {context}"""
                             'tier': tier,
                             'kind': kind,
                             'gate_pass': r.get('gate_pass', True),
+                            'reaction_only': bool(r.get('reaction_only')),
                             'tier_reasoning': r.get('reasoning', ''),
                             'text_source': text_source,
                             'article_text': pending[idx].get('_full_text', ''),
