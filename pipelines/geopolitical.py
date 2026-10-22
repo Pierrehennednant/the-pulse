@@ -1970,7 +1970,7 @@ class GeopoliticalPipeline:
 
     # Tier-claim patterns for the reasoning/tier consistency check.
     _TIER_CLAIM_RE = re.compile(r'\btier\s*([123])\b', re.IGNORECASE)
-    _TIER_NEG_RE = re.compile(r'\b(?:not|n\'t|no|never)\b[\w\s]{0,14}$', re.IGNORECASE)
+    _TIER_NEG_RE = re.compile(r"\b(?:not|n\'t|no|never|rather\s+than|instead\s+of)\b[\w\s]{0,14}$", re.IGNORECASE)
 
     @staticmethod
     def _reasoning_tier_claim(reasoning):
@@ -1979,8 +1979,10 @@ class GeopoliticalPipeline:
         Haiku returns both a structured `tier` and free-text `reasoning`;
         the two have disagreed in production ("Tier 1 catalyst" prose with
         tier=2 on the Oct 14 Houthis/Saudi pin). A bare regex would misread
-        negations ("Not Tier 1 because no active kinetic conflict"), so a
-        claim only counts when not negated in the preceding words. When
+        negations ("Not Tier 1 because no active kinetic conflict") and
+        comparative rejections ("Tier 2 rather than Tier 1" — the first
+        mention is the verdict, the second is the rejected alternative),
+        so a claim only counts when not negated in the preceding words. When
         several affirmative claims exist, the last one wins — reasoning
         typically concludes with the final tier ("downgraded from Tier 1
         to Tier 2"). Returns 1, 2, 3, or None.
