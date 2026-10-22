@@ -3273,8 +3273,14 @@ Articles to classify:
             pulse_logger.log(f"🧭 Startup tier reconcile — {changed} record(s) aligned to reasoning claims")
         return changed
 
-    def is_same_story(self, new_headline, other_headline):
-        """Ask Haiku whether two headlines cover the same underlying story.
+    def is_same_story(self, new_headline, other_headline, new_summary='', other_summary=''):
+        """Ask Haiku whether two articles cover the same underlying story.
+
+        Judged on headline PLUS each article's own summary: a re-titled or
+        roundup article's headline can point at a side detail while its story
+        is the event already on the board, and a headline-only comparison
+        structurally misses those. A missing summary falls back to the
+        headline alone for that side.
 
         Used only for duplicate-event detection (re-titled coverage of one event),
         never as a pin/scoring eviction gate — a SAME verdict here merges or skips
@@ -3283,12 +3289,18 @@ Articles to classify:
         if self.anthropic_client is None:
             return False
         try:
-            prompt = f"""You are evaluating whether two news headlines are about the same underlying geopolitical or market story.
+            new_block = f"NEW ARTICLE: {new_headline}"
+            if (new_summary or '').strip():
+                new_block += f"\nNEW ARTICLE SUMMARY: {new_summary.strip()[:600]}"
+            other_block = f"EXISTING ARTICLE: {other_headline}"
+            if (other_summary or '').strip():
+                other_block += f"\nEXISTING ARTICLE SUMMARY: {other_summary.strip()[:600]}"
+            prompt = f"""You are evaluating whether two news articles are about the same underlying geopolitical or market story.
 
-NEW ARTICLE: {new_headline}
-EXISTING ARTICLE: {other_headline}
+{new_block}
+{other_block}
 
-Are these two headlines covering the same underlying story or event — even if the outcome has changed or the angle is different?
+Are these two articles covering the same underlying story or event — even if the outcome has changed or the angle is different? Judge the underlying event, not the headline wording: a headline may spotlight a different detail of the same event, so when the headlines alone are ambiguous, decide from what each article is actually about.
 
 Examples of SAME story:
 - "Hormuz blockade tightens" and "Iran opens Hormuz to commercial vessels" — same story, outcome changed
@@ -5405,8 +5417,10 @@ CONTEXT: {context}"""
                                     ]
                                     active_entries.sort(key=lambda hc: hc[1].get('classified_at', ''), reverse=True)
                                     candidates = active_entries[:15]
-                                    for existing_headline, _ in candidates:
-                                        if self.is_same_story(headline, existing_headline):
+                                    for existing_headline, existing_class in candidates:
+                                        if self.is_same_story(headline, existing_headline,
+                                                              new_class.get('summary', ''),
+                                                              existing_class.get('summary', '')):
                                             duplicate_of = existing_headline
                                             break
                                     # Explicit outcome every time this runs — a silent miss here is
