@@ -2134,6 +2134,7 @@ class GeopoliticalPipeline:
         self._ensure_geo_blocklist()
         self._seed_classifications()
         self._purge_blocked_from_cache()
+        self.reconcile_stored_tier_claims()
         self.market_keywords = [
             'federal reserve', 'fomc', 'interest rate', 'interest rates',
             'rate hike', 'rate hikes', 'rate cut', 'rate cuts',
