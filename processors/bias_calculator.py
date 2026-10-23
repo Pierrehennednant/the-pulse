@@ -22,7 +22,9 @@ class BiasCalculator:
         pillar_signals = []
         pillar_signal_map = {}    # config_key → signal, for weight-aware agreement
         active_pillar_weights = {}  # config_key → effective weight, for active pillars only
-        weights = PILLAR_WEIGHTS
+        # COT weight cut 25 -> 12 (Pierre, Oct 23 2026). Override applied here,
+        # not in config.PILLAR_WEIGHTS, so no other importer changes.
+        weights = {**PILLAR_WEIGHTS, 'institutional': 12}
 
         weight_map = {
             'economic': 'economic_calendar',
@@ -34,6 +36,9 @@ class BiasCalculator:
         for data_key, config_key in weight_map.items():
             pillar_data = formatted_data.get(data_key, {})
             score = pillar_data.get('pillar_score', 0)
+            # COT pillar score clamp — cap to [-0.6, +0.6] before weighting.
+            if config_key == 'institutional' and score is not None:
+                score = max(-0.6, min(0.6, score))
             base_weight = weights.get(config_key, 0)
             weight = base_weight
             status = pillar_data.get('status', 'unavailable')

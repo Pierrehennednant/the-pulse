@@ -22,8 +22,8 @@ class PropFirmRecommendationEngine:
       Moderate-edge confidence 55%–69%
       Strong-edge confidence   ≥70%
       Pillar alignment         ≥45% of total week weight must agree with bias
-                               Quiet week: EC 15%, total 85%, threshold ≥38.25%
-                               Standard week: EC 30%, total 100%, threshold ≥45%
+                               Quiet week: EC 15%, total 72%, threshold ≥32.4%
+                               Standard week: EC 30%, total 87%, threshold ≥39.15%
 
     Quiet week = 0 or 1 calendar days with at least one red folder event.
     A day with multiple red folder events counts as 1 red folder day.
@@ -43,8 +43,8 @@ class PropFirmRecommendationEngine:
         self.timezone = pytz.timezone(TIMEZONE)
 
     _WEEK_WEIGHTS = {
-        'standard': {'economic_calendar': 30, 'geopolitical': 25, 'institutional': 25, 'macro_sentiment': 20},
-        'quiet':    {'economic_calendar': 15, 'geopolitical': 25, 'institutional': 25, 'macro_sentiment': 20},
+        'standard': {'economic_calendar': 30, 'geopolitical': 25, 'institutional': 12, 'macro_sentiment': 20},
+        'quiet':    {'economic_calendar': 15, 'geopolitical': 25, 'institutional': 12, 'macro_sentiment': 20},
     }
 
     def _get_weekly_threshold(self, econ_data):
@@ -130,8 +130,8 @@ class PropFirmRecommendationEngine:
                     'is_new_week': False,
                     'is_quiet_week': held['is_quiet_week'],
                     'ec_weight': held['ec_weight'],
-                    'total_weight': held['total_weight'],
-                    'alignment_threshold': held['alignment_threshold'],
+                    'total_weight': sum(self._WEEK_WEIGHTS['quiet' if held['is_quiet_week'] else 'standard'].values()),
+                    'alignment_threshold': round(sum(self._WEEK_WEIGHTS['quiet' if held['is_quiet_week'] else 'standard'].values()) * 0.45, 2),
                 }
             # No prior value at all — compute honestly from whatever econ_data
             # has (as before) but don't persist it.
@@ -139,7 +139,7 @@ class PropFirmRecommendationEngine:
             is_quiet = red_folder_days <= 1
             threshold = 0.30 if is_quiet else 0.33
             ec_weight = 15 if is_quiet else 30
-            total_weight = 85 if is_quiet else 100
+            total_weight = sum(self._WEEK_WEIGHTS['quiet' if is_quiet else 'standard'].values())
             return {
                 'bias_threshold': threshold,
                 'red_folder_days': red_folder_days,
@@ -166,14 +166,14 @@ class PropFirmRecommendationEngine:
                 'is_new_week': False,
                 'is_quiet_week': same_day_cached['is_quiet_week'],
                 'ec_weight': same_day_cached['ec_weight'],
-                'total_weight': same_day_cached['total_weight'],
-                'alignment_threshold': same_day_cached['alignment_threshold'],
+                'total_weight': sum(self._WEEK_WEIGHTS['quiet' if same_day_cached['is_quiet_week'] else 'standard'].values()),
+                'alignment_threshold': round(sum(self._WEEK_WEIGHTS['quiet' if same_day_cached['is_quiet_week'] else 'standard'].values()) * 0.45, 2),
             }
 
         threshold = 0.30 if is_quiet else 0.33
         ec_weight = 15 if is_quiet else 30
-        total_weight = 85 if is_quiet else 100
-        alignment_threshold = round(total_weight * 0.45, 2)  # 38.25 (quiet) or 45.0 (standard)
+        total_weight = sum(self._WEEK_WEIGHTS['quiet' if is_quiet else 'standard'].values())
+        alignment_threshold = round(total_weight * 0.45, 2)  # 32.4 (quiet) or 39.15 (standard)
 
         # Change-log baseline: prefer today's own (now-stale) cached value if
         # one exists, so a same-day correction is reported the same way a

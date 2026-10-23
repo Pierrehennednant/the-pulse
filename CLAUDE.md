@@ -23,7 +23,7 @@ Weights are **fixed** (no regime switching):
 |---|---|---|
 | Economic Calendar | 30% | `pipelines/economic_calendar.py` |
 | Geopolitical | 25% | `pipelines/geopolitical.py` — Claude Haiku |
-| Institutional (COT) | 25% | `pipelines/institutional.py` |
+| Institutional (COT) | 12% (score capped ±0.6) | `pipelines/institutional.py` |
 | Macro Sentiment | 20% | `pipelines/macro_sentiment.py` |
 
 Final bias assembled in `processors/bias_calculator.py`. Dashboard rendered in `ui/dashboard.py` + `ui/templates/`.
@@ -38,7 +38,7 @@ Institutional weight is reduced progressively Mon–Thu based on staleness since
 |---|---|---|
 | Friday before 3:30 PM EST | 55% (floor — awaiting new release) | `📉 COT decay applied` |
 | Friday after 3:30 PM EST | 100% (new data posted) | — |
-| Monday (fresh — fetch succeeded) | 100% | `✅ COT weight — Monday, full 25% effective` |
+| Monday (fresh — fetch succeeded) | 100% | `✅ COT weight — Monday, full 12% effective` |
 | Monday (stale — fetch failed) | 55% (freshness guard) | `📉 COT freshness guard — Monday but data is last week's` |
 | Tuesday | 85% | `📉 COT decay applied` |
 | Wednesday | 70% | `📉 COT decay applied` |
@@ -219,8 +219,8 @@ the next 9:40 AM ET slot.
 
 **Quiet week mode (Prop Firm only):** Recomputed once per calendar day — on the first genuinely-live Economic Calendar cycle of that day (`status` not `unavailable`/`stale`, `events` non-empty) — then held for the rest of the day. Same-day freshness, not same-cycle (5-minute) freshness: the red-folder-day count changes because of calendar edits (new event added, reclassified impact), not live market movement, so recomputing every 5 minutes would just add noise and risk a false "classification changed" line firing on a transient bad cycle. Counts red folder **days** (not individual events — a day with multiple red folder events counts as 1 red folder day), via the shared `economic_calendar_pipeline._count_red_folder_days()` (excludes `SCORING_EXCLUSIONS`). Persisted to `/data/prop_firm_weekly_threshold.json`, keyed by calendar date. On a cycle where EC data isn't usable, the last computed day's value is held rather than recomputed from empty data.
 
-- 0 or 1 red folder days → quiet week: bias threshold ± 0.30, EC weight drops from 30% to 15%, total weight 85%, pillar alignment threshold 45% of 85% = 38.25%
-- 2+ red folder days → standard week: bias threshold ± 0.33, EC weight 30%, total weight 100%, pillar alignment threshold 45%
+- 0 or 1 red folder days → quiet week: bias threshold ± 0.30, EC weight drops from 30% to 15%, total weight 72%, pillar alignment threshold 45% of 72% = 32.4%
+- 2+ red folder days → standard week: bias threshold ± 0.33, EC weight 30%, total weight 87%, pillar alignment threshold 45% of 87% = 39.15%
 
 Logged on the first live cycle of each day:
 ```
