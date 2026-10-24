@@ -276,7 +276,7 @@
             <div class="pillar-title">🏦 Institutional Positioning</div>
             <div class="pillar-score" id="inst-score-badge">--</div>
         </div>
-        <div class="pillar-weight" id="weight-inst">Weight: 12% (score capped ±0.6) | COT Report (Updates Fridays)</div>
+        <div class="pillar-weight" id="weight-inst">Weight: 12% | COT Report (Updates Fridays)</div>
         <div id="inst-content">Loading...</div>
     </div>
     <div class="pillar-card" id="card-macro">
@@ -747,10 +747,8 @@
         document.getElementById('econ-score-badge').className = `pillar-score ${scoreClass(econ.pillar_score || 0)}`;
         document.getElementById('econ-content').innerHTML = renderEconomic(econ);
         const inst = pillars.institutional || {};
-        // Badge shows the COT score actually used by the bias calc (clamped to ±0.6).
-        const instUsed = Math.max(-0.6, Math.min(0.6, inst.pillar_score || 0));
-        document.getElementById('inst-score-badge').textContent = `${scoreLabel(instUsed)} (${instUsed.toFixed(2)})`;
-        document.getElementById('inst-score-badge').className = `pillar-score ${scoreClass(instUsed)}`;
+        document.getElementById('inst-score-badge').textContent = scoreLabel(inst.pillar_score || 0);
+        document.getElementById('inst-score-badge').className = `pillar-score ${scoreClass(inst.pillar_score || 0)}`;
         document.getElementById('inst-content').innerHTML = renderInstitutional(inst);
         const macro = pillars.macro || {};
         document.getElementById('macro-score-badge').textContent = scoreLabel(macro.pillar_score || 0);
@@ -768,7 +766,7 @@
         const macroW = pc.macro_sentiment && pc.macro_sentiment.base_weight != null ? Math.round(pc.macro_sentiment.base_weight) : 20;
         const geoW = pc.geopolitical && pc.geopolitical.base_weight != null ? Math.round(pc.geopolitical.base_weight) : 25;
         document.getElementById('weight-econ').textContent = `Weight: ${econW}% | Red Folder Events Only`;
-        document.getElementById('weight-inst').textContent = `Weight: ${instW}% (score capped ±0.6) | COT Report (Updates Fridays)`;
+        document.getElementById('weight-inst').textContent = `Weight: ${instW}% | COT Report (Updates Fridays)`;
         document.getElementById('weight-macro').textContent = `Weight: ${macroW}% | VIX · VXN · Fear & Greed`;
         document.getElementById('weight-geo').textContent = `Weight: ${geoW}% | Real-time via TheNewsAPI · Updates every 3min`;
         // Quiet week: show Prop Firm's reduced EC weight on the EC pillar card
