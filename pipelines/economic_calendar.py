@@ -861,7 +861,7 @@ class EconomicCalendarPipeline:
                     'impact': event.get('impact', ''),
                     'result': 'pending',
                     'market_impact': 'unknown',
-                    'reason': f'{title} not yet released'
+                    'reason': self._event_definition(title) or f'{title} not yet released'
                 }
                 if self.is_speech_event(event_row['title']):
                     event_row['is_speech'] = True
