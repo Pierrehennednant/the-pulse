@@ -80,13 +80,13 @@ def run_pulse():
     except Exception as e:
         pulse_logger.log(f"⚠️ Geo blocklist reset check failed: {e}", level="WARNING")
 
-    # Geopolitical with 45s thread timeout — parallel fetching + Haiku needs time
+    # Geopolitical with 60s thread timeout — parallel fetching + Haiku needs time
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(geopolitical_pipeline.fetch)
-            geo_data = future.result(timeout=45)
+            geo_data = future.result(timeout=60)
     except concurrent.futures.TimeoutError:
-        pulse_logger.log("⚠️ Geopolitical timed out after 45s — using cache", level="WARNING")
+        pulse_logger.log("⚠️ Geopolitical timed out after 60s — using cache", level="WARNING")
         cached = cache.load("geopolitical")
         geo_data = cached['data'] if cached else {}
     except Exception as e:

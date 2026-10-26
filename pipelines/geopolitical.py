@@ -4915,7 +4915,7 @@ CONTEXT: {context}"""
             '"federal reserve" | tariff | tariffs | war | iran | sanctions | recession | trump'
         ]
 
-        def _news_get(url, label, retries=3, backoff=2, timeout=10):
+        def _news_get(url, label, retries=3, backoff=2, timeout=15):
             # Same loop as utils.retry.fetch_with_retry (3 attempts, 2s/4s
             # waits, retry on 429/5xx and RequestException) plus one log line
             # per failed attempt with elapsed seconds and attempt number.
@@ -5060,7 +5060,7 @@ CONTEXT: {context}"""
             all_futures = cat_futures + qry_futures
 
             try:
-                completed = concurrent.futures.as_completed(all_futures, timeout=40)
+                completed = concurrent.futures.as_completed(all_futures, timeout=55)
                 for future in completed:
                     try:
                         data = future.result()
