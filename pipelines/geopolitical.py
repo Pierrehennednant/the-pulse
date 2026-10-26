@@ -1533,7 +1533,7 @@ def _geo_hard_keep(headline, *texts):
     elif oil_down or eq_up:
         direction = 'bullish'
     else:
-        direction = 'bearish'
+        direction = 'neutral'
     return {'reason': '; '.join(dict.fromkeys(reasons)), 'tier': tier, 'direction': direction}
 
 
