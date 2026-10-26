@@ -1433,6 +1433,15 @@ _GEO_STRIKE_OPTION_RE = re.compile(
 _GEO_EQUITY = r"(?:stocks|stock market|equities|nasdaq|s&p(?: 500)?|dow|wall street|treasur(?:y|ies)|yields?|10-year)"
 _GEO_EQUITY_MOVE_RE = re.compile(r"\b" + _GEO_EQUITY + r"\b[^.;!?]{0,30}?\b(?:" + _GEO_UP + "|" + _GEO_DOWN + r")\b")
 _GEO_TIE_RE = re.compile(r"\b(?:oil|crude|brent|wti|strikes?|iran|war|hormuz)\b")
+# Personal holdings ("his stocks gained", "Trump's portfolio") or personal
+# gains ("made millions") are not a market move: a sentence carrying one
+# gives no equity/yield cue (CBS 10/26 "...his stocks gained millions during Iran war").
+_GEO_PERSONAL_HOLDING_RE = re.compile(
+    r"\b(?:his|her|their|[a-z]+['\u2019]s)\s+(?:own\s+|personal\s+)?(?:stocks?|shares|holdings|portfolios?|stakes?|investments?)\b"
+    r"|\b(?:made|make|making|gained|earned|pocketed|reaped)\s+(?:\$?[\d.,]+\s+)?(?:millions|billions)\b")
+# Oil-move gap may not run through company profit/earnings or stock words
+# ("oil and gas company profits, his stocks gained" is not oil rising).
+_GEO_BENCH_GAP = r"(?:(?!\b(?:profits?|earnings|revenues?|compan(?:y|ies)|firms?|stocks?|shares)\b)[^.;!?]){0,40}?\b"
 _GEO_TIER1_RE = re.compile(
     r"\b(?:order(?:s|ed)? (?:new |renewed |large-scale )?(?:strikes|attacks|military)|launch(?:es|ed)? (?:new |renewed )?"
     r"(?:strikes|attacks)|strikes? (?:began|begins|under ?way|in progress)|(?:strait|hormuz) (?:is |was |has been )?closed|"
@@ -1509,14 +1518,17 @@ def _geo_hard_keep(headline, *texts):
                 reasons.append(f"benchmark move {m.group(2)}%")
         if _GEO_STRIKE_ACTOR_RE.search(s) and _GEO_STRIKE_OPTION_RE.search(s):
             reasons.append("actor + live strike option")
-        if _GEO_EQUITY_MOVE_RE.search(s) and _GEO_TIE_RE.search(s):
+        personal = bool(_GEO_PERSONAL_HOLDING_RE.search(s))
+        if not personal and _GEO_EQUITY_MOVE_RE.search(s) and _GEO_TIE_RE.search(s):
             reasons.append("equity/yield move tied to oil/strike line")
-        if re.search(_GEO_BENCH + r"[^.;!?]{0,40}?\b" + _GEO_UP + r"\b", s):
+        if re.search(_GEO_BENCH + _GEO_BENCH_GAP + _GEO_UP + r"\b", s):
             oil_up = True
-        if re.search(_GEO_BENCH + r"[^.;!?]{0,40}?\b" + _GEO_DOWN + r"\b", s):
+        if re.search(_GEO_BENCH + _GEO_BENCH_GAP + _GEO_DOWN + r"\b", s):
             oil_down = True
-        for m in _GEO_EQUITY_MOVE_RE.finditer(s):
+        for m in ([] if personal else _GEO_EQUITY_MOVE_RE.finditer(s)):
             word = m.group(0)
+            if re.search(r"\b(?:oil|energy|crude|gas)\s+$", s[:m.start()]):
+                continue  # sector move: no market up/down vote
             is_yield = re.match(r"(?:treasur|yield|10-year)", word)
             down = re.search(r"\b" + _GEO_DOWN + r"\b", word)
             if is_yield:
@@ -4689,7 +4701,9 @@ CONTEXT: {context}"""
                 continue
             prev = f"relevant={r.get('relevant')} conf={r.get('confidence')}"
             r['relevant'] = True
-            r['confidence'] = max(r.get('confidence') or 0, 0.75)
+            # Fixed 0.75: the minimum that passes every >= 0.75 gate (cache, scoring,
+            # stock-move check), never inflated by a confident reject's confidence.
+            r['confidence'] = 0.75
             r['tier'], r['direction'] = hk['tier'], hk['direction']
             if r.get('kind') not in ('first_print', 'follow_up'):
                 r['kind'] = 'first_print'
