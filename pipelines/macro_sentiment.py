@@ -27,6 +27,15 @@ INTRADAY_SLOTS = ["09:40", "09:45", "09:55", "10:30"]
 ALWAYS_LIVE_SLOTS = {"09:40", "10:30"}
 VALID_RANGE = (5.0, 100.0)  # sane bounds for both VIX and VXN
 
+# Finding 9: percentile bands. History is FRED daily closes (VIXCLS/VXNCLS),
+# the same series the Level-3 fallback already uses. Percentiles are computed
+# once a day in daily_fred_refresh and cached; cycles only read the cache.
+PCT_WINDOW = 252       # trailing closes in the percentile distribution
+PCT_MIN_HISTORY = 200  # fewer valid closes -> fixed bands (a partial FRED
+                       # pull must never quietly produce skewed percentiles)
+VIX_PCT_FILE = '/data/vix_percentiles.json'
+VXN_PCT_FILE = '/data/vxn_percentiles.json'
+
 class MacroSentimentPipeline:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
@@ -70,6 +79,68 @@ class MacroSentimentPipeline:
             pass
         return None
 
+    # -- Percentile cache (Finding 9) --------------------------------------
+    # Stored distribution: the trailing closes themselves (small JSON), so a
+    # cycle computes an exact rank instead of trusting precomputed cutoffs.
+
+    def _save_percentiles(self, path, closes, scale, reason=''):
+        try:
+            atomic_write_json(path, {
+                'timestamp': datetime.now(self.timezone).isoformat(),
+                'closes': closes,
+                'scale': scale,
+                'reason': reason,
+            })
+        except Exception as e:
+            pulse_logger.log(f"⚠️ Percentile cache write failed: {e}", level="WARNING")
+
+    def _load_percentiles(self, path):
+        try:
+            if os.path.exists(path):
+                with open(path, 'r') as f:
+                    d = json.load(f)
+                    if isinstance(d, dict):
+                        return d
+        except Exception:
+            pass
+        return None
+
+    def _refresh_percentiles(self, symbol, series_id, pct_path):
+        """Daily percentile refresh for one index. Returns (closes, scale).
+        Always logs one MACRO SCALE line, so the scale in use is tellable
+        from logs at all times.
+          - History fetch fails: keep the last good distribution (a one-day
+            stale window is barely different) and say so; only fall back to
+            fixed bands when there is no prior history at all.
+          - Fewer than PCT_MIN_HISTORY closes: a partial pull is suspect
+            data, not a short window — fall back to fixed bands and say so,
+            and overwrite the cache so cycles never rank against it."""
+        prev = self._load_percentiles(pct_path) or {}
+        prev_closes = prev.get('closes') or []
+        try:
+            closes = self._fetch_fred_history(series_id)
+        except Exception as e:
+            if prev_closes:
+                pulse_logger.log(
+                    f"MACRO SCALE | {symbol} percentile | stale history | "
+                    f"reason=history fetch failed: {e} | using closes as of {prev.get('timestamp', '?')}")
+                return prev_closes, 'percentile'
+            pulse_logger.log(
+                f"MACRO SCALE | {symbol} fixed bands | reason=history fetch failed: {e} (no prior history)")
+            self._save_percentiles(pct_path, [], 'fixed', f'history fetch failed: {e}')
+            return None, 'fixed'
+        if len(closes) < PCT_MIN_HISTORY:
+            pulse_logger.log(
+                f"MACRO SCALE | {symbol} fixed bands | reason=too few closes: {len(closes)} "
+                f"(minimum {PCT_MIN_HISTORY})")
+            self._save_percentiles(pct_path, [], 'fixed', f'too few closes: {len(closes)}')
+            return None, 'fixed'
+        window = closes[-PCT_WINDOW:]
+        self._save_percentiles(pct_path, window, 'percentile', '')
+        pulse_logger.log(
+            f"MACRO SCALE | {symbol} percentile | window={len(window)} closes={len(closes)}")
+        return window, 'percentile'
+
     def _fetch_fred_index(self, series_id):
         """Fetch index from FRED. Returns (current, previous) or raises."""
         if not FRED_API_KEY:
@@ -88,8 +159,52 @@ class MacroSentimentPipeline:
         previous = round(float(observations[1]['value']), 2) if len(observations) >= 2 else current
         return current, previous
 
+    def _fetch_fred_history(self, series_id, limit=260):
+        """FRED daily closes for a series, oldest-first. Raises on a missing
+        key or empty response. limit=260 covers the 252-close window plus
+        slack for missing ('.') observations."""
+        if not FRED_API_KEY:
+            raise ValueError("FRED_API_KEY not set")
+        url = (
+            "https://api.stlouisfed.org/fred/series/observations"
+            f"?series_id={series_id}&api_key={FRED_API_KEY}"
+            f"&sort_order=desc&limit={limit}&file_type=json"
+        )
+        response = fetch_with_retry(url, timeout=10)
+        data = response.json()
+        closes = [float(o['value']) for o in data.get('observations', []) if o['value'] != '.']
+        if not closes:
+            raise ValueError(f"No {series_id} data from FRED")
+        return list(reversed(closes))
+
     @staticmethod
-    def _vix_signal(value):
+    def _rank_pct(value, closes):
+        """Percentile rank of value within closes: share at or below it."""
+        if not closes:
+            return None
+        return round(sum(1 for x in closes if x <= value) / len(closes) * 100.0, 1)
+
+    @staticmethod
+    def _pct_signal(value, closes, bear_guard, bull_guard):
+        """Quintile band of value within closes, with an absolute guardrail:
+        an extreme value always reads at least mildly in its own direction,
+        so a truly extreme day cannot hide behind a percentile."""
+        p = sum(1 for x in closes if x <= value) / len(closes) * 100.0
+        sig = ('strongly_bullish' if p < 20 else
+               'mildly_bullish' if p < 40 else
+               'neutral' if p < 60 else
+               'mildly_bearish' if p < 80 else
+               'strongly_bearish')
+        if value >= bear_guard and sig in ('strongly_bullish', 'mildly_bullish', 'neutral'):
+            sig = 'mildly_bearish'
+        if value <= bull_guard and sig in ('strongly_bearish', 'mildly_bearish', 'neutral'):
+            sig = 'mildly_bullish'
+        return sig
+
+    @staticmethod
+    def _vix_signal(value, closes=None):
+        if closes:
+            return MacroSentimentPipeline._pct_signal(value, closes, 30.0, 12.0)
         return (
             'strongly_bullish' if value < 15.0 else
             'mildly_bullish' if value < 17.0 else
@@ -99,7 +214,9 @@ class MacroSentimentPipeline:
         )
 
     @staticmethod
-    def _vxn_signal(value):
+    def _vxn_signal(value, closes=None):
+        if closes:
+            return MacroSentimentPipeline._pct_signal(value, closes, 35.0, 14.0)
         return (
             'strongly_bullish' if value < 18.0 else
             'mildly_bullish' if value < 20.0 else
@@ -114,12 +231,13 @@ class MacroSentimentPipeline:
         pulls — without this, vix_cache.json/vxn_cache.json would never update
         again once yfinance became the primary source, and the prior-day-close
         fallback would silently rot."""
-        for symbol, series_id, saver, signal_fn in (
-            ('VIX', 'VIXCLS', self._save_vix_cache, self._vix_signal),
-            ('VXN', 'VXNCLS', self._save_vxn_cache, self._vxn_signal),
+        for symbol, series_id, saver, signal_fn, pct_path in (
+            ('VIX', 'VIXCLS', self._save_vix_cache, self._vix_signal, VIX_PCT_FILE),
+            ('VXN', 'VXNCLS', self._save_vxn_cache, self._vxn_signal, VXN_PCT_FILE),
         ):
             try:
                 current, previous = self._fetch_fred_index(series_id)
+                closes, scale = self._refresh_percentiles(symbol, series_id, pct_path)
                 change = round(current - previous, 2)
                 change_pct = round((change / previous) * 100, 2) if previous else 0
                 result = {
@@ -127,7 +245,9 @@ class MacroSentimentPipeline:
                     'previous': previous,
                     'change': change,
                     'change_pct': change_pct,
-                    'signal': signal_fn(current),
+                    'signal': signal_fn(current, closes),
+                    'percentile': self._rank_pct(current, closes),
+                    'scale': scale,
                     'source': 'fred'
                 }
                 saver(result)
@@ -369,7 +489,8 @@ class MacroSentimentPipeline:
             out['error'] = '; '.join(f"{k} {v}" for k, v in out['errors'].items())
         return out
 
-    def _read_intraday_value(self, symbol, session_file, fred_cache_loader, signal_fn):
+    def _read_intraday_value(self, symbol, session_file, fred_cache_loader, signal_fn,
+                             percentile_fn=None, scale='fixed'):
         """Passive read for the normal 5-minute refresh cycle — never calls
         yfinance or FRED live. Reports today's frozen value, or the most recent
         successful/fallback slot so far, or (before any slot has run) FRED's
@@ -449,16 +570,30 @@ class MacroSentimentPipeline:
             'change': change,
             'change_pct': change_pct,
             'signal': signal_fn(value),
+            'percentile': percentile_fn(value) if percentile_fn else None,
+            'scale': scale,
             'source': source,
             'stale': is_stale,
             'intraday_warning': session.get('intraday_warning', False),
         }
 
     def fetch_vix(self):
-        return self._read_intraday_value('VIX', VIX_SESSION_FILE, self._load_vix_cache, self._vix_signal)
+        pct = self._load_percentiles(VIX_PCT_FILE)
+        closes = pct.get('closes') if pct else None
+        return self._read_intraday_value(
+            'VIX', VIX_SESSION_FILE, self._load_vix_cache,
+            lambda v: self._vix_signal(v, closes),
+            lambda v: self._rank_pct(v, closes) if closes else None,
+            'percentile' if closes else 'fixed')
 
     def fetch_vxn(self):
-        return self._read_intraday_value('VXN', VXN_SESSION_FILE, self._load_vxn_cache, self._vxn_signal)
+        pct = self._load_percentiles(VXN_PCT_FILE)
+        closes = pct.get('closes') if pct else None
+        return self._read_intraday_value(
+            'VXN', VXN_SESSION_FILE, self._load_vxn_cache,
+            lambda v: self._vxn_signal(v, closes),
+            lambda v: self._rank_pct(v, closes) if closes else None,
+            'percentile' if closes else 'fixed')
 
     # -- Fear & Greed --------------------------------------------------------
 
@@ -564,6 +699,8 @@ class MacroSentimentPipeline:
             vxn = self.fetch_vxn()
             fear_greed = self.fetch_fear_greed()
             score = self.calculate_score(vix, vxn, fear_greed)
+            scales = {(vix or {}).get('scale'), (vxn or {}).get('scale')}
+            scale = 'percentile' if scales == {'percentile'} else 'fixed' if scales == {'fixed'} else 'mixed'
             result = {
                 'pillar': 'macro_sentiment',
                 'timestamp': datetime.now(self.timezone).isoformat(),
@@ -571,6 +708,7 @@ class MacroSentimentPipeline:
                 'vxn': vxn,
                 'fear_greed': fear_greed,
                 'pillar_score': score,
+                'scale': scale,
                 'intraday_warning': bool((vix or {}).get('intraday_warning') or (vxn or {}).get('intraday_warning')),
                 'status': 'live'
             }
