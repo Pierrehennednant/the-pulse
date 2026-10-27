@@ -2792,6 +2792,11 @@ Articles to classify:
         Manual trigger only (see ui/dashboard.py's /api/geo-force-reclassify
         route) — no scheduled/automatic version.
 
+        After the stock-move exclusions, the fresh path's hard-keep and
+        campaign steps run too (same order as background_classify): a
+        Haiku verdict that drops reaction_only or upgrades a recap to
+        first_print is corrected here, not written through raw.
+
         Returns a result dict: {'ok': True, ...details...} or
         {'ok': False, 'error': '...'}.
         """
@@ -2837,8 +2842,16 @@ Articles to classify:
             return {'ok': False, 'error': 'Haiku classification failed (see logs) — record left unchanged'}
         r = results[0]
         r['id'] = 1  # single-article call
-        self._geo_stock_move_excludes([{'headline': headline, 'description': record.get('description')}], [r],
-                                      ' (force_reclassify)')
+        _fc_source = [{'headline': headline, 'description': record.get('description')}]
+        self._geo_stock_move_excludes(_fc_source, [r], ' (force_reclassify)')
+        # Finding 7: mirror the fresh path — a bare Haiku verdict must not
+        # drop reaction_only or upgrade a recap to first_print. Hard-keep
+        # rescues a qualifying reject (price-only rescues get reaction_only);
+        # the campaign step then owns the kind decision (talk, reaction,
+        # or no-new-fact recap -> follow_up). Both run BEFORE tier/kind
+        # are read below, so the corrected verdict drives the record.
+        self._geo_hard_keep_rejects(_fc_source, [r], ' (force_reclassify)')
+        self._geo_campaign_apply_fresh(_fc_source, [r], ' (force_reclassify)')
 
         tier = r.get('tier')
         if tier not in (1, 2, 3):
@@ -2868,6 +2881,10 @@ Articles to classify:
         record['kind'] = new_kind
         record['gate_pass'] = r.get('gate_pass', True)
         record['reaction_only'] = bool(r.get('reaction_only'))
+        if r.get('hard_keep'):
+            record['hard_keep'] = r['hard_keep']
+        if r.get('hard_keep_override'):
+            record['hard_keep_override'] = True
         record['tier_reasoning'] = r.get('reasoning', '')
         record['classified_at'] = new_classified_at
         record.pop('drop_reason', None)
