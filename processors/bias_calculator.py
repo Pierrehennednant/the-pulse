@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 import pytz
-from config import PILLAR_WEIGHTS, TIMEZONE
+from config import PILLAR_WEIGHTS, COT_SCORE_CAP, TIMEZONE
 from utils.logger import pulse_logger
 
 NEUTRAL_MODE_FILE = "/data/neutral_mode.json"
@@ -14,7 +14,7 @@ NEUTRAL_MODE_FILE = "/data/neutral_mode.json"
 # NEUTRAL_MODE_FILE stays defined only because ui/dashboard.py imports it.
 
 class BiasCalculator:
-    def compute(self, formatted_data, bias_threshold=0.5):
+    def compute(self, formatted_data, bias_threshold=0.5, ec_weight=None):
         total_score = 0.0
         total_weight_used = 0.0   # sum of base_weight for genuinely-reporting pillars only
         pillar_contributions = {}
@@ -22,9 +22,13 @@ class BiasCalculator:
         pillar_signals = []
         pillar_signal_map = {}    # config_key → signal, for weight-aware agreement
         active_pillar_weights = {}  # config_key → effective weight, for active pillars only
-        # COT weight cut 25 -> 12 (Pierre, Oct 23 2026). Override applied here,
-        # not in config.PILLAR_WEIGHTS, so no other importer changes.
-        weights = {**PILLAR_WEIGHTS, 'institutional': 12}
+        # Weights come from config (single source of truth). ec_weight, when
+        # supplied by pulse_refresh, overrides EC for this cycle: 15 in a quiet
+        # week, 30 in a standard week. It applies to BOTH the score base and
+        # the agreement denominator, because both read this same dict.
+        weights = dict(PILLAR_WEIGHTS)
+        if ec_weight is not None:
+            weights['economic_calendar'] = ec_weight
 
         weight_map = {
             'economic': 'economic_calendar',
@@ -36,9 +40,9 @@ class BiasCalculator:
         for data_key, config_key in weight_map.items():
             pillar_data = formatted_data.get(data_key, {})
             score = pillar_data.get('pillar_score', 0)
-            # COT pillar score clamp — cap to [-0.6, +0.6] before weighting.
+            # COT pillar score clamp — cap from config before weighting.
             if config_key == 'institutional' and score is not None:
-                score = max(-0.6, min(0.6, score))
+                score = max(-COT_SCORE_CAP, min(COT_SCORE_CAP, score))
             base_weight = weights.get(config_key, 0)
             weight = base_weight
             status = pillar_data.get('status', 'unavailable')

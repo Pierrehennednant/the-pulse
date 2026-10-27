@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime
 import pytz
-from config import TIMEZONE
+from config import TIMEZONE, PILLAR_WEIGHTS, QUIET_WEEK_EC_WEIGHT
 from utils.file_lock import atomic_write_json
 from utils.logger import pulse_logger
 from pipelines.economic_calendar import economic_calendar_pipeline
@@ -42,9 +42,11 @@ class PropFirmRecommendationEngine:
     def __init__(self):
         self.timezone = pytz.timezone(TIMEZONE)
 
+    # Derived from config (single source of truth) so a weight change in
+    # config moves Prop alignment with it. Totals: 87 standard / 72 quiet.
     _WEEK_WEIGHTS = {
-        'standard': {'economic_calendar': 30, 'geopolitical': 25, 'institutional': 12, 'macro_sentiment': 20},
-        'quiet':    {'economic_calendar': 15, 'geopolitical': 25, 'institutional': 12, 'macro_sentiment': 20},
+        'standard': dict(PILLAR_WEIGHTS),
+        'quiet':    {**PILLAR_WEIGHTS, 'economic_calendar': QUIET_WEEK_EC_WEIGHT},
     }
 
     def _get_weekly_threshold(self, econ_data):

@@ -7,6 +7,7 @@ on-demand refresh after a manual Yahoo pull — so the two can never
 drift apart.
 """
 
+from config import QUIET_WEEK_EC_WEIGHT
 from utils.logger import pulse_logger
 from pipelines.macro_sentiment import macro_sentiment_pipeline
 from pipelines.weekly_summary import weekly_summary_pipeline
@@ -24,12 +25,15 @@ def compute_and_save(formatted_data):
     _ec_weak = formatted_data.get('economic', {}).get('weak_ec_week')
     if _ec_weak is True:
         bias_threshold = 0.30
+        ec_weight = QUIET_WEEK_EC_WEIGHT
     elif _ec_weak is False:
         bias_threshold = 0.33
+        ec_weight = None  # standard week: config EC weight (30) stands
     else:
         bias_threshold = 0.50
+        ec_weight = None
 
-    bias_score = bias_calculator.compute(formatted_data, bias_threshold=bias_threshold)
+    bias_score = bias_calculator.compute(formatted_data, bias_threshold=bias_threshold, ec_weight=ec_weight)
 
     prop_recommendation = prop_firm_engine.compute_prop_firm(
         bias_score,
