@@ -5,14 +5,7 @@ from config import PILLAR_WEIGHTS, COT_SCORE_CAP, TIMEZONE
 from pipelines.institutional import institutional_pipeline
 from utils.logger import pulse_logger
 
-NEUTRAL_MODE_FILE = "/data/neutral_mode.json"
-
-
-# Neutral-day sizing is locked to Quarter (Pierre, Oct 15 2026: per-day rule,
-# no rolling window, no automatic promotion). neutral_mode.json is no longer
-# read here, so it cannot force Half. Half on a Neutral day would need an
-# explicit per-day override for that session; none exists yet.
-# NEUTRAL_MODE_FILE stays defined only because ui/dashboard.py imports it.
+# Dead endpoint removed: the file it wrote was never read by the engine.
 
 class BiasCalculator:
     def compute(self, formatted_data, bias_threshold=0.5, ec_weight=None):
