@@ -153,11 +153,9 @@ class AILensPipeline:
                     break
                 days_since_signal += 1
 
-        # Pillar agreement percentage (pillar signals aligned with current bias)
-        pillar_signals = bias_score.get('pillar_signals', [])
-        if bias != 'Neutral' and pillar_signals:
-            agreeing = pillar_signals.count(bias.lower())
-            agreement_pct = round(agreeing / len(pillar_signals) * 100)
+        # Engine's weight-based agreement (single source, Finding 3).
+        if bias != 'Neutral':
+            agreement_pct = round((bias_score.get('agreement_pct') or 0) * 100)
         else:
             agreement_pct = 0
 
