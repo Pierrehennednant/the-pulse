@@ -475,7 +475,24 @@ class MacroSentimentPipeline:
         try:
             if os.path.exists(FG_CACHE_FILE):
                 with open(FG_CACHE_FILE, 'r') as f:
-                    return json.load(f).get('fear_greed')
+                    wrapper = json.load(f)
+                data = wrapper.get('fear_greed')
+                if data is not None:
+                    # Same 3-day rule as VIX/VXN: a cached reading older
+                    # than 3 days is stale, so calculate_score excludes it.
+                    stale = False
+                    ts = wrapper.get('timestamp', '')
+                    if ts:
+                        try:
+                            cached_dt = datetime.fromisoformat(ts)
+                            if cached_dt.tzinfo is None:
+                                cached_dt = cached_dt.replace(tzinfo=self.timezone)
+                            age_days = (datetime.now(self.timezone) - cached_dt).total_seconds() / 86400
+                            stale = age_days >= 3
+                        except Exception:
+                            pass
+                    data['stale'] = stale
+                return data
         except Exception:
             pass
         return None
@@ -534,8 +551,11 @@ class MacroSentimentPipeline:
                 score += signal_map.get(vxn['signal'], 0)
                 count += 1
         if fear_greed:
-            score += signal_map.get(fear_greed['signal'], 0)
-            count += 1
+            if fear_greed.get('stale'):
+                pulse_logger.log("📉 Fear & Greed excluded from macro score — stale data (≥3 days old)")
+            else:
+                score += signal_map.get(fear_greed['signal'], 0)
+                count += 1
         return round(score / count if count > 0 else 0, 2)
 
     def fetch(self):
@@ -551,7 +571,7 @@ class MacroSentimentPipeline:
                 'vxn': vxn,
                 'fear_greed': fear_greed,
                 'pillar_score': score,
-                'intraday_warning': bool(vix.get('intraday_warning') or vxn.get('intraday_warning')),
+                'intraday_warning': bool((vix or {}).get('intraday_warning') or (vxn or {}).get('intraday_warning')),
                 'status': 'live'
             }
             cache.save(self.cache_key, result)
