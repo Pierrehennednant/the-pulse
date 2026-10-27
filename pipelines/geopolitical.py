@@ -3232,8 +3232,10 @@ Articles to classify:
         (e.g. the Oct 21 oil price-reaction card). Idempotent; runs at
         startup. Every change is loudly logged."""
         changed = 0
+        checked = 0
         try:
             pins = self.load_pinned_stories()
+            checked += len(pins)
             pins_changed = False
             for pin in pins:
                 claimed = self._reasoning_tier_claim(pin.get('tier_reasoning', ''))
@@ -3270,6 +3272,7 @@ Articles to classify:
                 for headline, rec in cache_data.items():
                     if not isinstance(rec, dict):
                         continue
+                    checked += 1
                     claimed = self._reasoning_tier_claim(rec.get('tier_reasoning', ''))
                     if claimed is not None and rec.get('tier') != claimed:
                         old = rec.get('tier')
@@ -3295,8 +3298,10 @@ Articles to classify:
                     atomic_write_json(cache_file, cache_data)
         except Exception as e:
             pulse_logger.log(f"⚠️ Startup tier reconcile (cache) failed: {e}", level="WARNING")
-        if changed:
-            pulse_logger.log(f"🧭 Startup tier reconcile — {changed} record(s) aligned to reasoning claims")
+        # Always log, even when nothing changed: a clean pass must be
+        # distinguishable from a pass that never ran. Runs in __init__ and
+        # again in __main__, so every boot shows this line twice.
+        pulse_logger.log(f"RECONCILE TIER ran | checked={checked} changed={changed}")
         return changed
 
     def reconcile_stored_hard_keep_pins(self):
