@@ -1549,6 +1549,17 @@ def _geo_hard_keep(headline, *texts):
     return {'reason': '; '.join(dict.fromkeys(reasons)), 'tier': tier, 'direction': direction}
 
 
+# Hard-keep reasons that describe an EVENT (an actor with a live strike
+# option). Every other hard-keep reason is a price/yield/equity move, which
+# keeps the article visible but never gives it a vote (Price-Reaction Cap).
+_GEO_HK_EVENT_REASONS = ('actor + live strike option',)
+
+
+def _geo_hk_price_only(reason):
+    parts = [p.strip() for p in (reason or '').split(';') if p.strip()]
+    return bool(parts) and not any(p.startswith(_GEO_HK_EVENT_REASONS) for p in parts)
+
+
 # ── Stock-move exclusion (v5, deterministic, post-classification) ──
 # A single-name or single-sector stock move is not a Geo event unless it is a
 # locked tech/AI deal or capex item, or carries a war/tariff/sanctions/physical
@@ -1629,6 +1640,8 @@ class GeopoliticalPipeline:
         'kind': 'kind',
         'gate_pass': 'haiku_gate_pass',
         'reaction_only': 'reaction_only',
+        'hard_keep': 'hard_keep',
+        'hard_keep_override': 'hard_keep_override',
         # Event-identity fold (see _event_decide() Rule A): the item is the
         # same event as an earlier card — it rides that card's clock and is
         # never a separate vote in calculate_score().
@@ -3286,6 +3299,34 @@ Articles to classify:
             pulse_logger.log(f"🧭 Startup tier reconcile — {changed} record(s) aligned to reasoning claims")
         return changed
 
+    def reconcile_stored_hard_keep_pins(self):
+        """Apply Finding 1 to pins stored before the fix: a price-only
+        hard-keep rescued from a Haiku reject is unpinned (follow_ups never
+        pin). Idempotent. Always logs one summary line."""
+        pinned = self.load_pinned_stories()
+        kept, removed = [], 0
+        for pin in pinned:
+            reason = pin.get('hard_keep')
+            if reason is None:
+                hk = _geo_hard_keep(pin.get('headline', ''), pin.get('summary'))
+                reason = hk['reason'] if hk else None
+            # Rescue origin: explicit marker (new pins), or the two traces a
+            # pre-fix rescue leaves: an empty summary, or the flat 0.75 that
+            # 75bee56f assigns.
+            rescued = bool(pin.get('hard_keep_override')) or (
+                reason is not None and (not (pin.get('summary') or '').strip()
+                                        or pin.get('confidence') == 0.75))
+            if reason and rescued and _geo_hk_price_only(reason):
+                removed += 1
+                pulse_logger.log(f"RECONCILE HARD-KEEP | unpinned price-only rescue | "
+                                 f"reason={reason} | headline={pin.get('headline', '')[:80]}")
+                continue
+            kept.append(pin)
+        if removed:
+            self.save_pinned_stories(kept)
+        pulse_logger.log(f"RECONCILE HARD-KEEP ran | checked={len(pinned)} changed={removed}")
+        return {'checked': len(pinned), 'changed': removed}
+
     def is_same_story(self, new_headline, other_headline, new_summary='', other_summary=''):
         """Ask Haiku whether two articles cover the same underlying story.
 
@@ -3405,6 +3446,11 @@ Respond with only one word: DIVERGED or UNCHANGED"""
                 # in the pin mechanism instead.
                 continue
 
+            if r.get('reaction_only'):
+                # Price-reaction items never pin, whatever their kind. This
+                # second guard does not depend on the campaign step having run.
+                continue
+
             article = new_items[idx]
             headline = article.get('headline', '')
             if self._is_ec_survey_recap(article):
@@ -3450,9 +3496,17 @@ Respond with only one word: DIVERGED or UNCHANGED"""
             resolved['confidence'] = r.get('confidence', 0)
             resolved['uncertainty_score'] = r.get('uncertainty_score', 0)
 
+            # Pin invariant: no pin without a non-empty summary. Uses `or`,
+            # not a .get default, so a present-but-empty summary ('') also
+            # falls back to the feed description.
+            pin_summary = (r.get('summary') or '').strip() or (article.get('description') or '').strip()
+            if not pin_summary:
+                pulse_logger.log(f"📌 PIN SKIPPED | empty summary and description | headline={headline[:80]}")
+                continue
+
             new_entry = {
                 'headline': headline,
-                'summary': r.get('summary', article.get('description', '')),
+                'summary': pin_summary,
                 'source': article.get('source', ''),
                 'timestamp': article.get('timestamp', ''),
                 'date': article.get('date', ''),
@@ -4708,8 +4762,15 @@ CONTEXT: {context}"""
             if r.get('kind') not in ('first_print', 'follow_up'):
                 r['kind'] = 'first_print'
             r['hard_keep'] = hk['reason']
+            r['hard_keep_override'] = True   # origin marker: rescued from a Haiku reject
+            if _geo_hk_price_only(hk['reason']):
+                # Visibility only. The campaign step turns this into a
+                # follow_up (24h, no pin) and calculate_score skips it.
+                r['reaction_only'] = True
             pulse_logger.log(f"GEO KEEP | hard_keep={hk['reason']} | overrides=haiku_reject ({prev}){label} | "
-                             f"Tier {hk['tier']} | {hk['direction']} | headline={art.get('headline', '')[:90]}")
+                             f"Tier {hk['tier']} | {hk['direction']} | "
+                             f"vote={'none (reaction_only)' if r.get('reaction_only') else 'yes'} | "
+                             f"headline={art.get('headline', '')[:90]}")
 
     def _geo_campaign_apply_fresh(self, source_items, classifications, source=''):
         """Run _geo_campaign_apply as the single kind decision for each
@@ -5415,7 +5476,7 @@ CONTEXT: {context}"""
                                     'classified_at': datetime.now(timezone.utc).isoformat()
                                 }
                                 for f in ('event_rule', 'pre_rule_kind', 'pre_rule_tier',
-                                          'event_folded', 'event_key', 'clock_anchor', 'clock_hours', 'hard_keep', 'drop_reason',
+                                          'event_folded', 'event_key', 'clock_anchor', 'clock_hours', 'hard_keep', 'hard_keep_override', 'drop_reason',
                                           't1_reject_recheck'):
                                     if f in r:
                                         new_class[f] = r[f]
@@ -5991,7 +6052,7 @@ CONTEXT: {context}"""
                             'classified_at': datetime.now(timezone.utc).isoformat()
                         }
                         for f in ('event_rule', 'pre_rule_kind', 'pre_rule_tier',
-                                  'event_folded', 'event_key', 'clock_anchor', 'clock_hours', 'hard_keep', 'drop_reason',
+                                  'event_folded', 'event_key', 'clock_anchor', 'clock_hours', 'hard_keep', 'hard_keep_override', 'drop_reason',
                                           't1_reject_recheck'):
                             if f in r:
                                 gc[headline][f] = r[f]
