@@ -281,35 +281,27 @@ class PropFirmRecommendationEngine:
             if bias not in ('Bullish', 'Bearish'):
                 return self._no_rec(week_info)
 
-            pillar_weights = self._WEEK_WEIGHTS['quiet' if is_quiet else 'standard']
-            pillar_contributions = (bias_data.get('pillar_contributions', {}) or {}) if bias_data else {}
-            aligned_weight = sum(
-                pillar_weights.get(p, 0)
-                for p, c in pillar_contributions.items()
-                if (bias == 'Bullish' and c.get('raw_score', 0) > 0.15)
-                or (bias == 'Bearish' and c.get('raw_score', 0) < -0.15)
-            )
-            if aligned_weight < alignment_threshold:
+            # Same pillar set and weights the engine used (silent pillars,
+            # COT decay and the agreement override already applied).
+            agreement_pct = bias_data.get('agreement_pct') if bias_data else None
+            if agreement_pct is None:
+                pulse_logger.log("⚠️ Prop Firm — engine agreement_pct missing, no recommendation", level="WARNING")
+                return self._no_rec(week_info)
+            pulse_logger.log(f"📊 Prop alignment = engine agreement {agreement_pct:.0%} (cutoff 45%)")
+            if agreement_pct < 0.45:
                 return self._no_rec(week_info)
 
             confidence = bias_data.get('confidence', 0) if bias_data else 0
             if confidence < 55:
                 return self._no_rec(week_info)
 
-            total_w = week_info['total_weight']
-            if confidence >= 70:
-                return self._rec(week_info,
-                    mode='normal',
-                    label=f'Prop Firm — {bias}, strong edge',
-                    reason=f'{aligned_weight}% of {total_w}% weight aligned · Confidence {confidence}%',
-                    strength='strong',
-                    bias=bias,
-                )
+            # Same buckets as the engine directive: <60 weak, 60-69 moderate, 70+ strong.
+            strength = 'strong' if confidence >= 70 else 'moderate' if confidence >= 60 else 'weak'
             return self._rec(week_info,
-                mode='quarter',
-                label=f'Prop Firm — {bias}, moderate edge',
-                reason=f'Confidence {confidence}% · edge present',
-                strength='moderate',
+                mode='normal' if strength == 'strong' else 'quarter',   # unchanged legacy field, see flag below
+                label=f'Prop Firm — {bias}, {strength} edge',
+                reason=f'Engine agreement {agreement_pct:.0%} · Confidence {confidence}%',
+                strength=strength,
                 bias=bias,
             )
 

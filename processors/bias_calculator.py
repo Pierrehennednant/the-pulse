@@ -192,6 +192,7 @@ class BiasCalculator:
             bias = 'Neutral'
             bias_emoji = '🟡'
 
+        agreement_pct = 0.0
         if active_pillars == 0:
             confidence = 0
             confidence_label = 'No Data'
@@ -285,6 +286,9 @@ class BiasCalculator:
             'active_pillars': active_pillars,
             'pillar_signals': pillar_signals,
             'pillar_contributions': pillar_contributions,
+            # Weight-based agreement (decay-adjusted weights, override
+            # applied). The ONLY agreement number other modules may show.
+            'agreement_pct': round(agreement_pct, 4),
             'gauge_value': int((signed_confidence + 100) / 2),
             'directive': directive,
             'directive_color': directive_color,
