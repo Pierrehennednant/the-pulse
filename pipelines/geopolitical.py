@@ -2003,7 +2003,9 @@ class GeopoliticalPipeline:
         return tier
 
     # Tier-claim patterns for the reasoning/tier consistency check.
-    _TIER_CLAIM_RE = re.compile(r'\btier\s*([123])\b', re.IGNORECASE)
+    # Second alternative: a cap stated without "tier" right before the digit
+    # ("tier is capped at 2" — the Oct 31 Hormuz tanker card, stored Tier 1).
+    _TIER_CLAIM_RE = re.compile(r'\btier\s*([123])\b|\bcapped\s+at\s+(?:tier\s*)?([123])\b', re.IGNORECASE)
     _TIER_NEG_RE = re.compile(r"\b(?:not|n\'t|no|never|rather\s+than|instead\s+of)\b[\w\s]{0,14}$", re.IGNORECASE)
 
     @staticmethod
@@ -2027,7 +2029,7 @@ class GeopoliticalPipeline:
             before = text[max(0, m.start() - 18):m.start()]
             if GeopoliticalPipeline._TIER_NEG_RE.search(before):
                 continue
-            claimed = int(m.group(1))
+            claimed = int(m.group(1) or m.group(2))
         return claimed
 
     def _reevaluate_pinned_ec_folds(self):
