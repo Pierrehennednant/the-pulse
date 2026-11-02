@@ -4204,6 +4204,24 @@ CONTEXT: {context}"""
                         folds, t1_live = [live], True
                         t1_note = ' | t1_live=live Tier 1 card, actor+action+place, no new fact'
                 if folds:
+                    # An event whose own clock has already run out can't host a
+                    # fold: the folded card would inherit that dead clock and be
+                    # skipped as clock_expired next cycle. Skip those events; if
+                    # none is live the article stays its own item (own clock).
+                    live_folds = []
+                    for f in folds:
+                        frow = mem[f[2]]
+                        fh = frow.get('clock_hours') or (
+                            24 if frow.get('haiku_kind_on_first_seen') == 'follow_up' else MAX_ARTICLE_AGE_HOURS)
+                        fa = frow.get('clock_start') or frow.get('first_seen')
+                        if fa and self._clock_expired({'clock_anchor': fa, 'clock_hours': fh}):
+                            self._event_log_once('fold_skip_expired', (identity['headline_norm'], f[2]),
+                                                 f"EVENT MEMORY FOLD SKIPPED | event clock expired | key={f[2]} | "
+                                                 f"clock=original {fa} +{fh}h | own clock kept | headline={short}")
+                        else:
+                            live_folds.append(f)
+                    folds = live_folds
+                if folds:
                     _, _, row_key, sim = min(folds)
                     row = mem[row_key]
                     row['last_seen'] = now_iso
@@ -5575,7 +5593,10 @@ CONTEXT: {context}"""
                                             pulse_logger.log(f"🧭 Outcome divergence detected despite matching labels: '{headline[:60]}' vs anchor '{duplicate_of[:60]}'")
                                             pulse_logger.log(
                                                 f"GEO KEEP | reason=outcome-divergence | not a duplicate of "
-                                                f"'{duplicate_of[:60]}' | kept as own card | headline={headline[:90]}")
+                                                f"'{duplicate_of[:60]}' | "
+                                                + (f"folded into event {r.get('event_key')} (original clock {r.get('clock_anchor')} +{r.get('clock_hours')}h)"
+                                                   if r.get('event_folded') else "kept as own card")
+                                                + f" | headline={headline[:90]}")
                                             duplicate_of = None
 
                                 if duplicate_of:
