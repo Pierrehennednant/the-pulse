@@ -492,6 +492,16 @@ _EVENT_KIND_CONCEPTS = frozenset({'attack', 'ceasefire', 'call', 'talks', 'deal'
 # A coercive act named only as a threat, warning or possibility ("warns of
 # new Iran strikes", "could impose tariffs") is kind 'threat', not the act.
 _EVENT_THREAT_KINDS = frozenset({'attack', 'tariff', 'sanction'})
+# Kind compatibility for event-memory folds (see _event_kind_class()): each
+# core-action concept belongs to one event CLASS; an article whose headline
+# class is incompatible with the event row's headline class never folds into
+# it (a strike never folds into a talks/deal row, and vice versa). Concepts
+# not listed ('threat', 'output', 'ratemove') and mixed/empty headlines are
+# class None = unknown, which keeps the existing fold behavior.
+_EVENT_KIND_CLASS = {'attack': 'kinetic', 'deploy': 'kinetic',
+                     'talks': 'diplomacy', 'deal': 'diplomacy', 'call': 'diplomacy', 'ceasefire': 'diplomacy',
+                     'tariff': 'economic', 'sanction': 'economic'}
+_EVENT_KIND_INCOMPATIBLE = frozenset({frozenset({'kinetic', 'diplomacy'}), frozenset({'kinetic', 'economic'})})
 _EVENT_THREAT_RE = re.compile(
     r"\b(?:warn(?:s|ed|ing)?|threat(?:s|en|ens|ened|ening)?|vow(?:s|ed)?|signal(?:s|ed|ing|led|ling)?|"
     r"could|may(?!\s+\d)|might|would|plans? to|planning to|intends? to|consider(?:s|ing)?|"
@@ -1297,6 +1307,25 @@ def _event_identity_similarity(a, b):
     both = set(a['tokens']) & set(b['tokens'])
     core = sum(_event_token_weight(t) for t in both if t[:1] in ('#', '@', '!'))
     return core, _event_identity_score(a, b)
+
+
+def _event_kind_class(headline):
+    """Event class of a headline (_EVENT_KIND_CLASS) when all its classed
+    core actions agree, else None (unknown/mixed). Headline only: it is what
+    the event IS; summaries mention context ("under threat of strikes")."""
+    classes = {_EVENT_KIND_CLASS[k] for k in _event_kinds(_event_norm_text(
+        _EVENT_HEADLINE_PREFIX_RE.sub('', ' '.join((headline or '').split()))))
+        if k in _EVENT_KIND_CLASS}
+    return classes.pop() if len(classes) == 1 else None
+
+
+def _event_kind_incompatible(headline, row):
+    """'<article class>-vs-<row class>' when the article may never fold into
+    `row` by kind (_EVENT_KIND_INCOMPATIBLE), else None (incl. unknown)."""
+    a, b = _event_kind_class(headline), _event_kind_class((row or {}).get('sample_headline', ''))
+    if a and b and frozenset({a, b}) in _EVENT_KIND_INCOMPATIBLE:
+        return f"{a}-vs-{b}"
+    return None
 
 
 def _event_identity_matches(ident, row):
@@ -4265,9 +4294,21 @@ CONTEXT: {context}"""
                 touched = True
             else:
                 folds, new_facts = [], []
+                refused = set()
+
+                def refuse(reason, rkey, extra=''):
+                    # A refused CANDIDATE, never the outcome (see EVENT MATCH DECISION).
+                    refused.add(rkey)
+                    self._event_log_once('cand_refused', (identity['headline_norm'], rkey, reason),
+                                         f"EVENT CANDIDATE REFUSED | reason={reason} | key={rkey}{extra} | "
+                                         f"matched=\"{mem[rkey].get('sample_headline', '')[:90]}\" | headline={short}")
                 for rkey, row in mem.items():
                     sim = _event_identity_matches(ident, row)
                     if sim is None:
+                        continue
+                    kind_why = _event_kind_incompatible(headline, row)
+                    if kind_why:
+                        refuse(f"kind-incompatible {kind_why}", rkey)
                         continue
                     reason = _event_new_fact(ident, row)
                     if reason is None:
@@ -4287,9 +4328,7 @@ CONTEXT: {context}"""
                         if why is None:
                             kept_folds.append(f)
                         else:
-                            self._event_log_once('t1_keep', (identity['headline_norm'], f[2]),
-                                                 f"T1 FIRST_PRINT KEEP | reason={why} | key={f[2]} | haiku_kind=first_print tier=1 | "
-                                                 f"matched=\"{mem[f[2]].get('sample_headline', '')[:90]}\" | headline={short}")
+                            refuse(why, f[2], ' | guard=t1_first_print | haiku_kind=first_print tier=1')
                     folds = kept_folds
                     t1_note = ' | t1_guard=live scored card, exact actor+action+place' if folds else ''
                     # Folded onto a live Tier 1 card: the divergence keep may not undo it.
@@ -4302,6 +4341,10 @@ CONTEXT: {context}"""
                     # actor + action + place folds into it (no 2nd vote/pin)
                     # unless it carries a narrow new fact.
                     live = self._event_t1_live_match(ident, mem, scored(), identity['headline_norm'], short)
+                    if live is not None and _event_kind_incompatible(headline, mem[live[2]]):
+                        refuse(f"kind-incompatible {_event_kind_incompatible(headline, mem[live[2]])}", live[2],
+                               ' | guard=t1_live')
+                        live = None
                     if live is not None:
                         folds, t1_live = [live], True
                         t1_note = ' | t1_live=live Tier 1 card, actor+action+place, no new fact'
@@ -4322,6 +4365,7 @@ CONTEXT: {context}"""
                                                  f"clock=original {fa} +{fh}h | own clock kept | headline={short}")
                         else:
                             live_folds.append(f)
+                    refused.update(f[2] for f in folds if f not in live_folds)
                     folds = live_folds
                 if folds:
                     _, _, row_key, sim = min(folds)
@@ -4349,6 +4393,7 @@ CONTEXT: {context}"""
                         f"haiku_kind={haiku_kind} | clock=original {fold['clock_anchor']} +{clock_hours}h | "
                         f"matched=\"{row.get('sample_headline', '')[:90]}\"{t1_note} | headline={short}"
                     )
+                    outcome = 'folded'
                 else:
                     # Strike clock (before tier): a kinetic act Haiku called
                     # follow_up that matches no same-event row, and no strike
@@ -4401,6 +4446,11 @@ CONTEXT: {context}"""
                     for nk, reason in new_facts:
                         self._event_log_once('new_fact', identity['headline_norm'],
                                              f"NEW FACT | {reason} | vs key={nk} | kept kind={kind} | headline={short}")
+                    outcome = 'kept_own_card'
+                # The article's one final outcome (refusals above are candidates only).
+                self._event_log_once('match_decision', identity['headline_norm'],
+                                     f"EVENT MATCH DECISION | outcome={outcome} | key={row_key} | refused={len(refused)} | "
+                                     f"headline={short}")
 
         decision = None
         if (kind, tier) != (haiku_kind, haiku_tier) or fold:
@@ -4500,14 +4550,8 @@ CONTEXT: {context}"""
                 best = cand
         return best
 
-    def _event_scored_today(self, mem, today):
-        """{event-memory key: best live tier} for rows whose own card holds a
-        live vote on today's board: a stored identity's headline is a relevant, conf >= 0.75,
-        directional, tiered (1-3), gate-passing, NOT folded / NOT
-        duplicate-dropped cache entry or pin, still inside its clock (so it
-        is in today's score). Read from disk (the cache/pin state as of the
-        last write). Never raises."""
-        voted = {}
+    def _event_scored_disk_records(self):
+        """(headline, record) pairs from the cache and pin files on disk."""
         records = []
         for path in ("/data/gemini_classifications.json",
                      getattr(self, 'pinned_store_file', "/data/pinned_stories.json")):
@@ -4521,8 +4565,24 @@ CONTEXT: {context}"""
                         records.extend((c.get('headline', ''), c) for c in raw if isinstance(c, dict))
             except Exception as e:
                 pulse_logger.log(f"⚠️ T1 fold guard: could not read {path}: {e}", level="WARNING")
+        return records
+
+    def _event_scored_today(self, mem, today, live_records=None, disk_records=None):
+        """{event-memory key: best live tier} for rows whose own card holds a
+        live vote on today's board: a stored identity's headline is a relevant, conf >= 0.75,
+        directional, tiered (1-3), gate-passing, NOT folded / NOT
+        duplicate-dropped cache entry or pin, still inside its clock (so it
+        is in today's score). Read from disk (the cache/pin state as of the
+        last write), UNION `live_records` — in-memory (headline, record)
+        pairs of the current cycle (cache/pins being processed, articles
+        already decided this pass), so a card that is live in memory but not
+        yet on disk still counts as scored. `disk_records`: pre-read disk
+        records (skips the read). Never raises."""
+        voted = {}
+        records = list(disk_records) if disk_records is not None else self._event_scored_disk_records()
+        records.extend(live_records or [])
         for h, c in records:
-            if (not h or not c.get('relevant') or (c.get('confidence') or 0) < 0.75
+            if (not h or not isinstance(c, dict) or not c.get('relevant') or (c.get('confidence') or 0) < 0.75
                     or c.get('direction') not in ('bullish', 'bearish') or c.get('tier') not in (1, 2, 3)
                     or c.get('gate_pass') is False or c.get('event_folded') or c.get('duplicate_of')
                     or c.get('drop_reason')):
@@ -4962,20 +5022,31 @@ CONTEXT: {context}"""
                 dirty = dropped > 0
                 now = datetime.now(timezone.utc)
                 today = now.astimezone(_EVENT_TZ).date()
-                scored_memo = []
+                disk_memo = []
+                # Live in-memory scored state for THIS pass: every entry's own
+                # record, as decided so far (a fold decided this pass is not a
+                # vote). Unioned with the disk snapshot so a card that is live
+                # in memory but not yet written can't be treated as unscored.
+                live = [((e.get('ctx') or {}).get('headline', ''),
+                         dict(e.get('target') or {}, classified_at=(e.get('target') or {}).get('classified_at')
+                              or (e.get('target') or {}).get('pinned_at') or now.isoformat()))
+                        for e in entries]
 
                 def scored():
                     # Read the cache/pins from disk only when a Tier 1
                     # first_print fold candidate actually needs it.
-                    if not scored_memo:
-                        scored_memo.append(self._event_scored_today(mem, today))
-                    return scored_memo[0]
-                for entry in entries:
+                    if not disk_memo:
+                        disk_memo.append(self._event_scored_disk_records())
+                    return self._event_scored_today(mem, today, live_records=live, disk_records=disk_memo[0])
+                for n, entry in enumerate(entries):
                     try:
                         decision, touched = self._event_decide(entry, mem, now, today, scored)
                         dirty = dirty or touched
                         if decision:
                             decisions.append((entry, decision))
+                            live[n] = (live[n][0], dict(live[n][1], kind=decision['kind'], tier=decision['tier'],
+                                                        event_folded=bool(decision.get('fold'))
+                                                        or live[n][1].get('event_folded')))
                     except Exception as e:
                         pulse_logger.log(
                             f"⚠️ Event rules failed for '{(entry.get('ctx') or {}).get('headline', '')[:60]}' — "
