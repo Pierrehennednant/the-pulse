@@ -3369,50 +3369,64 @@ Articles to classify:
         except Exception as e:
             pulse_logger.log(f"⚠️ Pin refresh failed: {e}", level="WARNING")
 
-    def reconcile_stored_tier_claims(self):
-        """Startup self-heal: align stored tiers with affirmative tier claims
-        in their own reasoning text. Covers pinned_stories.json and the
-        gemini_classifications.json cache — records that predate the
-        background_classify() consistency check (e.g. the Oct 14
-        Houthis/Saudi pin: "Tier 1 catalyst" prose, tier=2). Also flags
-        stored records whose own tier reasoning invoked the Price-Reaction
-        Cap ("price-reaction cap" / "price-reaction piece") as
-        reaction_only, demoting a first_print kind to follow_up: the
-        self-heal for pins scored before the reaction_only field existed
-        (e.g. the Oct 21 oil price-reaction card). Idempotent; runs at
-        startup. Every change is loudly logged."""
+    _PRICE_REACTION_RE = re.compile(r"price[- ]reaction (cap|piece)", re.IGNORECASE)
+
+    def _reconcile_record(self, rec, tier_field='tier', reasoning_field='tier_reasoning'):
+        """Scoring-state invariants derived from a record's OWN reasoning
+        text. Pure, idempotent, in-place; returns a list of change messages
+        (empty on a no-op). Same rules for a pin / classification-cache
+        entry (tier, tier_reasoning) and a served item (haiku_tier,
+        haiku_tier_reasoning):
+        1) affirmative tier claim in the reasoning wins over the stored tier;
+        2) reasoning that invoked the Price-Reaction Cap -> reaction_only,
+           first_print kind demoted to follow_up (no score vote).
+        Add a new scoring invariant HERE, once, and it runs at startup and
+        on every refresh for pins, cache and served items alike."""
+        msgs = []
+        reasoning = rec.get(reasoning_field) or ''
+        claimed = self._reasoning_tier_claim(reasoning)
+        if claimed is not None and rec.get(tier_field) != claimed:
+            old = rec.get(tier_field)
+            rec[tier_field] = claimed
+            msgs.append(f"tier reconcile ({{src}}) — reasoning claims Tier {claimed}, "
+                        f"stored={old} | using {claimed}")
+        if not rec.get('reaction_only') and self._PRICE_REACTION_RE.search(reasoning):
+            rec['reaction_only'] = True
+            if rec.get('kind') == 'first_print':
+                rec['kind'] = 'follow_up'
+            msgs.append("reaction reconcile ({src}) — capped price-reaction piece marked "
+                        "reaction_only, kind -> follow_up")
+        return msgs
+
+    def _reconcile_scoring_state(self, phase='Refresh'):
+        """ONE shared path for scoring-correctness self-heals over the stored
+        state (pinned_stories.json + gemini_classifications.json). Called at
+        startup (phase='Startup', via reconcile_stored_tier_claims()) and at
+        the top of every fetch() (phase='Refresh'), so a record that breaks
+        an invariant mid-session can never vote until the next restart
+        (11/3: the Qeshm oil price-reaction card voted 8:04-11:05 AM ET).
+        Idempotent and cheap (two local JSON reads, no network): writes and
+        logs ONLY when a record actually changes. Returns (checked, changed)."""
         changed = 0
         checked = 0
+        def _emit(msgs, src, headline):
+            for m in msgs:
+                pulse_logger.log(f"🧭 {phase} {m.format(src=src)} | '{(headline or '')[:60]}'",
+                                 level="WARNING")
         try:
             pins = self.load_pinned_stories()
             checked += len(pins)
             pins_changed = False
             for pin in pins:
-                claimed = self._reasoning_tier_claim(pin.get('tier_reasoning', ''))
-                if claimed is not None and pin.get('tier') != claimed:
-                    old = pin.get('tier')
-                    pin['tier'] = claimed
+                msgs = self._reconcile_record(pin)
+                if msgs:
                     pins_changed = True
-                    changed += 1
-                    pulse_logger.log(
-                        f"🧭 Startup tier reconcile (pin) — reasoning claims Tier {claimed}, "
-                        f"stored={old} | using {claimed} | '{(pin.get('headline') or '')[:60]}'",
-                        level="WARNING")
-                _rxn_reasoning = pin.get('tier_reasoning', '') or ''
-                if not pin.get('reaction_only') and re.search(r"price[- ]reaction (cap|piece)", _rxn_reasoning, re.IGNORECASE):
-                    pin['reaction_only'] = True
-                    if pin.get('kind') == 'first_print':
-                        pin['kind'] = 'follow_up'
-                    pins_changed = True
-                    changed += 1
-                    pulse_logger.log(
-                        f"🧭 Startup reaction reconcile (pin) — capped price-reaction piece marked "
-                        f"reaction_only, kind -> follow_up | '{(pin.get('headline') or '')[:60]}'",
-                        level="WARNING")
+                    changed += len(msgs)
+                    _emit(msgs, 'pin', pin.get('headline'))
             if pins_changed:
                 self.save_pinned_stories(pins)
         except Exception as e:
-            pulse_logger.log(f"⚠️ Startup tier reconcile (pins) failed: {e}", level="WARNING")
+            pulse_logger.log(f"⚠️ {phase} tier reconcile (pins) failed: {e}", level="WARNING")
         try:
             cache_file = "/data/gemini_classifications.json"
             if os.path.exists(cache_file):
@@ -3423,34 +3437,43 @@ Articles to classify:
                     if not isinstance(rec, dict):
                         continue
                     checked += 1
-                    claimed = self._reasoning_tier_claim(rec.get('tier_reasoning', ''))
-                    if claimed is not None and rec.get('tier') != claimed:
-                        old = rec.get('tier')
-                        rec['tier'] = claimed
+                    msgs = self._reconcile_record(rec)
+                    if msgs:
                         cache_changed = True
-                        changed += 1
-                        pulse_logger.log(
-                            f"🧭 Startup tier reconcile (cache) — reasoning claims Tier {claimed}, "
-                            f"stored={old} | using {claimed} | '{headline[:60]}'",
-                            level="WARNING")
-                    _rxn_reasoning = rec.get('tier_reasoning', '') or ''
-                    if not rec.get('reaction_only') and re.search(r"price[- ]reaction (cap|piece)", _rxn_reasoning, re.IGNORECASE):
-                        rec['reaction_only'] = True
-                        if rec.get('kind') == 'first_print':
-                            rec['kind'] = 'follow_up'
-                        cache_changed = True
-                        changed += 1
-                        pulse_logger.log(
-                            f"🧭 Startup reaction reconcile (cache) — capped price-reaction piece marked "
-                            f"reaction_only, kind -> follow_up | '{headline[:60]}'",
-                            level="WARNING")
+                        changed += len(msgs)
+                        _emit(msgs, 'cache', headline)
                 if cache_changed:
                     atomic_write_json(cache_file, cache_data)
         except Exception as e:
-            pulse_logger.log(f"⚠️ Startup tier reconcile (cache) failed: {e}", level="WARNING")
-        # Always log, even when nothing changed: a clean pass must be
-        # distinguishable from a pass that never ran. Runs in __init__ and
-        # again in __main__, so every boot shows this line twice.
+            pulse_logger.log(f"⚠️ {phase} tier reconcile (cache) failed: {e}", level="WARNING")
+        return checked, changed
+
+    def _reconcile_served_items(self, items):
+        """Apply the same invariants to an already-built served item list
+        (the 3-min cached fetch() result), so a card fixed in the store stops
+        voting on THIS refresh rather than on the next live fetch. Logs only
+        on change; returns the number of changes."""
+        changed = 0
+        for item in items or []:
+            msgs = self._reconcile_record(item, 'haiku_tier', 'haiku_tier_reasoning')
+            for m in msgs:
+                pulse_logger.log(f"🧭 Refresh {m.format(src='served')} | '{(item.get('headline') or '')[:60]}'",
+                                 level="WARNING")
+            changed += len(msgs)
+        return changed
+
+    def reconcile_stored_tier_claims(self):
+        """Startup self-heal: align stored tiers with affirmative tier claims
+        in their own reasoning text, and flag Price-Reaction-Cap records as
+        reaction_only (see _reconcile_record()). Covers pinned_stories.json
+        and the gemini_classifications.json cache. The same pass runs on
+        every refresh from fetch() via _reconcile_scoring_state(); this
+        wrapper only adds the always-on startup summary line."""
+        checked, changed = self._reconcile_scoring_state('Startup')
+        # Always log at startup, even when nothing changed: a clean pass must
+        # be distinguishable from a pass that never ran. Runs in __init__ and
+        # again in __main__, so every boot shows this line twice. Refresh
+        # passes log nothing on a no-op.
         pulse_logger.log(f"RECONCILE TIER ran | checked={checked} changed={changed}")
         return changed
 
@@ -6473,8 +6496,9 @@ CONTEXT: {context}"""
             or not self.is_article_too_old(i.get('published_at', ''))
         ]
         aged_out = before_age - len(filtered)
+        reconciled = self._reconcile_served_items(filtered)
 
-        if not merged and not removed and not aged_out:
+        if not merged and not removed and not aged_out and not reconciled:
             return data
         flags = self.identify_flags(filtered)
         score = self.calculate_score(filtered, flags)
@@ -6487,6 +6511,8 @@ CONTEXT: {context}"""
             pulse_logger.log(f"🔄 Cache refresh — merged {merged} newly-classified article(s), score recomputed: {score}")
         if removed:
             pulse_logger.log(f"🚫 Cache fallback — removed {removed} blocklisted item(s), score recomputed: {score}")
+        if reconciled:
+            pulse_logger.log(f"🧭 Cache refresh — reconciled {reconciled} served item(s), score recomputed: {score}")
         if aged_out:
             pulse_logger.log(f"🕐 Cache fallback — aged out {aged_out} item(s) past 48h TTL, score recomputed: {score}")
         return data
@@ -6517,6 +6543,10 @@ CONTEXT: {context}"""
             # reads and mechanical matching. See its own docstring for why
             # this is a genuinely separate pass from the ingest-time fold.
             self._reevaluate_pinned_ec_folds()
+            # Same unconditional per-refresh contract for the scoring-state
+            # self-heals (tier claim, price-reaction reaction_only): one
+            # shared path with the startup pass. Silent on a no-op.
+            self._reconcile_scoring_state('Refresh')
 
             existing = cache.load(self.cache_key)
             age_minutes = cache.get_age_minutes(self.cache_key)
