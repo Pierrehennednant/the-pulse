@@ -1646,6 +1646,9 @@ class GeopoliticalPipeline:
         # same event as an earlier card — it rides that card's clock and is
         # never a separate vote in calculate_score().
         'event_folded': 'event_folded',
+        # Which event it folded into — lets the self-fold invariant
+        # (_clear_self_folds()) check scored items and pins, not just the cache.
+        'event_key': 'event_key',
         'clock_anchor': 'clock_anchor',
         'clock_hours': 'clock_hours',
     }
@@ -3144,7 +3147,102 @@ Articles to classify:
     # kind and classified_at drive the survivor's 48h clock (classified_at is
     # what known_relevant/is_article_too_old age a cache entry from), and the
     # event-rule audit fields describe the echo, not the original.
-    MERGE_KIND_GUARD_KEEP_FIELDS = ('kind', 'classified_at', 'event_rule', 'pre_rule_kind', 'pre_rule_tier')
+    # EVENT STATE — the single list of per-card fields that decide whether a
+    # card is folded into another card's event, whose clock it runs on, and
+    # whether it may pin or vote. They describe THIS card's own place in the
+    # event graph, never "the story's latest read", so a same-story duplicate
+    # merge must never carry them from the incoming echo onto the survivor
+    # (11/2 10:12 PM ET: the folded Qeshm duplicate's event_folded/event_key
+    # were copied onto "U.S. strikes Iranian targets", folding the card into
+    # its own event — Geo 0.0 instead of ~-1.45). Add any new field of this
+    # kind HERE; MERGE_KIND_GUARD_KEEP_FIELDS and every merge path derive
+    # from it.
+    EVENT_FOLD_FIELDS = ('event_folded', 'event_key', 'clock_anchor', 'clock_hours', 't1_live_fold')
+    EVENT_STATE_FIELDS = EVENT_FOLD_FIELDS + ('reaction_only', 'keyword_fallback_only', 'ec_folded')
+
+    # Fields a same-story merge never copies from an incoming follow_up onto
+    # an original first_print survivor (see _guarded_duplicate_merge()):
+    # kind and classified_at drive the survivor's 48h clock (classified_at is
+    # what known_relevant/is_article_too_old age a cache entry from), the
+    # event-rule audit fields describe the echo, not the original, and the
+    # EVENT_STATE_FIELDS are never merged on any path.
+    # SURVIVOR CLASSIFICATION — the original card's own Haiku read (what it
+    # scores and how it is shown). When the kind guard keeps an original
+    # first_print against a follow_up echo, the echo is a restatement: its
+    # read describes the echo, not the event, and must not downgrade the
+    # survivor (11/2: the Qeshm echo's Tier 3 neutral "restates the
+    # already-scored Qeshm strike" overwrote the Tier 1 bearish 0.85 card).
+    # gate_pass is included: the political-pressure gate judges the article
+    # it was run on; the Sep 18 refresh rule still applies on every
+    # non-guarded merge (first_print echo, or follow_up onto follow_up).
+    SURVIVOR_CLASSIFICATION_FIELDS = ('relevant', 'confidence', 'category', 'direction', 'reason', 'summary',
+                                      'uncertainty_score', 'tier', 'tier_reasoning', 'gate_pass', 'text_source',
+                                      'article_text', 'hard_keep', 'hard_keep_override', 'drop_reason',
+                                      't1_reject_recheck')
+    MERGE_KIND_GUARD_KEEP_FIELDS = (('kind', 'classified_at', 'event_rule', 'pre_rule_kind', 'pre_rule_tier')
+                                    + SURVIVOR_CLASSIFICATION_FIELDS + EVENT_STATE_FIELDS)
+    # Pin-record names of the survivor's classification (pins store the
+    # classification under the same names) — used to restore a cache entry
+    # an older merge overwrote. See _clear_self_folds().
+    PIN_RESTORE_FIELDS = ('direction', 'tier', 'confidence', 'tier_reasoning', 'summary', 'gate_pass',
+                          'uncertainty_score', 'kind')
+
+    @classmethod
+    def _keep_survivor_event_state(cls, existing, merged):
+        """Survivor's EVENT_STATE_FIELDS win over the incoming read's:
+        drop the incoming values, restore the survivor's own (absent stays
+        absent). Returns a new dict; never mutates `merged`."""
+        out = {k: v for k, v in merged.items() if k not in cls.EVENT_STATE_FIELDS}
+        for k in cls.EVENT_STATE_FIELDS:
+            if k in existing:
+                out[k] = existing[k]
+        return out
+
+    def _event_self_fold_key(self, rec, headline, mem):
+        """event_key when `rec` is marked folded into the event it ORIGINATED
+        (its headline is the event row's origin: sample_headline, or the
+        first stored identity — identities[0] is never trimmed); else None.
+        A row we can't see proves nothing, so it is left alone."""
+        if not isinstance(rec, dict) or not rec.get('event_folded'):
+            return None
+        key = rec.get('event_key')
+        row = (mem or {}).get(key) if key else None
+        if not isinstance(row, dict):
+            return None
+        hn = _event_headline_norm(headline or rec.get('headline') or '')
+        if not hn:
+            return None
+        origins = {_event_headline_norm(row.get('sample_headline') or '')}
+        idents = row.get('identities') or []
+        if idents and isinstance(idents[0], dict):
+            origins.add(idents[0].get('headline_norm') or '')
+        return key if hn in origins else None
+
+    def _clear_self_folds(self, records, mem, restore_from=None):
+        """Invariant: a card is never folded into its own event. `records` is
+        an iterable of (headline, record dict). Clears EVENT_FOLD_FIELDS in
+        place on any self-fold, logs once per card/key. A self-fold is the
+        mark of a pre-fix merge that also overwrote the survivor's read, so
+        when `restore_from` (headline -> unfolded pin record) has this card,
+        PIN_RESTORE_FIELDS are restored from it. Returns count."""
+        n = 0
+        for headline, rec in records:
+            key = self._event_self_fold_key(rec, headline, mem)
+            if key is None:
+                continue
+            for k in self.EVENT_FOLD_FIELDS:
+                rec.pop(k, None)
+            n += 1
+            src = (restore_from or {}).get(headline)
+            restored = ''
+            if isinstance(src, dict) and not src.get('event_folded') and src is not rec:
+                for k in self.PIN_RESTORE_FIELDS:
+                    if k in src:
+                        rec[k] = src[k]
+                restored = f" | restored=pin T{src.get('tier')} {src.get('direction')} conf={src.get('confidence')}"
+            self._event_log_once('self_fold', (_event_headline_norm(headline), key),
+                                 f"EVENT FOLD SELF-CLEARED | key={key} | headline={(headline or '')[:90]}{restored}")
+        return n
 
     @staticmethod
     def _merge_kind_guard_applies(existing_kind, incoming_kind):
@@ -3163,13 +3261,17 @@ Articles to classify:
     def _guarded_duplicate_merge(self, existing, new_class, original_headline, incoming_headline):
         """Value to write over a same-story survivor's gemini_cache entry.
         Unchanged behavior (return new_class) unless the survivor is
-        first_print and the incoming read is follow_up: then every field is
-        merged EXCEPT kind/classified_at (and the echo's event-rule audit
-        fields), so the original keeps first_print and its clock start.
+        first_print and the incoming read is follow_up: then the survivor
+        keeps MERGE_KIND_GUARD_KEEP_FIELDS (kind, clock, its own
+        classification, event state) and the echo only adds fields the
+        survivor lacks. EVENT_STATE_FIELDS are never merged on any branch.
         Not used by the EC fold, which is a separate rule."""
         if self._late_attribution_locked(existing):
-            merged = {k: v for k, v in new_class.items() if k not in self.MERGE_KIND_GUARD_KEEP_FIELDS}
-            for k in self.MERGE_KIND_GUARD_KEEP_FIELDS:
+            # Late-attribution lock: takes the incoming read (then caps it),
+            # unchanged — only the clock/audit fields and event state are kept.
+            late_keep = ('kind', 'classified_at', 'event_rule', 'pre_rule_kind', 'pre_rule_tier') + self.EVENT_STATE_FIELDS
+            merged = {k: v for k, v in new_class.items() if k not in late_keep}
+            for k in late_keep:
                 if k in existing:
                     merged[k] = existing[k]
             merged['kind'] = 'follow_up'
@@ -3180,7 +3282,7 @@ Articles to classify:
             )
             return merged
         if not self._merge_kind_guard_applies(existing.get('kind'), new_class.get('kind')):
-            return new_class
+            return self._keep_survivor_event_state(existing, new_class)
         merged = {k: v for k, v in new_class.items() if k not in self.MERGE_KIND_GUARD_KEEP_FIELDS}
         for k in self.MERGE_KIND_GUARD_KEEP_FIELDS:
             if k in existing:
@@ -4981,6 +5083,27 @@ CONTEXT: {context}"""
                 }))
             entries.sort(key=lambda e: e[0] or '')
             changed = self._apply_event_rules([e for _, e in entries], log_loaded=True)
+            # Self-fold invariant over the same cache entries and pins
+            # (heals records already on disk; persisted below).
+            try:
+                with self._event_memory_lock:
+                    mem, _ = self._load_event_memory()
+                # Pins first: a pin written before event_key was carried
+                # borrows the key from its own cache entry (same headline).
+                pin_recs = []
+                for p in pinned_stories or []:
+                    c = gemini_cache.get(p.get('headline', ''))
+                    if p.get('event_folded') and not p.get('event_key') and isinstance(c, dict) and c.get('event_key'):
+                        p['event_key'] = c['event_key']
+                    pin_recs.append((p.get('headline', ''), p))
+                if self._clear_self_folds(pin_recs, mem):
+                    changed.add('pin')
+                cache_recs = [(h, gemini_cache.get(h)) for h in covered]
+                pin_by_headline = {h: p for h, p in pin_recs if h}
+                if self._clear_self_folds(cache_recs, mem, restore_from=pin_by_headline):
+                    changed.add('cache')
+            except Exception as e:
+                pulse_logger.log(f"⚠️ Self-fold check failed: {e}", level="WARNING")
             if 'cache' in changed:
                 atomic_write_json(gemini_cache_file, gemini_cache)
             if 'pin' in changed:
@@ -5884,6 +6007,24 @@ CONTEXT: {context}"""
         folded_count = 0
         event_folded_count = 0
         tier_map = {1: (1.7, 4.0), 2: (0.75, 2.0), 3: (0.35, 1.0)}
+        # Self-fold invariant at scoring time (e.g. a served cached snapshot
+        # or pin list from before the on-disk heal). Memory read only when
+        # some item is folded.
+        if any(isinstance(i, dict) and i.get('event_folded') for i in items):
+            try:
+                with self._event_memory_lock:
+                    mem, _ = self._load_event_memory()
+                self._clear_self_folds([(i.get('headline', ''), i) for i in items], mem)
+            except Exception as e:
+                pulse_logger.log(f"⚠️ Self-fold check failed: {e}", level="WARNING")
+
+        def _not_scored(item, reason):
+            # Silent non-votes of pinned Tier 1/2 cards show up in the logs.
+            # Logging only — never changes the score.
+            if (item.get('pinned') or item.get('pin_active')) and item.get('haiku_tier') in (1, 2):
+                pulse_logger.log(
+                    f"⚠️ PINNED CARD NOT SCORED | tier={item.get('haiku_tier')} | reason={reason} | "
+                    f"headline={str(item.get('headline') or '')[:90]}", level="WARNING")
         for item in items:
             # Keyword-fallback-only articles (no Haiku confirmation yet) never
             # contribute to the score — a pure keyword match is not a confirmed
@@ -5892,6 +6033,7 @@ CONTEXT: {context}"""
             # Haiku confirms or dropped entirely if Haiku rejects them.
             if item.get('keyword_fallback_only'):
                 pending_count += 1
+                _not_scored(item, 'keyword_fallback_only')
                 continue
             # Gate-failed items (e.g. political pressure on the Fed with no
             # new concrete action — see the POLITICAL PRESSURE ON THE FED —
@@ -5906,6 +6048,7 @@ CONTEXT: {context}"""
             # which can still be nonzero.
             if item.get('haiku_gate_pass') is False:
                 gate_failed_count += 1
+                _not_scored(item, 'gate_failed')
                 continue
             # Price-reaction-only items (Haiku's reaction_only verdict: the
             # article's own news is a market price move caused by a geo event,
@@ -5915,6 +6058,7 @@ CONTEXT: {context}"""
             # can restore the vote.
             if item.get('reaction_only'):
                 reaction_only_count += 1
+                _not_scored(item, 'reaction_only')
                 continue
             # App-layer EC fold (Sep 18 Warsh fix) — a recap/analysis article
             # about an FOMC event the EC pillar already scored never
@@ -5927,21 +6071,25 @@ CONTEXT: {context}"""
             # original's clock but never votes a second time.
             if item.get('event_folded'):
                 event_folded_count += 1
+                _not_scored(item, 'event_folded')
                 continue
             if self._check_ec_fold(item, ec_anchors):
                 item['kind'] = 'follow_up'  # already true by construction (condition d) — set explicitly for clarity
                 item['ec_folded'] = True
                 folded_count += 1
+                _not_scored(item, 'ec_folded')
                 continue
             if self._is_ec_survey_recap(item):
                 pulse_logger.log(
                     f"🚫 Geo EC-survey reject (score skipped): {str(item.get('headline') or '')[:80]}"
                 )
+                _not_scored(item, 'ec_survey_recap')
                 continue
             if self._is_aviation_incident(item):
                 pulse_logger.log(
                     f"🚫 Geo aviation-incident reject (score skipped): {str(item.get('headline') or '')[:80]}"
                 )
+                _not_scored(item, 'aviation_incident')
                 continue
             # Direction
             direction = item.get('gemini_direction')
@@ -5953,6 +6101,7 @@ CONTEXT: {context}"""
                 s = item.get('sentiment_score', 0.0)
                 sign = 1.0 if s > 0 else (-1.0 if s < 0 else 0.0)
             if sign == 0.0:
+                _not_scored(item, 'no_direction')
                 continue
             # Haiku confidence (None for unclassified articles)
             haiku_conf = item.get('haiku_confidence')
@@ -5961,6 +6110,7 @@ CONTEXT: {context}"""
                 # Ticket 2: the keyword backup no longer scores a directional
                 # item that has no tier. Visible, not scored, until Haiku tiers it.
                 self._geo_log_drop(item.get('headline', ''), 'below-threshold', 'detail=keyword backup returned no tier')
+                _not_scored(item, 'no_tier')
                 continue
             if haiku_tier in tier_map:
                 haiku_tier_count += 1
