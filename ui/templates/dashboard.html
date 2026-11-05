@@ -213,9 +213,59 @@
             border-radius:6px; font-size:12px; color:#c8e6d0; line-height:1.5;
         }
         .ai-trigger-pip { width:5px; height:5px; border-radius:50%; background:#2ecc71; margin-top:5px; flex-shrink:0; }
+
+        /* ── Lockdown overlay (display-only, 4:00 PM → 8:00 AM ET) ── */
+        #lockdown-overlay {
+            display: none;
+            position: fixed; inset: 0; z-index: 9999;
+            background: rgba(10, 14, 26, 0.97);
+            align-items: center; justify-content: center;
+            padding: 20px;
+        }
+        #lockdown-overlay .lock-card {
+            max-width: 430px; width: 100%;
+            background: #0d1224; border: 1px solid #1e2d4a; border-radius: 14px;
+            padding: 30px 26px 24px; text-align: center;
+        }
+        #lockdown-overlay .lock-icon { font-size: 30px; margin-bottom: 10px; }
+        #lockdown-overlay .lock-label {
+            font-size: 11px; font-weight: 700; letter-spacing: 2.5px;
+            color: #7a8fa8; margin-bottom: 16px;
+        }
+        #lockdown-overlay .lock-quote {
+            font-size: 17px; line-height: 1.55; font-style: italic; color: #e0e6f0;
+        }
+        #lockdown-overlay .lock-reopen {
+            display: inline-block; margin-top: 20px; padding: 6px 14px;
+            border: 1px solid #4a9eff; border-radius: 999px;
+            color: #4a9eff; font-size: 12.5px; font-weight: 600;
+        }
+        #lockdown-overlay .lock-note { margin-top: 16px; font-size: 11px; color: #7a8fa8; line-height: 1.5; }
     </style>
 </head>
 <body>
+<div id="lockdown-overlay">
+    <div class="lock-card">
+        <div class="lock-icon">🔒</div>
+        <div class="lock-label">LOCKED FOR THE NIGHT</div>
+        <div class="lock-quote">&ldquo;No evening reads. Tonight&rsquo;s read is stale by morning. I trade the fresh Pulse at 8 AM.&rdquo;</div>
+        <div class="lock-reopen">Reopens 8:00 AM ET</div>
+        <div class="lock-note">Display only — the engine keeps running underneath, so the morning read is current the moment this lifts.</div>
+    </div>
+</div>
+<script>
+    // Lockdown window: 4:00 PM → 8:00 AM ET, every day. Visual cover only —
+    // the dashboard's own data refresh keeps running underneath it.
+    function pulseLockdownCheck() {
+        var h = parseInt(new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/New_York', hour: 'numeric', hour12: false
+        }).format(new Date()), 10) % 24;
+        document.getElementById('lockdown-overlay').style.display =
+            (h >= 16 || h < 8) ? 'flex' : 'none';
+    }
+    pulseLockdownCheck();
+    setInterval(pulseLockdownCheck, 60000);
+</script>
 <div class="header">
     <div class="logo" style="display:flex;align-items:center;gap:10px">
         <span>⚡ THE PULSE</span>
