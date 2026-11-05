@@ -218,9 +218,10 @@
         #lockdown-overlay {
             display: none;
             position: fixed; inset: 0; z-index: 9999;
-            background: rgba(10, 14, 26, 0.97);
+            background: #0a0e1a;
             align-items: center; justify-content: center;
             padding: 20px;
+            overflow: hidden; touch-action: none;
         }
         #lockdown-overlay .lock-card {
             max-width: 430px; width: 100%;
@@ -260,8 +261,11 @@
         var h = parseInt(new Intl.DateTimeFormat('en-US', {
             timeZone: 'America/New_York', hour: 'numeric', hour12: false
         }).format(new Date()), 10) % 24;
+        var locked = (h >= 16 || h < 8);
         document.getElementById('lockdown-overlay').style.display =
-            (h >= 16 || h < 8) ? 'flex' : 'none';
+            locked ? 'flex' : 'none';
+        document.documentElement.style.overflow = locked ? 'hidden' : '';
+        document.body.style.overflow = locked ? 'hidden' : '';
     }
     pulseLockdownCheck();
     setInterval(pulseLockdownCheck, 60000);
