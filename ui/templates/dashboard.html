@@ -255,13 +255,21 @@
     </div>
 </div>
 <script>
-    // Lockdown window: 4:00 PM → 8:00 AM ET, every day. Visual cover only —
-    // the dashboard's own data refresh keeps running underneath it.
+    // Lockdown window: 4:00 PM → 8:00 AM ET on weekdays; all weekend —
+    // Friday 4:00 PM straight through to Monday 8:00 AM ET. Visual cover
+    // only — the dashboard's own data refresh keeps running underneath it.
     function pulseLockdownCheck() {
-        var h = parseInt(new Intl.DateTimeFormat('en-US', {
-            timeZone: 'America/New_York', hour: 'numeric', hour12: false
-        }).format(new Date()), 10) % 24;
-        var locked = (h >= 16 || h < 8);
+        var parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/New_York', hour: 'numeric', hour12: false,
+            weekday: 'short'
+        }).formatToParts(new Date());
+        var h = 0, wd = '';
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i].type === 'hour') h = parseInt(parts[i].value, 10) % 24;
+            if (parts[i].type === 'weekday') wd = parts[i].value;
+        }
+        var weekend = (wd === 'Sat' || wd === 'Sun');
+        var locked = weekend || (h >= 16 || h < 8);
         document.getElementById('lockdown-overlay').style.display =
             locked ? 'flex' : 'none';
         document.documentElement.style.overflow = locked ? 'hidden' : '';
