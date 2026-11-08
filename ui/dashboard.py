@@ -271,14 +271,6 @@ def manual_input():
             except Exception as refresh_err:
                 pulse_logger.log(f"⚠️ manual_input partial refresh failed: {refresh_err}", level="WARNING")
 
-            try:
-                from pipelines.ai_lens import ai_lens_pipeline
-                latest = snapshot_generator.get_latest()
-                if latest:
-                    ai_lens_pipeline.generate(latest['bias'], latest['pillars'], force=True)
-            except Exception as ai_err:
-                pulse_logger.log(f"⚠️ AI Lens re-trigger on manual_input failed: {ai_err}", level="WARNING")
-
             return jsonify({'status': 'saved', 'event': event_title, 'actual': actual_value})
 
         return jsonify({'error': 'Failed to save'}), 500
@@ -707,27 +699,19 @@ def macro_manual_pull():
         result['refresh_warning'] = 'Pull stored, but immediate recompute unavailable — next 5-minute cycle will pick it up'
     return jsonify(result)
 
-@app.route('/api/ai_lens')
+@app.route('/api/structure')
 @require_auth
-def api_ai_lens():
-    from pipelines.ai_lens import ai_lens_pipeline
-    cached = ai_lens_pipeline._load_cache()
-    if not cached or not cached.get('analysis'):
-        return jsonify({'error': 'No AI Lens data available'}), 404
-    is_fresh = False
-    try:
-        tz = pytz.timezone(TIMEZONE)
-        ts = datetime.fromisoformat(cached['timestamp'])
-        if ts.tzinfo is None:
-            ts = pytz.utc.localize(ts)
-        is_fresh = ts.astimezone(tz).date() == datetime.now(tz).date()
-    except Exception:
-        pass
-    return jsonify({
-        'analysis': cached['analysis'],
-        'timestamp': cached['timestamp'],
-        'is_fresh': is_fresh,
-    })
+def api_structure():
+    """Market Structure panel data — descriptive levels and gaps only
+    (nearest 4H fair value gaps, prior day high/low with price's position
+    in that range, Monday weekend gap levels). Computed on demand by
+    pipelines/market_structure.py behind its own short cache; it is not a
+    pillar and never feeds the bias calculation."""
+    from pipelines.market_structure import market_structure_pipeline
+    data = market_structure_pipeline.fetch()
+    if not data or (data.get('nq') is None and data.get('es') is None):
+        return jsonify({'error': 'No structure data available'}), 404
+    return jsonify(data)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=False)
