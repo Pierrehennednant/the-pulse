@@ -271,14 +271,6 @@ def manual_input():
             except Exception as refresh_err:
                 pulse_logger.log(f"⚠️ manual_input partial refresh failed: {refresh_err}", level="WARNING")
 
-            try:
-                from pipelines.ai_lens import ai_lens_pipeline
-                latest = snapshot_generator.get_latest()
-                if latest:
-                    ai_lens_pipeline.generate(latest['bias'], latest['pillars'], force=True)
-            except Exception as ai_err:
-                pulse_logger.log(f"⚠️ AI Lens re-trigger on manual_input failed: {ai_err}", level="WARNING")
-
             return jsonify({'status': 'saved', 'event': event_title, 'actual': actual_value})
 
         return jsonify({'error': 'Failed to save'}), 500
@@ -707,27 +699,29 @@ def macro_manual_pull():
         result['refresh_warning'] = 'Pull stored, but immediate recompute unavailable — next 5-minute cycle will pick it up'
     return jsonify(result)
 
-@app.route('/api/ai_lens')
+@app.route('/calendar')
 @require_auth
-def api_ai_lens():
-    from pipelines.ai_lens import ai_lens_pipeline
-    cached = ai_lens_pipeline._load_cache()
-    if not cached or not cached.get('analysis'):
-        return jsonify({'error': 'No AI Lens data available'}), 404
-    is_fresh = False
+def calendar_page():
+    """Day Probability Calendar — ratings and reasons ONLY (no bias, no
+    confidence, no pillar data, by design). This page intentionally carries
+    none of the dashboard's lockdown code, so it stays reachable while the
+    dashboard is locked."""
+    from pipelines.probability_calendar import probability_calendar
+    cal = None
     try:
-        tz = pytz.timezone(TIMEZONE)
-        ts = datetime.fromisoformat(cached['timestamp'])
-        if ts.tzinfo is None:
-            ts = pytz.utc.localize(ts)
-        is_fresh = ts.astimezone(tz).date() == datetime.now(tz).date()
-    except Exception:
-        pass
-    return jsonify({
-        'analysis': cached['analysis'],
-        'timestamp': cached['timestamp'],
-        'is_fresh': is_fresh,
-    })
+        cal = probability_calendar.fetch()
+    except Exception as e:
+        pulse_logger.log(f"⚠️ Probability calendar failed: {e}", level="WARNING")
+    return render_template('calendar.html', cal=cal)
+
+@app.route('/api/calendar')
+@require_auth
+def api_calendar():
+    from pipelines.probability_calendar import probability_calendar
+    try:
+        return jsonify(probability_calendar.fetch())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=False)

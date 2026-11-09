@@ -280,17 +280,16 @@ Haiku assigns tier, direction, confidence, and reasoning for every geo article a
 - Clears on Sunday weekly reset
 - Events blocked by title + scheduled date identifier
 
-## AI Lens (`pipelines/ai_lens.py`)
+## Day Probability Calendar (`pipelines/probability_calendar.py`)
 
-- Powered by **Grok** (`grok-4.20-0309-reasoning`) via `GROK_API_KEY`
-- Generates once daily after 8:30 AM EST; re-fires on manual EC input submission
-- Uses last 10 daily snapshots as historical context
-- Cached to `/data/ai_lens_cache.json`
+- Ratings-only day planner served at `/calendar` (+ `/api/calendar`): each trading day rated PROBABLE / MID / DEFENSIVE / DON'T LOOK from the week's recorded facts (red-folder timing, FOMC position, thin sessions, prior-session range percentiles, overnight travel, Pulse gate crossings)
+- **Guardrail:** the output is ratings and reason strings ONLY — no bias, no confidence, no pillar data — which is why the page intentionally sits outside the dashboard lockdown. The Pulse's confidence is read internally against the 55% gate and never rendered
+- Computed at read time with a 240-second server cache (`/data/probability_calendar_cache.json`) — a Sunday baseline that revises only when a recorded fact lands (checkpoint model)
+- Earnings markers live in `data/earnings_markers.json` (marked, never scored; a marker night exempts the next morning from a quietness-only DON'T LOOK)
 
 ## AI Usage
 
 - **Geopolitical pipeline:** Claude Haiku (`claude-haiku-4-5-20251001`) for story classification (relevance, direction, tier, confidence, reasoning, summary), pin comparison, and tier backfill. Do not swap models without verifying prompt/cost fit.
-- **AI Lens:** Grok (`grok-4.20-0309-reasoning`). Do not swap without verifying cost/output fit.
 
 ## Data Sources
 
@@ -311,7 +310,7 @@ Haiku assigns tier, direction, confidence, and reasoning for every geo article a
 
 ## Key Env Vars
 
-`FRED_API_KEY`, `GROK_API_KEY`, `ANTHROPIC_API_KEY`, `THENEWS_API_KEY`, `DASHBOARD_PASSWORD`, `SECRET_KEY`
+`FRED_API_KEY`, `ANTHROPIC_API_KEY`, `THENEWS_API_KEY`, `DASHBOARD_PASSWORD`, `SECRET_KEY`
 
 ## Key Data Files
 
@@ -323,7 +322,7 @@ Haiku assigns tier, direction, confidence, and reasoning for every geo article a
 | `/data/pinned_stories.json` | Pinned geopolitical articles | 48-hour expiry |
 | `/data/ec_blocklist.json` | EC event blocklist | Clears Sunday |
 | `/data/prop_firm_weekly_threshold.json` | Prop Firm bias threshold for current ISO week | Weekly |
-| `/data/ai_lens_cache.json` | AI Lens daily narrative cache | Daily |
+| `/data/probability_calendar_cache.json` | Probability calendar last-computed ratings | 240-second refresh |
 | `/data/snapshots/` | Live 5-minute bias snapshots | Last 50 |
 | `/data/snapshots/daily/` | Daily 4 PM closing snapshots | Last 10 |
 | `/data/vix_cache.json` | VIX Level-3 fallback (FRED prior-day close) | Refreshed daily 4:35 PM ET |
@@ -346,7 +345,7 @@ pipelines/
   macro_sentiment.py           VIX, VXN, Fear & Greed
   recommendation.py            Size recommendation engine (Live + Prop Firm)
   manual_input.py              Manual actual value persistence (7-day)
-  ai_lens.py                   AI Lens daily narrative (Grok)
+  probability_calendar.py      Day Probability Calendar — ratings-only day planner
   weekly_summary.py            Weekly narrative summary
 processors/
   bias_calculator.py           Weighted bias + confidence + directives
