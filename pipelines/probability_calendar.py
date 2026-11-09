@@ -358,6 +358,7 @@ class ProbabilityCalendar:
         weeks = [{"week_of": monday.isoformat(), "label": "This week",
                   "days": days}]
         return {"generated_at": now.isoformat(), "today": today.isoformat(),
+                "updated_label": now.strftime("%b %-d, %Y · %-I:%M %p ET"),
                 "weeks": weeks}
 
     def _week_red_days(self, monday, events):
