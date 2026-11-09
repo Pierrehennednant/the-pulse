@@ -41,9 +41,9 @@ a downgrade — LOW requires positive evidence of quiet.
 
 DATA SOURCES (all already used by this codebase)
 ------------------------------------------------
-  * Red-folder events: the EC pipeline's cache (this week) plus the same
-    faireconomy feed's next-week file (next week), fetched the same way the
-    EC pipeline fetches it.
+  * Red-folder events: the EC pipeline's cache — this week only. The
+    calendar works week to week (Pierre, 2026-11-09: the next-week
+    baseline was all-MID noise and was removed).
   * FOMC decision dates + US market calendar: static tables below (2026–2027).
   * Ranges / overnight travel / weekend gap: Yahoo bars via yfinance, the
     pattern used by pipelines/market_structure.py. Adaptive overnight line =
@@ -73,14 +73,11 @@ import yfinance as yf
 from utils.cache import Cache
 from utils.file_lock import atomic_write_json
 from utils.logger import pulse_logger
-from utils.retry import fetch_with_retry
 
 ET = pytz.timezone("America/New_York")
 
 CACHE_FILE = "/data/probability_calendar_cache.json"
 CACHE_TTL_S = 240  # same cadence as pipelines/market_structure.py
-
-FF_NEXTWEEK_URL = "https://nfs.faireconomy.media/ff_calendar_nextweek.json"
 
 EARNINGS_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -128,7 +125,6 @@ FOMC_TITLES = {
     "FOMC Economic Projections", "FOMC Statement",
 }
 EC_EXCLUSIONS = {"FOMC Meeting Minutes", "FOMC Statement"}
-SPEECH_WORDS = ("speak", "speech", "testif", "remarks", "panel", "discussion")
 
 TIER_PROBABLE = "PROBABLE"
 TIER_MID = "MID"
@@ -208,15 +204,11 @@ class ProbabilityCalendar:
 
     # ── inputs ──────────────────────────────────────────────────────────────
     def _load_events(self):
-        """(events, nextweek_ok): date -> [{'title', 'time'}] red-folder events.
+        """events: date -> [{'title', 'time'}] red-folder events, this week.
 
-        This week comes from the EC pipeline's cache; next week from the same
-        faireconomy feed the EC pipeline uses. Data prints only: speeches are
-        not release days (FOMC-day titles are handled separately).
-        nextweek_ok matters: a week whose events could not be loaded is
-        UNKNOWN, not quiet — absence of data is never evidence of quiet."""
+        From the EC pipeline's cache. Data prints only: speeches are not
+        release days (FOMC-day titles are handled separately)."""
         events = {}
-        nextweek_ok = False
 
         def add(dstr, title, time_str):
             if not dstr or not title:
@@ -240,28 +232,7 @@ class ProbabilityCalendar:
         except Exception as e:
             pulse_logger.log(f"Calendar: EC cache read failed: {e}", level="WARNING")
 
-        # Next week — raw feed, same filters applied here.
-        try:
-            resp = fetch_with_retry(
-                FF_NEXTWEEK_URL,
-                headers={"User-Agent": "Mozilla/5.0"}, timeout=15,
-            )
-            if resp.status_code == 200:
-                nextweek_ok = True
-                for row in resp.json():
-                    if row.get("country") != "USD" or row.get("impact") != "High":
-                        continue
-                    title = row.get("title") or ""
-                    low = title.lower()
-                    if title in FOMC_TITLES:
-                        add((row.get("date") or "")[:10], title, row.get("date"))
-                    elif title in EC_EXCLUSIONS or any(w in low for w in SPEECH_WORDS):
-                        continue
-                    else:
-                        add((row.get("date") or "")[:10], title, row.get("date"))
-        except Exception as e:
-            pulse_logger.log(f"Calendar: next-week feed failed: {e}", level="WARNING")
-        return events, nextweek_ok
+        return events
 
     def _load_earnings_markers(self):
         try:
@@ -371,28 +342,21 @@ class ProbabilityCalendar:
         if today.weekday() >= 5:
             monday += timedelta(days=7)
 
-        events, nextweek_ok = self._load_events()
-        known_weeks = {monday}
-        if nextweek_ok:
-            known_weeks.add(monday + timedelta(days=7))
+        events = self._load_events()
         markers = self._load_earnings_markers()
         facts = self._market_facts(today, now)
         pulse_conf = self._pulse_confidence()
 
-        weeks = []
-        for label, wk_monday in (("This week", monday),
-                                 ("Next week", monday + timedelta(days=7))):
-            days = []
-            for offset in range(5):
-                d = wk_monday + timedelta(days=offset)
-                if not _is_trading_day(d):
-                    continue
-                days.append(self._rate_day(
-                    d, today, events, markers, facts, pulse_conf,
-                    monday_of=wk_monday,
-                    quiet_week_known=wk_monday in known_weeks))
-            weeks.append({"week_of": wk_monday.isoformat(), "label": label,
-                          "days": days})
+        days = []
+        for offset in range(5):
+            d = monday + timedelta(days=offset)
+            if not _is_trading_day(d):
+                continue
+            days.append(self._rate_day(
+                d, today, events, markers, facts, pulse_conf,
+                monday_of=monday, quiet_week_known=True))
+        weeks = [{"week_of": monday.isoformat(), "label": "This week",
+                  "days": days}]
         return {"generated_at": now.isoformat(), "today": today.isoformat(),
                 "weeks": weeks}
 
