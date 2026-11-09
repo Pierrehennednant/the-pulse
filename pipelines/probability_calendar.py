@@ -181,6 +181,35 @@ def _percentile(sorted_vals, q):
     return sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * (k - lo)
 
 
+# ── Summer mode (Pierre's LOCKED next-summer plan, 2026-11-09) ──
+SUMMER_MONTHS = (6, 7, 8)
+
+SUMMER_RULES_LINES = [
+    "Red-folder windows only. The window opens on the print day and carries "
+    "through the rest of that week. Before the week's first print, you're out.",
+    "Neutral Pulse — ignore the day. A green light is permission to trade, "
+    "not a bigger target.",
+    "Print day with a Pulse edge — full target. Carry days — 2R cap, even on "
+    "a green light.",
+    "Friday print — Friday only. Nothing carries into next week.",
+    "FOMC — no FOMC morning. The window opens the next day.",
+    "Size — half size as normal.",
+]
+
+SUMMER_RULES_WHY = ("Why these rules exist: summer chop nearly broke me in 2026. "
+                    "Thin summer sessions move without reliable follow-through — "
+                    "the frustration was the danger, not the losses. These rules "
+                    "were decided in November, in the cold. Summer Pierre doesn't "
+                    "get to renegotiate them.")
+
+
+def _summer_banner(week_dates):
+    """The locked summer rules, shown at the top of the calendar in summer."""
+    if any(d.month in SUMMER_MONTHS for d in week_dates):
+        return {"lines": SUMMER_RULES_LINES, "why": SUMMER_RULES_WHY}
+    return None
+
+
 class ProbabilityCalendar:
     def __init__(self):
         self.cache = Cache()
@@ -357,8 +386,10 @@ class ProbabilityCalendar:
                 monday_of=monday, quiet_week_known=True))
         weeks = [{"week_of": monday.isoformat(), "label": "This week",
                   "days": days}]
+        week_dates = [monday + timedelta(days=o) for o in range(5)]
         return {"generated_at": now.isoformat(), "today": today.isoformat(),
                 "updated_label": now.strftime("%b %-d, %Y · %-I:%M %p ET"),
+                "summer_banner": _summer_banner(week_dates),
                 "weeks": weeks}
 
     def _week_red_days(self, monday, events):
@@ -383,6 +414,45 @@ class ProbabilityCalendar:
         releases = [e["title"] for e in day_events if e["title"] not in FOMC_TITLES]
         is_fomc = d in FOMC_DECISION_DATES or bool(fomc_titles)
         is_release_day = bool(releases)
+
+        # ── Summer mode (LOCKED plan): Jun–Aug trades red-folder
+        #    windows only — the window opens on the week's first
+        #    release and carries through Friday, gated each morning
+        #    by the Pulse ──
+        summer = d.month in SUMMER_MONTHS
+        summer_out = False
+        summer_carry = False
+        summer_reason = ""
+        if summer:
+            week_release_days = []
+            for offset in range(5):
+                wd = monday_of + timedelta(days=offset)
+                if not _is_trading_day(wd):
+                    continue
+                wtitles = [e["title"] for e in events.get(wd.isoformat(), [])
+                           if e["title"] not in FOMC_TITLES]
+                if wtitles or wd in FOMC_DECISION_DATES:
+                    week_release_days.append(wd)
+            first_release = week_release_days[0] if week_release_days else None
+            if first_release is None:
+                summer_out = True
+                summer_reason = ("Summer plan — no red-folder release this "
+                                 "week; the locked summer rule trades release "
+                                 "windows only, so the whole week sits out")
+            elif is_fomc:
+                summer_out = True
+                summer_reason = ("Summer plan — FOMC day; he never trades "
+                                 "the FOMC morning, so the window opens the "
+                                 "next day")
+            elif d < first_release:
+                summer_out = True
+                summer_reason = ("Summer plan — no catalyst yet; the week's "
+                                 "first release is "
+                                 f"{first_release.strftime('%A')}, and the "
+                                 "locked summer rule stays out until the "
+                                 "window opens")
+            elif not is_release_day:
+                summer_carry = True
 
         prev_td = _prior_trading_day(d)
         next_td = _next_trading_day(d)
@@ -437,14 +507,16 @@ class ProbabilityCalendar:
                                 "about half of a normal session"))
 
         red_days = self._week_red_days(monday_of, events)
-        if quiet_week_known and red_days <= 1 and not is_release_day and not is_fomc:
+        if quiet_week_known and red_days <= 1 and not is_release_day and not is_fomc and not summer:
             scored.append((-1, "Quiet week — one or zero red-folder days all "
                                 "week; a weak calendar is positive evidence "
                                 "of quiet, not just a missing boost"))
 
-        if d.month in (6, 7, 8) and not is_release_day:
-            scored.append((-1, "Summer session — participation is seasonally "
-                                "thin outside release days"))
+        if summer_carry:
+            scored.append((1, "Summer carry — the week's release window is "
+                              "open and carries through Friday while the Pulse "
+                              "gives the okay; a catalyst week doesn't close "
+                              "after two days"))
 
         # ── Range facts (checkpoint inputs; only for days whose prior ──
         #    session is already a recorded fact) ──
@@ -511,6 +583,13 @@ class ProbabilityCalendar:
                                         "below the 25th percentile) with the "
                                         "Pulse under its gate; intraday "
                                         "follow-through is weakest here"))
+            if summer and not summer_out and pulse_conf is not None \
+                    and pulse_conf < 55:
+                summer_out = True
+                summer_reason = ("Summer plan — the Pulse reads Neutral this "
+                                 "morning (confidence under the 55% gate); "
+                                 "the locked summer rule ignores the day "
+                                 "entirely")
 
         # ── Markers (noted, never scored) ──
         marker_fired = False
@@ -551,7 +630,7 @@ class ProbabilityCalendar:
         else:
             tier = TIER_DONT_LOOK
 
-        hard_factors = travel_lock or is_fomc or d in BOND_CLOSED_THIN or any(
+        hard_factors = travel_lock or is_fomc or summer_out or d in BOND_CLOSED_THIN or any(
             "Pre-FOMC" in t for _p, t in scored)
         if marker_fired and tier == TIER_DONT_LOOK and not hard_factors:
             tier = TIER_DEFENSIVE
@@ -567,6 +646,9 @@ class ProbabilityCalendar:
                               f"({facts['line_pct']:.2f}%): an extended overnight "
                               "makes this a no-trade morning, whatever else the "
                               "week holds")
+        if summer_out:
+            tier = TIER_DONT_LOOK
+            reasons.insert(0, summer_reason)
         if not reasons:
             reasons = ["No catalyst and no positive evidence of quiet — a "
                        "baseline day; the morning itself decides"]
