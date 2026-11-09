@@ -875,7 +875,12 @@
             const cal = await resp.json();
             const wk = (cal.weeks || [])[0];
             if (!wk || !wk.days.length) { el.textContent = 'Calendar unavailable.'; return; }
-            el.innerHTML = '<div class="week-strip">' + wk.days.map(d =>
+            const banner = cal.summer_banner ? '<div style="border:2px solid #f5c542;border-radius:10px;padding:10px 12px;margin-bottom:10px;">'
+                + '<div style="font-weight:800;font-size:13px;color:#f5c542;">☀️ SUMMER RULES — LOCKED</div>'
+                + '<ul style="margin:6px 0 4px;padding-left:16px;font-weight:700;font-size:12px;line-height:1.45;color:#e8eef4;">'
+                + cal.summer_banner.lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul>'
+                + '<div style="font-size:11.5px;color:#b0c4d8;line-height:1.45;">' + esc(cal.summer_banner.why) + '</div></div>' : '';
+            el.innerHTML = banner + '<div class="week-strip">' + wk.days.map(d =>
                 `<div class="day-block ${tierClass(d.rating)}${d.is_today ? ' today' : ''}">
                     <div class="db-day">${esc(d.weekday.slice(0, 3))}</div>
                     <div class="db-date">${esc(d.date.slice(5))}</div>
