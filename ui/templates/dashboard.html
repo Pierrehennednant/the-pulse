@@ -212,6 +212,12 @@
             color: #4a9eff; font-size: 12.5px; font-weight: 600;
         }
         #lockdown-overlay .lock-note { margin-top: 16px; font-size: 11px; color: #7a8fa8; line-height: 1.5; }
+        #lockdown-overlay .lock-cal {
+            display: inline-block; margin-top: 18px; padding: 9px 18px;
+            border: 1px solid #f5c542; border-radius: 999px;
+            color: #f5c542; font-size: 13px; font-weight: 700;
+            text-decoration: none;
+        }
 
         /* ── Day Probability week strip (Design 1) — same strip as /calendar ──
            Fit rules, by requirement: reason text wraps in full (no ellipsis,
@@ -258,6 +264,8 @@
         <div class="lock-quote">&ldquo;No evening reads. Tonight&rsquo;s read is stale by morning. I trade the fresh Pulse at 8 AM.&rdquo;</div>
         <div class="lock-reopen" id="lock-reopen">Reopens 8:00 AM ET</div>
         <div class="lock-note">Display only — the engine keeps running underneath, so the morning read is current the moment this lifts.</div>
+        <a class="lock-cal" href="/calendar">🗓️ Day Probability Calendar</a>
+        <div class="lock-note" style="margin-top:10px">Ratings only — no direction, no scores. That's why it stays open during the lock.</div>
     </div>
 </div>
 <script>
