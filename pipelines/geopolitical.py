@@ -5919,8 +5919,11 @@ CONTEXT: {context}"""
                         try:
                             pillar_cached = cache.load(self.cache_key)
                             if pillar_cached:
-                                refreshed = self._refresh_cached_data(pillar_cached['data'])
-                                cache.save(self.cache_key, refreshed)
+                                # persist=True so the emptied/promoted served
+                                # list is what the next empty-fetch cycle
+                                # re-serves — and so _commit_served_state logs
+                                # the post-Haiku Geopolitical updated line.
+                                self._refresh_cached_data(pillar_cached['data'], persist=True)
                         except Exception as e:
                             pulse_logger.log(f"⚠️ Background classify — failed to re-merge into pillar cache: {e}", level="WARNING")
 
@@ -6088,6 +6091,10 @@ CONTEXT: {context}"""
         (flag_multiplier = 1 + 0.2 × priority/100 when priority ≥65).
         """
         if not items:
+            self._last_score_stats = {
+                'voting': 0, 'pending_haiku': 0, 'gate_failed': 0,
+                'reaction_only': 0, 'folded': 0, 'event_folded': 0,
+            }
             return 0.0
         # Loaded once per call — see FOMC_FOLD_* / _check_ec_fold() above.
         ec_anchors = self._load_ec_fomc_anchors()
@@ -6100,6 +6107,7 @@ CONTEXT: {context}"""
         reaction_only_count = 0
         folded_count = 0
         event_folded_count = 0
+        voting_count = 0
         tier_map = {1: (1.7, 4.0), 2: (0.75, 2.0), 3: (0.35, 1.0)}
         # Self-fold invariant at scoring time (e.g. a served cached snapshot
         # or pin list from before the on-disk heal). Memory read only when
@@ -6241,6 +6249,7 @@ CONTEXT: {context}"""
                 )
             weighted_sum += article_score * sign * tier_weight
             total_weight += tier_weight
+            voting_count += 1
         tiered_count = haiku_tier_count + fallback_tier_count
         if tiered_count:
             pulse_logger.log(
@@ -6257,6 +6266,14 @@ CONTEXT: {context}"""
             pulse_logger.log(f"🔗 Geo — {folded_count} article(s) excluded from score, folded into an existing EC event (visible, non-scoring)")
         if event_folded_count:
             pulse_logger.log(f"🔗 Geo — {event_folded_count} article(s) excluded from score, folded into an earlier card's event (original clock, no second vote)")
+        self._last_score_stats = {
+            'voting': voting_count,
+            'pending_haiku': pending_count,
+            'gate_failed': gate_failed_count,
+            'reaction_only': reaction_only_count,
+            'folded': folded_count,
+            'event_folded': event_folded_count,
+        }
         if total_weight == 0:
             return 0.0
         return round(max(-2.0, min(2.0, weighted_sum / total_weight)), 2)
@@ -6467,7 +6484,87 @@ CONTEXT: {context}"""
             kept.append(item)
         return kept, updated
 
-    def _refresh_cached_data(self, data):
+
+    def _served_fingerprint(self, data):
+        """Comparable picture of what is on the Pulse — used so we log a
+        fresh Geopolitical updated line only when the served list (or its
+        score/flag counts) actually changed, not on every quiet 5-min cycle."""
+        if not isinstance(data, dict):
+            return None
+        items = data.get('all_items') or data.get('news_items') or []
+        counts = data.get('served_counts') or {}
+        return (
+            round(float(data.get('pillar_score') or 0), 2),
+            int(counts.get('voting') or 0),
+            int(counts.get('pending_haiku') or 0),
+            len(data.get('active_flags') or []),
+            len(items),
+            tuple((i.get('headline') or '') for i in items),
+        )
+
+    def _commit_served_state(self, data, items, source, *, persist=False, always_log=False):
+        """ONE choke point for every served-list mutation.
+
+        Recomputes flags + score from `items`, writes all_items / news_items /
+        active_flags / pillar_score / total_items / served_counts /
+        last_recomputed onto `data`, optionally persists the pillar cache,
+        and logs a Geopolitical updated line with split counts whenever the
+        served picture changed (or when always_log=True for a fresh live /
+        pinned_only construction).
+
+        Does NOT overwrite data['timestamp'] — that stays the live-fetch
+        stamp so dashboard/API consumers that treat it as "when this live
+        fetch was built" keep working; last_recomputed is the field that
+        moves on every Haiku-merge / cache-refresh / reconcile / age-out.
+
+        source labels (combinable with '+'): live | pinned_only | haiku-merge |
+        blocklist | aged-out | reconciled | cache-refresh
+        """
+        if data is None:
+            data = {}
+        items = list(items or [])
+        prev_fp = self._served_fingerprint(data)
+
+        flags = self.identify_flags(items)
+        score = self.calculate_score(items, flags)
+        stats = getattr(self, '_last_score_stats', None) or {}
+        voting = int(stats.get('voting') or 0)
+        pending = int(stats.get('pending_haiku') or 0)
+
+        tz = getattr(self, 'timezone', None) or pytz.timezone(TIMEZONE)
+        now = datetime.now(tz).isoformat()
+
+        data['all_items'] = items
+        data['news_items'] = items[:10]
+        data['active_flags'] = flags
+        data['total_items'] = len(items)
+        data['pillar_score'] = score
+        data['last_recomputed'] = now
+        data['served_counts'] = {
+            'voting': voting,
+            'pending_haiku': pending,
+            'flags': len(flags),
+            'articles': len(items),
+        }
+
+        new_fp = self._served_fingerprint(data)
+        changed = prev_fp != new_fp
+
+        if persist:
+            cache.save(self.cache_key, data)
+
+        if always_log or changed:
+            # Keep the "✓ Geopolitical updated" prefix so existing watchers /
+            # greps that match on it still hit. Split counts replace the old
+            # "N active flags | M articles" body (hit_patterns.txt does not
+            # parse that body; Tier-1 watch keys on GEO KEEP / outcome-divergence).
+            pulse_logger.log(
+                f"✓ Geopolitical updated | voting={voting} pending_haiku={pending} "
+                f"flags={len(flags)} articles={len(items)} | Score: {score} | source={source}"
+            )
+        return data, changed
+
+    def _refresh_cached_data(self, data, persist=False):
         """Bring a cached fetch() result up to date before serving it:
         1) merge in any Haiku classification that arrived since this snapshot
            was cached but never made it back into the served item list, and
@@ -6475,7 +6572,10 @@ CONTEXT: {context}"""
         Operates on `all_items` (the full scoring set), not the top-10
         `news_items` display slice, and falls back to `news_items` for any
         cache entry saved before `all_items` existed. Recomputes
-        active_flags/pillar_score/news_items if either step changed anything."""
+        active_flags/pillar_score/news_items via _commit_served_state (the
+        single Geopolitical-updated choke point) if either step changed
+        anything. persist=True writes the pillar cache after a real change
+        (used by the Haiku background merge)."""
         all_items = data.get('all_items', data.get('news_items', []))
         all_items, merged = self._merge_fresh_classifications(all_items)
         filtered, removed = self._filter_blocklisted_items(all_items)
@@ -6500,13 +6600,24 @@ CONTEXT: {context}"""
 
         if not merged and not removed and not aged_out and not reconciled:
             return data
-        flags = self.identify_flags(filtered)
-        score = self.calculate_score(filtered, flags)
-        data['all_items'] = filtered
-        data['news_items'] = filtered[:10]
-        data['active_flags'] = flags
-        data['total_items'] = len(filtered)
-        data['pillar_score'] = score
+
+        parts = []
+        if merged:
+            parts.append('haiku-merge')
+        if removed:
+            parts.append('blocklist')
+        if aged_out:
+            parts.append('aged-out')
+        if reconciled:
+            parts.append('reconciled')
+        source = '+'.join(parts) if parts else 'cache-refresh'
+
+        data, _changed = self._commit_served_state(
+            data, filtered, source, persist=persist, always_log=False
+        )
+        score = data.get('pillar_score', 0.0)
+        # Keep the per-reason detail lines (watchers / tests key on them); the
+        # Geopolitical updated line above is the authoritative served picture.
         if merged:
             pulse_logger.log(f"🔄 Cache refresh — merged {merged} newly-classified article(s), score recomputed: {score}")
         if removed:
@@ -6574,35 +6685,25 @@ CONTEXT: {context}"""
                 pinned = self.load_pinned_stories()
                 if pinned:
                     pulse_logger.log(f"⚠️ Geopolitical — News API unavailable and no cache, using {len(pinned)} pinned stories only", level="WARNING")
-                    flags = self.identify_flags(pinned)
-                    score = self.calculate_score(pinned, flags)
-                    return self._backfill_live_published_at({
+                    result = {
                         'pillar': 'geopolitical',
                         'timestamp': datetime.now(self.timezone).isoformat(),
-                        'news_items': pinned[:10],
-                        'all_items': pinned,
-                        'active_flags': flags,
-                        'total_items': len(pinned),
-                        'pillar_score': score,
-                        'status': 'pinned_only'
-                    })
+                        'status': 'pinned_only',
+                    }
+                    self._commit_served_state(
+                        result, pinned, 'pinned_only', persist=False, always_log=True
+                    )
+                    return self._backfill_live_published_at(result)
                 return None
-
-            flags = self.identify_flags(items)
-            score = self.calculate_score(items, flags)
 
             result = {
                 'pillar': 'geopolitical',
                 'timestamp': datetime.now(self.timezone).isoformat(),
-                'news_items': items[:10],
-                'all_items': items,
-                'active_flags': flags,
-                'total_items': len(items),
-                'pillar_score': score,
-                'status': 'live'
+                'status': 'live',
             }
-            cache.save(self.cache_key, result)
-            pulse_logger.log(f"✓ Geopolitical updated | {len(flags)} active flags | {len(items)} articles | Score: {score}")
+            self._commit_served_state(
+                result, items, 'live', persist=True, always_log=True
+            )
             return self._backfill_live_published_at(result)
 
         except Exception as e:

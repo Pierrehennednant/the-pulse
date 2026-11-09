@@ -98,10 +98,15 @@ P._filter_blocklisted_items = lambda items: (items, 0)
 LOGGED.clear()
 out = P._refresh_cached_data(served)
 check(f'(1) served cache recomputed to -1.44 (got {out["pillar_score"]})', out['pillar_score'] == -1.44)
-srv = [l for l in LOGGED if 'reconcile' in l.lower()]
+# Exclude the Geopolitical updated choke-point line (source=reconciled also
+# contains the substring "reconcile") — only the per-reason reconcile detail.
+srv = [l for l in LOGGED if 'reconcile' in l.lower() and not l.startswith('✓ Geopolitical updated')]
 for l in srv: print('  log:', l)
 check('(1) served log lines', len(srv) == 2 and srv[0].startswith('🧭 Refresh reaction reconcile (served)')
       and srv[1].startswith('🧭 Cache refresh — reconciled 1 served item(s), score recomputed: -1.44'))
+geo = [l for l in LOGGED if l.startswith('✓ Geopolitical updated')]
+check('(1) served also emits Geopolitical updated source=reconciled',
+      len(geo) == 1 and 'source=reconciled' in geo[0] and 'Score: -1.44' in geo[0])
 
 # ---- (3) repeat cycles are silent no-ops ----
 LOGGED.clear(); WRITES.clear()
