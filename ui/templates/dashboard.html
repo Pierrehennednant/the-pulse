@@ -212,15 +212,51 @@
             color: #4a9eff; font-size: 12.5px; font-weight: 600;
         }
         #lockdown-overlay .lock-note { margin-top: 16px; font-size: 11px; color: #7a8fa8; line-height: 1.5; }
+
+        /* ── Day Probability week strip (Design 1) — same strip as /calendar ──
+           Fit rules, by requirement: reason text wraps in full (no ellipsis,
+           no truncation, no fixed heights, no clipping); blocks in a row
+           stretch to equal height (flex stretch); on narrow widths the strip
+           wraps to two blocks per row, then stacks — text is never squeezed. */
+        .week-strip { display: flex; gap: 8px; align-items: stretch; }
+        .day-block {
+            flex: 1 1 0; min-width: 0;
+            background: #0a0e1a; border: 1px solid #1e2d4a; border-top: 4px solid #7a8fa8;
+            border-radius: 10px; padding: 12px;
+            display: flex; flex-direction: column;
+        }
+        .day-block.today { box-shadow: inset 0 0 0 1px #4a9eff; }
+        .db-day { font-size: 13px; font-weight: 700; color: #d6e4f0; }
+        .db-date { font-size: 11px; color: #7a8fa8; margin-bottom: 6px; }
+        .db-tier { font-size: 12px; font-weight: 800; letter-spacing: 0.8px; margin-bottom: 8px; }
+        .db-reasons { font-size: 12px; line-height: 1.5; color: #b0c4d8; overflow-wrap: break-word; }
+        .db-reasons p { margin-bottom: 5px; }
+        .db-reasons p:last-child { margin-bottom: 0; }
+        .tier-PROBABLE { border-top-color: #2ecc71; }
+        .tier-PROBABLE .db-tier { color: #2ecc71; }
+        .tier-MID { border-top-color: #f5c542; }
+        .tier-MID .db-tier { color: #f5c542; }
+        .tier-DEFENSIVE { border-top-color: #e67e22; }
+        .tier-DEFENSIVE .db-tier { color: #e67e22; }
+        .tier-DONTLOOK { border-top-color: #e74c3c; }
+        .tier-DONTLOOK .db-tier { color: #e74c3c; }
+        .strip-footer { font-size: 11px; color: #5a6f88; margin-top: 8px; }
+        @media (max-width: 700px) {
+            .week-strip { flex-wrap: wrap; }
+            .day-block { flex: 1 1 44%; }
+        }
+        @media (max-width: 420px) {
+            .day-block { flex: 1 1 100%; }
+        }
     </style>
 </head>
 <body>
 <div id="lockdown-overlay">
     <div class="lock-card">
         <div class="lock-icon">🔒</div>
-        <div class="lock-label">LOCKED FOR THE NIGHT</div>
+        <div class="lock-label" id="lock-label">LOCKED FOR THE NIGHT</div>
         <div class="lock-quote">&ldquo;No evening reads. Tonight&rsquo;s read is stale by morning. I trade the fresh Pulse at 8 AM.&rdquo;</div>
-        <div class="lock-reopen">Reopens 8:00 AM ET</div>
+        <div class="lock-reopen" id="lock-reopen">Reopens 8:00 AM ET</div>
         <div class="lock-note">Display only — the engine keeps running underneath, so the morning read is current the moment this lifts.</div>
     </div>
 </div>
@@ -228,6 +264,10 @@
     // Lockdown window: 4:00 PM → 8:00 AM ET on weekdays; all weekend —
     // Friday 4:00 PM straight through to Monday 8:00 AM ET. Visual cover
     // only — the dashboard's own data refresh keeps running underneath it.
+    // The overlay copy follows the active lock PERIOD, derived from the
+    // same weekday/hour facts as the window itself: the weekend lock runs
+    // Friday 4:00 PM → Monday 8:00 AM; any other locked moment is a
+    // weekday-night lock that lifts the next morning at 8:00 AM.
     function pulseLockdownCheck() {
         var parts = new Intl.DateTimeFormat('en-US', {
             timeZone: 'America/New_York', hour: 'numeric', hour12: false,
@@ -240,6 +280,13 @@
         }
         var weekend = (wd === 'Sat' || wd === 'Sun');
         var locked = weekend || (h >= 16 || h < 8);
+        var weekendLock = weekend || (wd === 'Fri' && h >= 16) || (wd === 'Mon' && h < 8);
+        if (locked) {
+            document.getElementById('lock-label').textContent =
+                weekendLock ? 'LOCKED FOR THE WEEKEND' : 'LOCKED FOR THE NIGHT';
+            document.getElementById('lock-reopen').textContent =
+                weekendLock ? 'Reopens Monday 8:00 AM ET' : 'Reopens 8:00 AM ET';
+        }
         document.getElementById('lockdown-overlay').style.display =
             locked ? 'flex' : 'none';
         document.documentElement.style.overflow = locked ? 'hidden' : '';
@@ -816,18 +863,21 @@
         const el = document.getElementById('calendar-tile-body');
         if (!el) return;
         const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const tierClass = r => 'tier-' + String(r).replace(/[^A-Z]/g, '');
         try {
             const resp = await fetch('/api/calendar');
             if (!resp.ok) throw new Error(resp.status);
             const cal = await resp.json();
             const wk = (cal.weeks || [])[0];
             if (!wk || !wk.days.length) { el.textContent = 'Calendar unavailable.'; return; }
-            el.innerHTML = wk.days.map(d =>
-                `<div style="display:flex;gap:10px;padding:2px 0;align-items:baseline;">
-                    <span style="width:118px;flex-shrink:0;color:#7a8fa8;">${esc(d.weekday.slice(0, 3))} ${esc(d.date.slice(5))}</span>
-                    <strong style="width:104px;flex-shrink:0;">${esc(d.rating)}</strong>
-                    <span>${esc((d.reasons || [])[0] || '')}</span>
-                </div>`).join('');
+            el.innerHTML = '<div class="week-strip">' + wk.days.map(d =>
+                `<div class="day-block ${tierClass(d.rating)}${d.is_today ? ' today' : ''}">
+                    <div class="db-day">${esc(d.weekday.slice(0, 3))}</div>
+                    <div class="db-date">${esc(d.date.slice(5))}</div>
+                    <div class="db-tier">${esc(d.rating)}</div>
+                    <div class="db-reasons">${(d.reasons || []).map(r => `<p>${esc(r)}</p>`).join('')}</div>
+                </div>`).join('') + '</div>' +
+                '<div class="strip-footer">Baseline set Sunday · Revises at checkpoints only</div>';
         } catch (e) {
             el.textContent = 'Calendar unavailable.';
         }

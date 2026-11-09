@@ -18,22 +18,41 @@
         font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px;
         color: #7a8fa8; margin: 26px 0 10px;
     }
-    .day {
-        background: #0d1224; border: 1px solid #1e2d4a; border-radius: 10px;
-        padding: 14px 16px; margin-bottom: 10px;
+    /* ── Week strip (Design 1) ──────────────────────────────────────────
+       Fit rules, by requirement: reason text wraps in full (no ellipsis,
+       no truncation, no fixed heights, no clipping); blocks in a row
+       stretch to equal height (flex stretch); on narrow widths the strip
+       wraps to two blocks per row, then stacks — text is never squeezed. */
+    .week-strip { display: flex; gap: 8px; align-items: stretch; }
+    .day-block {
+        flex: 1 1 0; min-width: 0;
+        background: #0d1224; border: 1px solid #1e2d4a; border-top: 4px solid #7a8fa8;
+        border-radius: 10px; padding: 12px;
+        display: flex; flex-direction: column;
     }
-    .day.today { border-color: #4a9eff; }
-    .day-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-    .day-name { font-size: 15px; font-weight: 600; }
-    .day-date { font-size: 12px; color: #7a8fa8; }
-    .today-tag { font-size: 10px; color: #4a9eff; text-transform: uppercase; letter-spacing: 1px; }
-    .rating { font-size: 13px; font-weight: 700; letter-spacing: 0.6px; margin-left: auto; }
-    .r-PROBABLE { color: #2ecc71; }
-    .r-MID { color: #f5c542; }
-    .r-DEFENSIVE { color: #e67e22; }
-    .r-DONTLOOK { color: #e74c3c; }
-    .reasons { margin-top: 8px; font-size: 13px; line-height: 1.55; color: #b0c4d8; }
-    .reasons li { margin-left: 18px; margin-bottom: 3px; }
+    .day-block.today { box-shadow: inset 0 0 0 1px #4a9eff; }
+    .db-day { font-size: 13px; font-weight: 700; color: #d6e4f0; }
+    .db-date { font-size: 11px; color: #7a8fa8; margin-bottom: 6px; }
+    .db-tier { font-size: 12px; font-weight: 800; letter-spacing: 0.8px; margin-bottom: 8px; }
+    .db-reasons { font-size: 12px; line-height: 1.5; color: #b0c4d8; overflow-wrap: break-word; }
+    .db-reasons p { margin-bottom: 5px; }
+    .db-reasons p:last-child { margin-bottom: 0; }
+    .tier-PROBABLE { border-top-color: #2ecc71; }
+    .tier-PROBABLE .db-tier { color: #2ecc71; }
+    .tier-MID { border-top-color: #f5c542; }
+    .tier-MID .db-tier { color: #f5c542; }
+    .tier-DEFENSIVE { border-top-color: #e67e22; }
+    .tier-DEFENSIVE .db-tier { color: #e67e22; }
+    .tier-DONTLOOK { border-top-color: #e74c3c; }
+    .tier-DONTLOOK .db-tier { color: #e74c3c; }
+    .strip-footer { font-size: 11px; color: #5a6f88; margin-top: 8px; }
+    @media (max-width: 700px) {
+        .week-strip { flex-wrap: wrap; }
+        .day-block { flex: 1 1 44%; }
+    }
+    @media (max-width: 420px) {
+        .day-block { flex: 1 1 100%; }
+    }
     .foot {
         margin-top: 32px; font-size: 12px; line-height: 1.6; color: #5a6f88;
         border-top: 1px solid #1e2d4a; padding-top: 14px;
@@ -51,23 +70,21 @@
     </div>
 
     {% if not cal %}
-        <div class="day"><div class="reasons">Calendar unavailable right now — try again in a few minutes.</div></div>
+        <div class="day-block"><div class="db-reasons">Calendar unavailable right now — try again in a few minutes.</div></div>
     {% else %}
         {% for week in cal.weeks %}
         <h2>{{ week.label }} — week of {{ week.week_of }}</h2>
+        <div class="week-strip">
             {% for day in week.days %}
-            <div class="day{% if day.is_today %} today{% endif %}">
-                <div class="day-head">
-                    <span class="day-name">{{ day.weekday }}</span>
-                    <span class="day-date">{{ day.date }}</span>
-                    {% if day.is_today %}<span class="today-tag">Today</span>{% endif %}
-                    <span class="rating r-{{ day.rating.replace(' ', '').replace("'", '') }}">{{ day.rating }}</span>
-                </div>
-                <ul class="reasons">
-                    {% for reason in day.reasons %}<li>{{ reason }}</li>{% endfor %}
-                </ul>
+            <div class="day-block tier-{{ day.rating.replace(' ', '').replace("'", '') }}{% if day.is_today %} today{% endif %}">
+                <div class="db-day">{{ day.weekday }}</div>
+                <div class="db-date">{{ day.date }}{% if day.is_today %} · Today{% endif %}</div>
+                <div class="db-tier">{{ day.rating }}</div>
+                <div class="db-reasons">{% for reason in day.reasons %}<p>{{ reason }}</p>{% endfor %}</div>
             </div>
             {% endfor %}
+        </div>
+        <div class="strip-footer">Baseline set Sunday · Revises at checkpoints only</div>
         {% endfor %}
     {% endif %}
 
