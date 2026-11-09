@@ -162,6 +162,12 @@ if __name__ == '__main__':
     except Exception as e:
         pulse_logger.log(f"⚠️ Startup hard-keep reconcile failed: {e}", level="WARNING")
 
+    # Served-list baseline (no-op if __init__ already logged one this process).
+    try:
+        geopolitical_pipeline.log_startup_baseline()
+    except Exception as e:
+        pulse_logger.log(f"⚠️ Startup geo baseline failed: {e}", level="WARNING")
+
     port = int(os.environ.get('PORT', 8080))
 
     # Start first pulse refresh in background so Flask starts immediately

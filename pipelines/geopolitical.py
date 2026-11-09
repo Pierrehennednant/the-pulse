@@ -2194,6 +2194,9 @@ class GeopoliticalPipeline:
         self._seed_classifications()
         self._purge_blocked_from_cache()
         self.reconcile_stored_tier_claims()
+        # One served-list baseline after store heals; main.py may call again
+        # after hard-keep reconcile (guarded no-op if already logged).
+        self.log_startup_baseline()
         self.market_keywords = [
             'federal reserve', 'fomc', 'interest rate', 'interest rates',
             'rate hike', 'rate hikes', 'rate cut', 'rate cuts',
@@ -6485,7 +6488,43 @@ CONTEXT: {context}"""
         return kept, updated
 
 
+
+    def log_startup_baseline(self):
+        """Exactly one Geopolitical updated baseline per process boot.
+
+        Restores the pillar cache (if any), applies the same served-list heals
+        as a normal refresh, and logs one line via _commit_served_state with
+        source=startup. Any heal that would have logged source=reconciled /
+        blocklist / aged-out / haiku-merge is folded into that single startup
+        line (force_source). Does not persist unless the heal actually changed
+        the served picture. Subsequent calls in the same process are no-ops,
+        so __init__ and main.py can both invoke this safely.
+        """
+        if getattr(self, '_startup_baseline_logged', False):
+            return
+        self._startup_baseline_logged = True
+
+        existing = cache.load(self.cache_key)
+        if not existing or not isinstance(existing.get('data'), dict):
+            empty = {
+                'pillar': 'geopolitical',
+                'status': 'startup',
+            }
+            self._commit_served_state(
+                empty, [], 'startup', persist=False, always_log=True,
+            )
+            return
+
+        # persist=True is gated inside _commit_served_state on changed=True.
+        self._refresh_cached_data(
+            existing['data'],
+            persist=True,
+            force_source='startup',
+            force_always_log=True,
+        )
+
     def _served_fingerprint(self, data):
+
         """Comparable picture of what is on the Pulse — used so we log a
         fresh Geopolitical updated line only when the served list (or its
         score/flag counts) actually changed, not on every quiet 5-min cycle."""
@@ -6517,8 +6556,8 @@ CONTEXT: {context}"""
         fetch was built" keep working; last_recomputed is the field that
         moves on every Haiku-merge / cache-refresh / reconcile / age-out.
 
-        source labels (combinable with '+'): live | pinned_only | haiku-merge |
-        blocklist | aged-out | reconciled | cache-refresh
+        source labels (combinable with '+'): live | pinned_only | startup |
+        haiku-merge | blocklist | aged-out | reconciled | cache-refresh
         """
         if data is None:
             data = {}
@@ -6550,7 +6589,9 @@ CONTEXT: {context}"""
         new_fp = self._served_fingerprint(data)
         changed = prev_fp != new_fp
 
-        if persist:
+        # Never rewrite the pillar cache on a no-op recompute (startup baseline
+        # and quiet refreshes must not bump the cache file timestamp).
+        if persist and changed:
             cache.save(self.cache_key, data)
 
         if always_log or changed:
@@ -6564,7 +6605,7 @@ CONTEXT: {context}"""
             )
         return data, changed
 
-    def _refresh_cached_data(self, data, persist=False):
+    def _refresh_cached_data(self, data, persist=False, force_source=None, force_always_log=False):
         """Bring a cached fetch() result up to date before serving it:
         1) merge in any Haiku classification that arrived since this snapshot
            was cached but never made it back into the served item list, and
@@ -6599,6 +6640,13 @@ CONTEXT: {context}"""
         reconciled = self._reconcile_served_items(filtered)
 
         if not merged and not removed and not aged_out and not reconciled:
+            if force_always_log:
+                # No heal mutated the list — still emit the forced baseline
+                # (startup) from the restored items without rewriting cache.
+                self._commit_served_state(
+                    data, filtered, force_source or 'cache-refresh',
+                    persist=False, always_log=True,
+                )
             return data
 
         parts = []
@@ -6610,10 +6658,12 @@ CONTEXT: {context}"""
             parts.append('aged-out')
         if reconciled:
             parts.append('reconciled')
-        source = '+'.join(parts) if parts else 'cache-refresh'
+        # force_source folds heal reasons into one baseline line (startup)
+        # so we never log both source=reconciled and source=startup.
+        source = force_source or ('+'.join(parts) if parts else 'cache-refresh')
 
         data, _changed = self._commit_served_state(
-            data, filtered, source, persist=persist, always_log=False
+            data, filtered, source, persist=persist, always_log=force_always_log,
         )
         score = data.get('pillar_score', 0.0)
         # Keep the per-reason detail lines (watchers / tests key on them); the
