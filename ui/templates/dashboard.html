@@ -254,6 +254,23 @@
         @media (max-width: 420px) {
             .day-block { flex: 1 1 100%; }
         }
+        /* Desktop fix (2026-11-10): the strip lives inside the dashboard's
+           480px column, so on a desktop the viewport-keyed rules above never
+           wrapped it — five blocks squeezed into ~440px, one word per line.
+           Mid-width viewports now wrap two per row instead of squeezing;
+           wide screens break the tile out of the column and centre it at a
+           readable width. The phone layouts above are untouched. */
+        @media (min-width: 701px) and (max-width: 899px) {
+            .week-strip { flex-wrap: wrap; }
+            .day-block { flex: 1 1 44%; }
+        }
+        @media (min-width: 900px) {
+            #calendar-tile {
+                width: min(1150px, 95vw);
+                position: relative; left: 50%; transform: translateX(-50%);
+            }
+            .db-reasons { font-size: 12.5px; }
+        }
     </style>
 </head>
 <body>

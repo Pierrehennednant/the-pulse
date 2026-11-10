@@ -46,10 +46,12 @@ DATA SOURCES (all already used by this codebase)
     baseline was all-MID noise and was removed).
   * FOMC decision dates + US market calendar: static tables below (2026–2027).
   * Ranges / overnight travel / weekend gap: Yahoo bars via yfinance, the
-    pattern used by pipelines/market_structure.py. Adaptive overnight line =
-    94th percentile of the trailing 252 |overnight moves| on ^NDX daily bars,
-    floored at 0.90% and capped at 2.50% — the same construction as the
-    morning-read tool (tools/overnight/analyze.py, Yahoo fallback path).
+    pattern used by pipelines/market_structure.py. The travel lock judges
+    the FULL overnight session range against the locked 2% line
+    (TRAVEL_LOCK_PCT — Pierre's settled measure, 2026-11-06). The adaptive
+    p94 line is NOT used here: it judges the NET overnight move for the
+    morning-read flag, a different rule (an earlier build applied it to
+    travel by mistake — corrected 2026-11-10).
   * Pulse strength: processors.snapshot_generator latest snapshot — only the
     confidence number is compared against the 55% gate, internally.
   * Earnings markers: data/earnings_markers.json — top-weight Nasdaq-100
@@ -181,6 +183,40 @@ def _percentile(sorted_vals, q):
     return sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * (k - lo)
 
 
+# ── Locked overnight-travel line (Pierre, settled 2026-11-06) ──
+# The travel lock fires when the FULL overnight session range (18:00 → 09:30
+# ET, round trips included) reaches 2% of the prior close. Pierre settled
+# this measure himself on 2026-11-06 ("over 2% is the better measure"),
+# judging the full range against the dip-excluded floor figure (~1.85% that
+# night). NOT the adaptive p94 line — that one judges the NET overnight move
+# for the morning-read flag, a separate rule.
+TRAVEL_LOCK_PCT = 2.0
+
+
+def _travel_story(facts):
+    """One-line overnight path story: the extremes vs the prior close, which
+    extreme came first (round trip vs one-way), and the net move. Detail by
+    Pierre's request (2026-11-10): the travel number alone doesn't say
+    whether the overnight was violent or a drift."""
+    hi = facts.get("travel_high_pct")
+    lo = facts.get("travel_low_pct")
+    net = facts.get("travel_net_pct")
+    if hi is None or lo is None or net is None:
+        return ""
+    if lo <= -0.75 and hi >= 0.75:
+        if facts.get("travel_low_first"):
+            path = (f"dipped to {lo:+.1f}% then ripped back to {hi:+.1f}% "
+                    f"— a round trip")
+        else:
+            path = (f"ran to {hi:+.1f}% then sold back to {lo:+.1f}% "
+                    f"— a round trip")
+    elif abs(lo) >= abs(hi):
+        path = f"a one-way slide to {lo:+.1f}%"
+    else:
+        path = f"a one-way run to {hi:+.1f}%"
+    return f"The path: {path}; net {net:+.1f}%."
+
+
 # ── Summer mode (Pierre's LOCKED next-summer plan, 2026-11-09) ──
 SUMMER_MONTHS = (6, 7, 8)
 
@@ -310,20 +346,13 @@ class ProbabilityCalendar:
             return []
 
     def _market_facts(self, today, now):
-        """Recorded market facts: adaptive overnight line, prior-session range
-        percentiles, today's overnight travel, Monday's weekend gap."""
-        facts = {"line_pct": None, "prev_rank": None, "prev2_rank": None,
+        """Recorded market facts: prior-session range percentiles, today's
+        overnight travel (range + path detail), Monday's weekend gap."""
+        facts = {"prev_rank": None, "prev2_rank": None,
                  "prev_close_pos": None, "median10_rank": None,
-                 "travel_pct": None, "weekend_gap_pct": None}
-
-        # Adaptive overnight line from ^NDX daily bars (open vs prior close).
-        ndx = self._fetch_bars("^NDX", "2y", "1d")
-        if len(ndx) > 253:
-            moves = [abs(ndx[i][1] / ndx[i - 1][4] - 1) * 100
-                     for i in range(1, len(ndx))]
-            p94 = _percentile(sorted(moves[-252:]), 94)
-            if p94 is not None:
-                facts["line_pct"] = min(2.50, max(0.90, p94))
+                 "travel_pct": None, "travel_high_pct": None,
+                 "travel_low_pct": None, "travel_net_pct": None,
+                 "travel_low_first": None, "weekend_gap_pct": None}
 
         # NQ daily bars → completed sessions and range percentiles.
         nq_daily = self._fetch_bars("NQ=F", "2y", "1d")
@@ -355,9 +384,14 @@ class ProbabilityCalendar:
             win_end = min(now, ET.localize(datetime.combine(today, time(9, 30))))
             window = [b for b in nq_5m if win_start <= b[0] <= win_end]
             if len(window) >= 10 and prior_close:
-                hi = max(b[2] for b in window)
-                lo = min(b[3] for b in window)
+                hi_bar = max(window, key=lambda b: b[2])
+                lo_bar = min(window, key=lambda b: b[3])
+                hi, lo = hi_bar[2], lo_bar[3]
                 facts["travel_pct"] = (hi - lo) / prior_close * 100
+                facts["travel_high_pct"] = (hi / prior_close - 1) * 100
+                facts["travel_low_pct"] = (lo / prior_close - 1) * 100
+                facts["travel_net_pct"] = (window[-1][4] / prior_close - 1) * 100
+                facts["travel_low_first"] = lo_bar[0] < hi_bar[0]
                 if today.weekday() == 0:
                     facts["weekend_gap_pct"] = (window[0][1] / prior_close - 1) * 100
         return facts
@@ -561,10 +595,15 @@ class ProbabilityCalendar:
         # ── Today-only checkpoint facts ──
         travel_lock = False
         if d == today:
-            line = facts.get("line_pct")
             travel = facts.get("travel_pct")
-            if line is not None and travel is not None and travel >= line:
+            if travel is not None and travel >= TRAVEL_LOCK_PCT:
                 travel_lock = True
+            elif travel is not None:
+                story = _travel_story(facts)
+                scored.append((0, f"Overnight travel {travel:.1f}% — under "
+                                  f"the locked {TRAVEL_LOCK_PCT:.0f}% travel "
+                                  f"line, so no travel lock."
+                                  + (f" {story}" if story else "")))
             gap = facts.get("weekend_gap_pct")
             if d.weekday() == 0 and gap is not None and abs(gap) >= 0.5:
                 scored.append((-1, f"Weekend gap of {gap:+.1f}% — Monday gaps "
@@ -641,11 +680,14 @@ class ProbabilityCalendar:
         reasons = [t for _p, t in scored] + notes
         if travel_lock:
             tier = TIER_DONT_LOOK
+            story = _travel_story(facts)
             reasons.insert(0, f"LOCKED RULE — overnight travel "
-                              f"{facts['travel_pct']:.1f}% met the adaptive line "
-                              f"({facts['line_pct']:.2f}%): an extended overnight "
-                              "makes this a no-trade morning, whatever else the "
-                              "week holds")
+                              f"{facts['travel_pct']:.1f}% crossed the locked "
+                              f"{TRAVEL_LOCK_PCT:.0f}% travel line (full "
+                              f"overnight range, round trips included)."
+                              + (f" {story}" if story else "")
+                              + " Extended overnight travel makes this a "
+                              "no-trade morning, whatever else the week holds")
         if summer_out:
             tier = TIER_DONT_LOOK
             reasons.insert(0, summer_reason)
