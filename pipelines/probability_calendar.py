@@ -522,6 +522,10 @@ class ProbabilityCalendar:
         return {"generated_at": now.isoformat(), "today": today.isoformat(),
                 "updated_label": now.strftime("%b %-d, %Y · %-I:%M %p ET"),
                 "summer_banner": _summer_banner(week_dates),
+                # Live number for the dashboard travel alarm (today's
+                # overnight travel %, same value the DON'T LOOK call uses).
+                # None until the overnight window has enough bars to measure.
+                "today_travel_pct": facts.get("travel_pct"),
                 "weeks": weeks}
 
     def _week_red_days(self, monday, events):

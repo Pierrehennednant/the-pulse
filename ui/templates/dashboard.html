@@ -184,6 +184,21 @@
             animation: pulse 2s infinite;
         }
 
+        /* ── Overnight travel alarm banner (08:30–09:30 ET) ── */
+        #travel-alarm-banner {
+            display: none;
+            position: sticky;
+            top: 0;
+            z-index: 9998;
+            padding: 12px 16px;
+            text-align: center;
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: .3px;
+        }
+        #travel-alarm-banner.travel-alarm-red { background: #e74c3c; color: #fff; }
+        #travel-alarm-banner.travel-alarm-amber { background: #b7791f; color: #fff; }
+
         /* ── Lockdown overlay (display-only, 4:00 PM → 8:00 AM ET) ── */
         #lockdown-overlay {
             display: none;
@@ -285,6 +300,7 @@
         <div class="lock-note" style="margin-top:10px">Ratings only — no direction, no scores. That's why it stays open during the lock.</div>
     </div>
 </div>
+<div id="travel-alarm-banner" role="alert"></div>
 <script>
     // Lockdown window: 4:00 PM → 8:00 AM ET on weekdays; all weekend —
     // Friday 4:00 PM straight through to Monday 8:00 AM ET. Visual cover
@@ -910,6 +926,121 @@
         }
     }
 
+    // ── Overnight travel alarm ──────────────────────────────────────────
+    // Rings on this computer (never the phone) ONLY 08:30–09:30 ET on
+    // weekdays, the moment today's overnight travel crosses the locked 2%
+    // line (full overnight range 18:00 → 09:30 ET, round trips included —
+    // the same number the calendar's DON'T LOOK call uses). If travel is
+    // already >= 2% when the window opens — or when the page loads inside
+    // the window — it rings immediately. One ring per day; the banner stays
+    // until the window ends. 1.6–2.0% shows an amber "approaching" banner
+    // with no sound. Sound needs one click/keypress on the page first
+    // (browser autoplay rule); the banner shows regardless. The alarm never
+    // fires while the lockdown overlay is up.
+    const TRAVEL_LOCK_PCT = 2.0;
+    const TRAVEL_WARN_PCT = 1.6;
+    let _travelAlarmRungFor = null;   // YYYY-MM-DD the red ring fired
+    let _travelAudioCtx = null;
+    let _travelAudioUnlocked = false;
+
+    function _travelAlarmUnlockAudio() {
+        if (_travelAudioUnlocked) return;
+        try {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (!AC) return;
+            _travelAudioCtx = _travelAudioCtx || new AC();
+            if (_travelAudioCtx.state === 'suspended') _travelAudioCtx.resume();
+            _travelAudioUnlocked = true;
+        } catch (e) { /* audio unavailable — banner still shows */ }
+    }
+    ['pointerdown', 'keydown'].forEach(ev =>
+        document.addEventListener(ev, _travelAlarmUnlockAudio, { once: true }));
+
+    function _travelAlarmBeep() {
+        try {
+            _travelAlarmUnlockAudio();
+            if (!_travelAudioCtx) return;
+            const ctx = _travelAudioCtx, t0 = ctx.currentTime;
+            [0, 0.35, 0.7].forEach((dt, i) => {
+                const o = ctx.createOscillator(), g = ctx.createGain();
+                o.type = 'sine'; o.frequency.value = i === 2 ? 1175 : 880;
+                g.gain.setValueAtTime(0.0001, t0 + dt);
+                g.gain.exponentialRampToValueAtTime(0.25, t0 + dt + 0.02);
+                g.gain.exponentialRampToValueAtTime(0.0001, t0 + dt + 0.3);
+                o.connect(g); g.connect(ctx.destination);
+                o.start(t0 + dt); o.stop(t0 + dt + 0.32);
+            });
+        } catch (e) { /* never break the page over a beep */ }
+    }
+
+    function _travelAlarmETParts() {
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric',
+            hour12: false, weekday: 'short'
+        }).formatToParts(new Date());
+        let h = 0, m = 0, wd = '';
+        for (const p of parts) {
+            if (p.type === 'hour') h = parseInt(p.value, 10) % 24;
+            if (p.type === 'minute') m = parseInt(p.value, 10);
+            if (p.type === 'weekday') wd = p.value;
+        }
+        return { h, m, wd };
+    }
+
+    function _travelAlarmInWindow() {
+        const { h, m, wd } = _travelAlarmETParts();
+        if (wd === 'Sat' || wd === 'Sun') return false;
+        const mins = h * 60 + m;
+        return mins >= 8 * 60 + 30 && mins <= 9 * 60 + 30;
+    }
+
+    function _travelAlarmShow(pct, level) {
+        const el = document.getElementById('travel-alarm-banner');
+        if (!el) return;
+        if (level === 'red') {
+            el.className = 'travel-alarm-red';
+            el.textContent = '🔴 OVERNIGHT TRAVEL ' + pct.toFixed(1) + '% — LOCKED — DON\u2019T LOOK';
+            el.style.display = 'block';
+        } else if (level === 'amber') {
+            el.className = 'travel-alarm-amber';
+            el.textContent = '🟠 OVERNIGHT TRAVEL ' + pct.toFixed(1) + '% — approaching the 2% lock line';
+            el.style.display = 'block';
+        } else {
+            el.style.display = 'none';
+        }
+    }
+
+    async function travelAlarmCheck() {
+        if (!_travelAlarmInWindow()) { _travelAlarmShow(null, 'off'); return; }
+        const overlay = document.getElementById('lockdown-overlay');
+        if (overlay && overlay.style.display === 'flex') return;  // never ring under the lock
+        let pct = null, today = null;
+        try {
+            const resp = await fetch('/api/calendar');
+            if (!resp.ok) return;
+            const cal = await resp.json();
+            pct = (cal && typeof cal.today_travel_pct === 'number') ? cal.today_travel_pct : null;
+            today = cal && cal.today;
+        } catch (e) { return; }
+        if (pct == null) { _travelAlarmShow(null, 'off'); return; }
+        if (pct >= TRAVEL_LOCK_PCT) {
+            _travelAlarmShow(pct, 'red');
+            if (today && _travelAlarmRungFor !== today) {
+                _travelAlarmRungFor = today;
+                _travelAlarmBeep();
+            }
+        } else if (pct >= TRAVEL_WARN_PCT) {
+            _travelAlarmShow(pct, 'amber');
+        } else {
+            _travelAlarmShow(null, 'off');
+        }
+    }
+
+    function travelAlarmInit() {
+        travelAlarmCheck();
+        setInterval(travelAlarmCheck, 60 * 1000);
+    }
+
     function copySnapshot() {
         const url = window.location.origin + document.getElementById('share-btn').getAttribute('href');
         navigator.clipboard.writeText(url).then(() => alert('Snapshot link copied!'));
@@ -1358,6 +1489,7 @@
 
     fetchData();
     loadCalendarTile();
+    travelAlarmInit();
     scheduleRefresh();
 </script>
 </body>
