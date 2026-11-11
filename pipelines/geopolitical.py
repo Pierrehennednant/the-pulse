@@ -2064,6 +2064,36 @@ class GeopoliticalPipeline:
             claimed = int(m.group(1) or m.group(2))
         return claimed
 
+    # New-action claim pattern for the strike-clock gate in _event_decide().
+    _NEW_ACTION_CLAIM_RE = re.compile(r'\bnew action\b', re.IGNORECASE)
+
+    @staticmethod
+    def _reasoning_new_action_claim(reasoning):
+        """Haiku's new-action judgment as stated in its free-text reasoning:
+        True for an affirmative claim ("New action: Iran struck a tanker"),
+        False for an explicit denial ("No new action", "not a new action"),
+        None when the reasoning makes no claim either way. Mirrors
+        _reasoning_tier_claim(): a negation directly before the phrase
+        flips the claim instead of counting as an action claim, and when
+        several claims exist the last one wins."""
+        text = str(reasoning or '')
+        claimed = None
+        for m in GeopoliticalPipeline._NEW_ACTION_CLAIM_RE.finditer(text):
+            before = text[max(0, m.start() - 18):m.start()]
+            claimed = not GeopoliticalPipeline._TIER_NEG_RE.search(before)
+        return claimed
+
+    @staticmethod
+    def _resolve_new_action(reasoning, structured):
+        """The item's new-action verdict: the reasoning claim wins over the
+        structured `new_action` field (the same precedence the tier claim
+        gets over the structured tier); with neither, False — a first-print
+        upgrade is never granted on silence."""
+        claim = GeopoliticalPipeline._reasoning_new_action_claim(reasoning)
+        if claim is not None:
+            return claim
+        return structured is True
+
     def _reevaluate_pinned_ec_folds(self):
         """Code-only pass over currently-pinned stories, run on every
         fetch() call regardless of whether a live TheNewsAPI fetch happens
@@ -2531,6 +2561,8 @@ EXAMPLE — FOLLOW_UP, FOMC recap pattern: "Three words from Kevin Warsh have Wa
 Reject an item entirely (relevant: false, no tier, no kind) only if it neither introduces a new fact (FIRST_PRINT) nor restates an identifiable, already-scored, still-live event (FOLLOW_UP) — i.e. it has no traceable connection to anything market-moving, or it fails one of the other filters below on its own terms (source-vs-echo, actor test, market domain, etc.).
 - An official naming a country on an incident that was already public (arrests, “major incident,” prior foreign-actor comments) is FOLLOW_UP, 24-hour clock, max Tier 3. first_print 48h is only for a new fact the tape did not have: a new strike, a new target class, a new supply break, or the first public report of the incident itself. A PM saying “we believe X played a part” three days later is not the incident happening today.
 
+NEW ACTION — return new_action: true or false for every relevant item, alongside kind. This is a separate judgment from FIRST_PRINT vs FOLLOW_UP: it records whether THIS article itself reports a new discrete act that happened — a new strike or attack, a seizure or sinking, blockade enforcement, sanctions or tariffs actually imposed, troops deployed or moved, a signed agreement, a first confirmation of an incident — a state-actor act the tape did not already have. new_action is FALSE for storyline continuation, even about a major event: reactions, condemnations, official statements about an earlier incident, damage or casualty assessments, warnings or threats with no new incident behind them, "tensions remain high" framing, price moves, and recaps. The two judgments can disagree: an article you classify FOLLOW_UP because it is framed as continuing coverage can still carry new_action: true if the act it reports is itself new (a fresh strike inside a running story) — that is exactly the case new_action exists for. When new_action is true, state it in your reasoning in this form: "New action: <the act, in a few words>." When it is false, write "No new action" in your reasoning.
+
 M&A/PARTNERSHIP/DEAL ITEMS: apply the DEAL GATE inside the TECH/AI MEGA-DEAL RULES section below FIRST, before FIRST_PRINT/FOLLOW_UP or anything else. If an item fails that gate, set relevant: false and do not assign a tier or a kind.
 
 KNOWN ARTICLE OVERRIDES — if an article matches one of these titles exactly, use the specified tier, direction, and reasoning. Do not apply your normal tiering logic to these articles:
@@ -2679,12 +2711,13 @@ DECISION 3 — SUMMARY
 Write a clean 3-4 sentence market-focused summary of the article. Cover: what happened, who the key actor is, what the immediate consequence is, and what it means for NQ/ES traders today. Write it as if briefing a trader in 30 seconds. Do not use jargon. Be direct and specific.
 
 Return ONLY a JSON array with no markdown, no explanation, no preamble. Exactly this format:
-[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Iran war escalation directly affects oil and risk sentiment", "summary": "Your 3-4 sentence market summary here.", "uncertainty_score": 85, "tier": 1, "kind": "first_print", "reasoning": "Active war escalation directly threatens oil supply and broad risk sentiment."}}, {{"id": 2, "relevant": true, "confidence": 0.8, "category": "geopolitical", "direction": "neutral", "reason": "Renewed pressure on the Fed chair with no new concrete action — fails the political pressure gate.", "summary": "Your 3-4 sentence market summary here.", "uncertainty_score": 60, "kind": "follow_up", "gate_pass": false, "reasoning": "Continued rhetoric, no firing/resignation/legislation/directive — not a catalyst by itself."}}]
+[{{"id": 1, "relevant": true, "confidence": 0.95, "category": "geopolitical", "direction": "bearish", "reason": "Iran war escalation directly affects oil and risk sentiment", "summary": "Your 3-4 sentence market summary here.", "uncertainty_score": 85, "tier": 1, "kind": "first_print", "new_action": true, "reasoning": "Active war escalation directly threatens oil supply and broad risk sentiment."}}, {{"id": 2, "relevant": true, "confidence": 0.8, "category": "geopolitical", "direction": "neutral", "reason": "Renewed pressure on the Fed chair with no new concrete action — fails the political pressure gate.", "summary": "Your 3-4 sentence market summary here.", "uncertainty_score": 60, "kind": "follow_up", "new_action": false, "gate_pass": false, "reasoning": "Continued rhetoric, no firing/resignation/legislation/directive — not a catalyst by itself."}}]
 
 Use only "bearish", "bullish", or "neutral" for direction.
 Use confidence between 0.0 and 1.0.
 Use tier as an integer: 1, 2, or 3. Omit tier entirely when gate_pass is false.
 Use kind as either "first_print" or "follow_up" for every relevant item, per the FIRST_PRINT/FOLLOW_UP step above. Omit for a non-relevant item.
+Use new_action as true or false for every relevant item, per the NEW ACTION step above. Omit for a non-relevant item. State the judgment in your reasoning — "New action: ..." when true, "No new action" when false.
 If relevant is false, still provide a summary field but it can be empty string.
 Use gate_pass: false ONLY for an item that fails the POLITICAL PRESSURE ON THE FED — GATE above — it stays relevant: true (still gets a kind and clock so it stays visible), but direction must be "neutral" and tier must be omitted, so it contributes zero score. Omit gate_pass entirely (or use true) for every other item — this field exists solely to mark that one gate-failure case as visible-but-non-scoring rather than dropped.
 
@@ -4425,10 +4458,30 @@ CONTEXT: {context}"""
                     # follow_up that matches no same-event row, and no strike
                     # of the same wave (same place, ±1 day) on the board, is a
                     # NEW strike — first_print 48h. Only a toll/rescue/quote
-                    # on a strike already on the board stays follow_up.
+                    # on a strike already on the board stays follow_up. The
+                    # upgrade ALSO requires Haiku's own judgment that this
+                    # article reports a new action (new_action — see
+                    # _resolve_new_action): board state alone (the old
+                    # card's timer expired, no same-wave strike live) is
+                    # housekeeping, not evidence anything new happened —
+                    # the 11/11 Hormuz tanker card pinned off exactly that.
                     if (kind == 'follow_up' and haiku_kind == 'follow_up' and not rules
                             and 'attack' in (ident.get('kinds') or [])):
                         sc_reason = self._event_strike_clock_reason(ident, mem, new_facts, today)
+                        if sc_reason and not self._resolve_new_action(
+                                ctx.get('tier_reasoning'), target.get('new_action')):
+                            # No new action in Haiku's own judgment: a pure
+                            # continuation (reaction, assessment, tensions
+                            # framing) never becomes a first print just
+                            # because the earlier card aged off the board.
+                            # Logged directly, like the talk blocks below:
+                            # kind is unchanged, so no decision (and no
+                            # decision logs) is returned for this veto alone.
+                            self._event_log_once('strike_clock_blocked', identity['headline_norm'],
+                                                 f"STRIKE CLOCK BLOCKED | no new action | "
+                                                 f"reason=Haiku judged no new action in this article "
+                                                 f"(would have: {sc_reason}) | headline={short}")
+                            sc_reason = None
                         if sc_reason and target.get('talk_forced'):
                             # A talk-forced follow_up (statement/threat headline,
                             # no concrete current fact) is never promoted: no
