@@ -33,6 +33,12 @@ what the settled design's checkpoints mean mechanically:
     for the next morning (range exhaustion: >=p95 downgrade, >=p97 strong).
   * After each red-folder print, the next day inherits "day after a release".
   * A Pulse 55% gate crossing at read time is a checkpoint fact for today.
+  * Once a day ends, its rating is FROZEN: today's block is written to the
+    history store on every compute, and a past day renders its frozen
+    block verbatim — never a recomputation from today's facts (the rating
+    that governed the day is the rating on record; Friday grading reads
+    it). A past day with no frozen record is recomputed WITHOUT today's
+    live facts (no range block, no today-only block).
 
 Precedence: (1) locked hard rules (overnight travel) beat everything;
 (2) the calendar is the plan — ratings move only when a recorded fact lands;
@@ -80,6 +86,10 @@ ET = pytz.timezone("America/New_York")
 
 CACHE_FILE = "/data/probability_calendar_cache.json"
 CACHE_TTL_S = 240  # same cadence as pipelines/market_structure.py
+
+# Frozen record of past days' blocks (date ISO -> the day block exactly as
+# it rendered while the day was live). A past day's rating never changes.
+HISTORY_FILE = "/data/probability_calendar_history.json"
 
 EARNINGS_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -132,6 +142,44 @@ TIER_PROBABLE = "PROBABLE"
 TIER_MID = "MID"
 TIER_DEFENSIVE = "DEFENSIVE"
 TIER_DONT_LOOK = "DON'T LOOK"
+
+# ── One-time seed for the week the freeze ships (week of 2026-11-09) ────
+# Monday and Tuesday were already past when the freeze landed, so their
+# governing ratings are written once from the verified live record:
+# Monday was a travel lock (overnight travel 2.7% vs the locked 2% line,
+# on top of exhaustion from Friday Nov 6's outsized range); Tuesday was
+# the CPI release day, PROBABLE, with 1.9% overnight travel — no lock.
+# String forms match exactly what the live code rendered those mornings.
+SEED_WEEK_MONDAY = date(2026, 11, 9)
+SEED_HISTORY = {
+    "2026-11-09": {
+        "date": "2026-11-09",
+        "weekday": "Monday",
+        "rating": TIER_DONT_LOOK,
+        "reasons": [
+            "LOCKED RULE — overnight travel 2.7% crossed the locked 2% "
+            "travel line (full overnight range, round trips included). "
+            "Extended overnight travel makes this a no-trade morning, "
+            "whatever else the week holds",
+            "Range exhaustion — Friday Nov 6 printed a range at the 97th "
+            "percentile or higher; days after huge ranges run wide but "
+            "inefficient and reverse about two times in three",
+        ],
+        "is_today": False,
+    },
+    "2026-11-10": {
+        "date": "2026-11-10",
+        "weekday": "Tuesday",
+        "rating": TIER_PROBABLE,
+        "reasons": [
+            "Red-folder release day — CPI m/m, Core CPI m/m at 8:30 AM "
+            "ET; the day's range is built around the print",
+            "Overnight travel 1.9% — under the locked 2% travel line, so "
+            "no travel lock. The path: a one-way slide to -1.5%; net -1.2%.",
+        ],
+        "is_today": False,
+    },
+}
 
 
 def _is_trading_day(d):
@@ -307,6 +355,37 @@ class ProbabilityCalendar:
         except Exception:
             return []
 
+    def _load_history(self):
+        """Frozen blocks for past days: date ISO -> the day block exactly
+        as it rendered while the day was live."""
+        try:
+            with open(HISTORY_FILE) as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _save_history(self, history):
+        try:
+            atomic_write_json(HISTORY_FILE, history)
+        except Exception as e:
+            pulse_logger.log(f"Probability calendar history write failed: {e}",
+                             level="WARNING")
+
+    def _seed_history(self, history, monday):
+        """One-time seed (see SEED_HISTORY): if this is the week of
+        2026-11-09, write the governing ratings for its already-past
+        Monday/Tuesday when they are missing. Returns True when anything
+        was added."""
+        if monday != SEED_WEEK_MONDAY:
+            return False
+        added = False
+        for iso, block in SEED_HISTORY.items():
+            if iso not in history:
+                history[iso] = block
+                added = True
+        return added
+
     def _pulse_confidence(self):
         """Latest snapshot confidence — used ONLY against the 55% gate,
         internally. Never rendered (see module guardrail)."""
@@ -410,14 +489,33 @@ class ProbabilityCalendar:
         facts = self._market_facts(today, now)
         pulse_conf = self._pulse_confidence()
 
+        history = self._load_history()
+        history_dirty = self._seed_history(history, monday)
+
         days = []
         for offset in range(5):
             d = monday + timedelta(days=offset)
             if not _is_trading_day(d):
                 continue
-            days.append(self._rate_day(
+            if d < today and d.isoformat() in history:
+                # Frozen: the block that governed the day, verbatim. A
+                # past day's rating never changes after rollover.
+                frozen = dict(history[d.isoformat()])
+                frozen["is_today"] = False
+                days.append(frozen)
+                continue
+            block = self._rate_day(
                 d, today, events, markers, facts, pulse_conf,
-                monday_of=monday, quiet_week_known=True))
+                monday_of=monday, quiet_week_known=True,
+                frozen_past=d < today)
+            days.append(block)
+            if d == today:
+                # Save today's live block on every compute (overwrite) —
+                # the day's last state before rollover is its record.
+                history[d.isoformat()] = block
+                history_dirty = True
+        if history_dirty:
+            self._save_history(history)
         weeks = [{"week_of": monday.isoformat(), "label": "This week",
                   "days": days}]
         week_dates = [monday + timedelta(days=o) for o in range(5)]
@@ -439,7 +537,7 @@ class ProbabilityCalendar:
         return count
 
     def _rate_day(self, d, today, events, markers, facts, pulse_conf,
-                  monday_of, quiet_week_known):
+                  monday_of, quiet_week_known, frozen_past=False):
         scored = []   # (points, text) — points drive the tier, text is rendered
         notes = []    # 0-point reason strings
 
@@ -554,9 +652,16 @@ class ProbabilityCalendar:
 
         # ── Range facts (checkpoint inputs; only for days whose prior ──
         #    session is already a recorded fact) ──
+        # frozen_past (a past day with no frozen record): the facts
+        # describe TODAY's prior session, never that day's — this block
+        # is skipped entirely so a past day can't inherit today's
+        # numbers. (The today-only block below is gated on d == today,
+        # so it is likewise unreachable for a past day.)
         prior_is_fact = prev_td < today or (
             prev_td == today and datetime.now(ET).time() >= time(16, 0))
-        if prior_is_fact and facts.get("prev_rank") is not None and d <= _next_trading_day(today):
+        if (not frozen_past and prior_is_fact
+                and facts.get("prev_rank") is not None
+                and d <= _next_trading_day(today)):
             rank = facts["prev_rank"]
             rank2 = facts.get("prev2_rank")
             if rank >= 97:
