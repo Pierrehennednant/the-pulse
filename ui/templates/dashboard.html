@@ -934,9 +934,12 @@
     // already >= 2% when the window opens — or when the page loads inside
     // the window — it rings immediately. One ring per day; the banner stays
     // until the window ends. 1.6–2.0% shows an amber "approaching" banner
-    // with no sound. Sound needs one click/keypress on the page first
-    // (browser autoplay rule); the banner shows regardless. The alarm never
-    // fires while the lockdown overlay is up.
+    // with no sound. The red ring is three beeps followed by a spoken
+    // sentence: "The 2 percent meter has been struck. Don't look mode has
+    // been activated on the Pulse." Sound and speech both need one
+    // click/keypress on the page first (browser autoplay rule); the banner
+    // shows regardless. The alarm never fires while the lockdown overlay
+    // is up.
     const TRAVEL_LOCK_PCT = 2.0;
     const TRAVEL_WARN_PCT = 1.6;
     let _travelAlarmRungFor = null;   // YYYY-MM-DD the red ring fired
@@ -971,6 +974,18 @@
                 o.start(t0 + dt); o.stop(t0 + dt + 0.32);
             });
         } catch (e) { /* never break the page over a beep */ }
+    }
+
+    function _travelAlarmSpeak() {
+        try {
+            if (!('speechSynthesis' in window)) return;
+            // Cancel any queued speech so a repeat ring never stacks up.
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(
+                'The 2 percent meter has been struck. Don\u2019t look mode has been activated on the Pulse.');
+            u.rate = 1; u.pitch = 1;
+            window.speechSynthesis.speak(u);
+        } catch (e) { /* speech unavailable — beeps + banner still work */ }
     }
 
     function _travelAlarmETParts() {
@@ -1028,6 +1043,7 @@
             if (today && _travelAlarmRungFor !== today) {
                 _travelAlarmRungFor = today;
                 _travelAlarmBeep();
+                _travelAlarmSpeak();
             }
         } else if (pct >= TRAVEL_WARN_PCT) {
             _travelAlarmShow(pct, 'amber');
