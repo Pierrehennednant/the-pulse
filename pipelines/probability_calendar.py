@@ -53,10 +53,8 @@ DATA SOURCES (all already used by this codebase)
   * FOMC decision dates + US market calendar: static tables below (2026–2027).
   * Ranges / overnight travel / weekend gap: Yahoo bars via yfinance, the
     pattern used by pipelines/market_structure.py. The travel lock judges
-    the FULL overnight session range (18:00 → 08:30 ET) against the locked
-    2% line (TRAVEL_LOCK_PCT — Pierre's settled measure, 2026-11-06; the
-    window's endpoint moved from 09:30 to 08:30 on 2026-11-11 — the 8:30 AM
-    ET data hour is where Pierre's overnight ends). The adaptive
+    the FULL overnight session range against the locked 2% line
+    (TRAVEL_LOCK_PCT — Pierre's settled measure, 2026-11-06). The adaptive
     p94 line is NOT used here: it judges the NET overnight move for the
     morning-read flag, a different rule (an earlier build applied it to
     travel by mistake — corrected 2026-11-10).
@@ -234,14 +232,12 @@ def _percentile(sorted_vals, q):
 
 
 # ── Locked overnight-travel line (Pierre, settled 2026-11-06) ──
-# The travel lock fires when the FULL overnight session range (18:00 → 08:30
+# The travel lock fires when the FULL overnight session range (18:00 → 09:30
 # ET, round trips included) reaches 2% of the prior close. Pierre settled
 # this measure himself on 2026-11-06 ("over 2% is the better measure"),
 # judging the full range against the dip-excluded floor figure (~1.85% that
-# night). The window's endpoint moved from 09:30 to 08:30 on 2026-11-11
-# (Pierre: the 8:30 AM ET data hour is where his overnight ends). NOT the
-# adaptive p94 line — that one judges the NET overnight move for the
-# morning-read flag, a separate rule.
+# night). NOT the adaptive p94 line — that one judges the NET overnight move
+# for the morning-read flag, a separate rule.
 TRAVEL_LOCK_PCT = 2.0
 
 
@@ -464,7 +460,7 @@ class ProbabilityCalendar:
             prior_close = completed[-1][4]
             win_start = ET.localize(datetime.combine(
                 today - timedelta(days=1), time(18, 0)))
-            win_end = min(now, ET.localize(datetime.combine(today, time(8, 30))))
+            win_end = min(now, ET.localize(datetime.combine(today, time(9, 30))))
             window = [b for b in nq_5m if win_start <= b[0] <= win_end]
             if len(window) >= 10 and prior_close:
                 hi_bar = max(window, key=lambda b: b[2])
