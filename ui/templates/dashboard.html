@@ -184,6 +184,21 @@
             animation: pulse 2s infinite;
         }
 
+        /* ── Overnight travel alarm banner (08:30–09:30 ET) ── */
+        #travel-alarm-banner {
+            display: none;
+            position: sticky;
+            top: 0;
+            z-index: 9998;
+            padding: 12px 16px;
+            text-align: center;
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: .3px;
+        }
+        #travel-alarm-banner.travel-alarm-red { background: #e74c3c; color: #fff; }
+        #travel-alarm-banner.travel-alarm-amber { background: #b7791f; color: #fff; }
+
         /* ── Lockdown overlay (display-only, 4:00 PM → 8:00 AM ET) ── */
         #lockdown-overlay {
             display: none;
@@ -285,6 +300,7 @@
         <div class="lock-note" style="margin-top:10px">Ratings only — no direction, no scores. That's why it stays open during the lock.</div>
     </div>
 </div>
+<div id="travel-alarm-banner" role="alert"></div>
 <script>
     // Lockdown window: 4:00 PM → 8:00 AM ET on weekdays; all weekend —
     // Friday 4:00 PM straight through to Monday 8:00 AM ET. Visual cover
@@ -910,6 +926,253 @@
         }
     }
 
+    // ── Overnight travel alarm ──────────────────────────────────────────
+    // Rings on this computer (never the phone) when today's overnight travel
+    // crosses the locked 2% line (full overnight range 18:00 → 09:30 ET,
+    // round trips included — the same number the calendar's DON'T LOOK call
+    // uses). The cross window is 08:30–09:30 ET on weekdays; polls run to
+    // 09:35 because the feed caches ~4 minutes and the travel number itself
+    // stops at 09:30, so a late poll can only surface a within-window cross.
+    // If travel is already >= 2% when the window opens — or when the page
+    // loads inside the window — it rings immediately. One ring per day,
+    // tracked in localStorage so a reload or a second tab can't re-ring;
+    // the banner stays until the window ends. 1.6–2.0% shows an amber
+    // "approaching" banner with no sound. The red ring is a soft four-note
+    // chime followed by a spoken sentence: "The overnight 2 percent
+    // threshold has been struck. Do not trade today!" — spoken in Google UK
+    // English Female (en-GB), at 1.1x speed and 1.0 pitch (Pierre's pick,
+    // 2026-11-11; falls back to Natasha, then any en-AU voice, then the
+    // default). If the cross happens before Pierre has clicked the page,
+    // the ring is HELD, not lost: the banner shows at once and the sound
+    // goes out on his next click, or the next poll, while still in the
+    // window. Sound and speech both need one click/keypress on the page
+    // first (browser autoplay rule); the banner shows regardless. The alarm
+    // never fires while the lockdown overlay is up.
+    const TRAVEL_LOCK_PCT = 2.0;
+    const TRAVEL_WARN_PCT = 1.6;
+    const TRAVEL_POLL_START_MIN = 8 * 60 + 30;
+    const TRAVEL_POLL_END_MIN = 9 * 60 + 35;
+    let _travelAlarmRungFor = null;   // YYYY-MM-DD the red ring fired (this tab)
+    let _travelAlarmPending = false;  // red seen, but sound couldn't play yet
+    let _travelAlarmLastPct = null;   // last polled travel %, for the pending retry
+    let _travelAlarmLastToday = null;
+    let _travelAlarmVoice = null;     // cached speech voice
+    let _travelAlarmSpeechDone = false;
+    let _travelAlarmSpeakTimer = null;
+    let _travelAudioCtx = null;
+    let _travelAudioUnlocked = false;
+
+    // "One ring per day" has to survive a reload and a second tab, so the
+    // day lives in localStorage as well as in page memory.
+    function _travelAlarmAlreadyRung(today) {
+        if (_travelAlarmRungFor === today) return true;
+        try {
+            return window.localStorage && window.localStorage.getItem('travelAlarmRung:' + today) === '1';
+        } catch (e) { return false; }
+    }
+    function _travelAlarmMarkRung(today) {
+        _travelAlarmRungFor = today;
+        try {
+            if (window.localStorage) window.localStorage.setItem('travelAlarmRung:' + today, '1');
+        } catch (e) { /* private mode — memory-only is fine */ }
+    }
+
+    function _travelAlarmUnlockAudio() {
+        if (_travelAudioUnlocked) return;
+        try {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (!AC) return;
+            _travelAudioCtx = _travelAudioCtx || new AC();
+            if (_travelAudioCtx.state === 'suspended') _travelAudioCtx.resume();
+            _travelAudioUnlocked = true;
+        } catch (e) { /* audio unavailable — banner still shows */ }
+    }
+    // A gesture unlocks audio AND retries a held ring: if the cross happened
+    // before Pierre ever clicked the page, the ring was held, not lost.
+    async function _travelAlarmOnGesture() {
+        _travelAlarmUnlockAudio();
+        try {
+            if (_travelAudioCtx && _travelAudioCtx.state === 'suspended') await _travelAudioCtx.resume();
+        } catch (e) { /* resume failed — the poll loop retries */ }
+        _travelAlarmRingPending();
+    }
+    ['pointerdown', 'keydown'].forEach(ev =>
+        document.addEventListener(ev, _travelAlarmOnGesture));
+
+    // Cache the voice at init (refreshed on voiceschanged): getVoices() can
+    // be empty if called before voices load, and the ring can happen on a
+    // page load inside the window — exactly when the list may still be empty.
+    function _travelAlarmPickVoice() {
+        try {
+            if (!('speechSynthesis' in window)) return;
+            const voices = window.speechSynthesis.getVoices() || [];
+            const byName = n => voices.find(v => (v.name || '') === n);
+            // Pierre's pick (2026-11-11, Chrome): Google UK English Female.
+            // Natasha stays in the chain for Edge; then any en-AU voice.
+            _travelAlarmVoice = byName('Google UK English Female')
+                || voices.find(v => (v.name || '').indexOf('Natasha') !== -1)
+                || voices.find(v => (v.lang || '').toLowerCase() === 'en-au')
+                || voices.find(v => (v.lang || '').toLowerCase().indexOf('en-au') === 0)
+                || null;
+        } catch (e) { _travelAlarmVoice = null; }
+    }
+
+    // Notes peak at gain 0.24 — Pierre's 30% volume (0.30) with the notes
+    // at 0.8x so the chord stays soft. Never schedule notes on a muted
+    // context: they would sound late, at the first click, possibly after
+    // the window. Returns false when the context isn't running.
+    function _travelAlarmChime() {
+        try {
+            if (!_travelAudioCtx || _travelAudioCtx.state !== 'running') return false;
+            const ctx = _travelAudioCtx, t0 = ctx.currentTime;
+            const notes = [523.25, 659.25, 783.99, 1046.5];
+            notes.forEach((freq, i) => {
+                const o = ctx.createOscillator(), g = ctx.createGain();
+                o.type = 'sine'; o.frequency.value = freq;
+                const dt = i * 0.18;
+                g.gain.setValueAtTime(0.0001, t0 + dt);
+                g.gain.exponentialRampToValueAtTime(0.24, t0 + dt + 0.02);
+                g.gain.exponentialRampToValueAtTime(0.0001, t0 + dt + 0.48);
+                o.connect(g); g.connect(ctx.destination);
+                o.start(t0 + dt); o.stop(t0 + dt + 0.5);
+                if (i === notes.length - 1) {
+                    // Words start when the last note ends (+100 ms), not on a
+                    // wall-clock guess — the audio clock is the authority.
+                    o.onended = () => setTimeout(_travelAlarmSpeakOnce, 100);
+                }
+            });
+            return true;
+        } catch (e) { /* never break the page over a chime */ return false; }
+    }
+
+    function _travelAlarmSpeakOnce() {
+        if (_travelAlarmSpeechDone) return;
+        _travelAlarmSpeechDone = true;
+        if (_travelAlarmSpeakTimer) { clearTimeout(_travelAlarmSpeakTimer); _travelAlarmSpeakTimer = null; }
+        _travelAlarmSpeak();
+    }
+
+    function _travelAlarmSpeak() {
+        try {
+            if (!('speechSynthesis' in window)) return;
+            // Cancel any queued speech so a repeat ring never stacks up.
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(
+                'The overnight 2 percent threshold has been struck. Do not trade today!');
+            // Cached at init (refreshed on voiceschanged); falls back to any
+            // en-AU voice, then to the default voice. When no voice is
+            // picked, lang pins Australian English for the default voice.
+            if (_travelAlarmVoice) {
+                u.voice = _travelAlarmVoice;
+                u.lang = _travelAlarmVoice.lang || 'en-AU';
+            } else {
+                u.lang = 'en-AU';
+            }
+            u.rate = 1.1; u.pitch = 1.0;
+            window.speechSynthesis.speak(u);
+        } catch (e) { /* speech unavailable — chime + banner still work */ }
+    }
+
+    // Ring now, but ONLY on a running audio context. Returns false when the
+    // sound couldn't go out — the caller holds the ring as pending instead.
+    function _travelAlarmRing(today) {
+        if (!_travelAudioCtx || _travelAudioCtx.state !== 'running') return false;
+        _travelAlarmSpeechDone = false;
+        if (!_travelAlarmChime()) return false;
+        // Fallback: if the last note's 'ended' event never fires
+        // (backgrounded tab, suspended context), the words still arrive
+        // within 2.5s. SpeakOnce guards against a double read.
+        _travelAlarmSpeakTimer = setTimeout(_travelAlarmSpeakOnce, 2500);
+        _travelAlarmMarkRung(today);
+        return true;
+    }
+
+    // Retry a held ring: still in the window, overlay down, travel still
+    // at/over the line, and not already rung (another tab may have rung).
+    function _travelAlarmRingPending() {
+        if (!_travelAlarmPending || !_travelAlarmLastToday) return;
+        if (!_travelAlarmInWindow()) return;
+        const overlay = document.getElementById('lockdown-overlay');
+        if (overlay && overlay.style.display === 'flex') return;
+        if (_travelAlarmLastPct == null || _travelAlarmLastPct < TRAVEL_LOCK_PCT) return;
+        if (_travelAlarmAlreadyRung(_travelAlarmLastToday)) { _travelAlarmPending = false; return; }
+        if (_travelAlarmRing(_travelAlarmLastToday)) _travelAlarmPending = false;
+    }
+
+    function _travelAlarmETParts() {
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric',
+            hour12: false, weekday: 'short'
+        }).formatToParts(new Date());
+        let h = 0, m = 0, wd = '';
+        for (const p of parts) {
+            if (p.type === 'hour') h = parseInt(p.value, 10) % 24;
+            if (p.type === 'minute') m = parseInt(p.value, 10);
+            if (p.type === 'weekday') wd = p.value;
+        }
+        return { h, m, wd };
+    }
+
+    function _travelAlarmInWindow() {
+        const { h, m, wd } = _travelAlarmETParts();
+        if (wd === 'Sat' || wd === 'Sun') return false;
+        const mins = h * 60 + m;
+        return mins >= TRAVEL_POLL_START_MIN && mins <= TRAVEL_POLL_END_MIN;
+    }
+
+    function _travelAlarmShow(pct, level) {
+        const el = document.getElementById('travel-alarm-banner');
+        if (!el) return;
+        if (level === 'red') {
+            el.className = 'travel-alarm-red';
+            el.textContent = '🔴 OVERNIGHT TRAVEL ' + pct.toFixed(1) + '% — LOCKED — DON\u2019T LOOK';
+            el.style.display = 'block';
+        } else if (level === 'amber') {
+            el.className = 'travel-alarm-amber';
+            el.textContent = '🟠 OVERNIGHT TRAVEL ' + pct.toFixed(1) + '% — approaching the 2% lock line';
+            el.style.display = 'block';
+        } else {
+            el.style.display = 'none';
+        }
+    }
+
+    async function travelAlarmCheck() {
+        if (!_travelAlarmInWindow()) { _travelAlarmShow(null, 'off'); return; }
+        const overlay = document.getElementById('lockdown-overlay');
+        if (overlay && overlay.style.display === 'flex') return;  // never ring under the lock; next poll retries
+        let pct = null, today = null;
+        try {
+            const resp = await fetch('/api/calendar');
+            if (!resp.ok) return;
+            const cal = await resp.json();
+            pct = (cal && typeof cal.today_travel_pct === 'number') ? cal.today_travel_pct : null;
+            today = cal && cal.today;
+        } catch (e) { return; }
+        if (pct == null) { _travelAlarmShow(null, 'off'); return; }
+        _travelAlarmLastPct = pct; _travelAlarmLastToday = today;
+        if (pct >= TRAVEL_LOCK_PCT) {
+            _travelAlarmShow(pct, 'red');
+            if (today && !_travelAlarmAlreadyRung(today)) {
+                // Ring now if sound is live; otherwise hold it — the next
+                // click, or the next poll, retries while still in the window.
+                if (!_travelAlarmRing(today)) _travelAlarmPending = true;
+            }
+        } else if (pct >= TRAVEL_WARN_PCT) {
+            _travelAlarmShow(pct, 'amber');
+        } else {
+            _travelAlarmShow(null, 'off');
+        }
+    }
+
+    function travelAlarmInit() {
+        _travelAlarmPickVoice();
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.onvoiceschanged = _travelAlarmPickVoice;
+        }
+        travelAlarmCheck();
+        setInterval(travelAlarmCheck, 60 * 1000);
+    }
+
     function copySnapshot() {
         const url = window.location.origin + document.getElementById('share-btn').getAttribute('href');
         navigator.clipboard.writeText(url).then(() => alert('Snapshot link copied!'));
@@ -1358,6 +1621,7 @@
 
     fetchData();
     loadCalendarTile();
+    try { travelAlarmInit(); } catch (e) { /* the alarm must never break the dashboard */ }
     scheduleRefresh();
 </script>
 </body>
