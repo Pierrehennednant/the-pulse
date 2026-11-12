@@ -185,11 +185,14 @@
         }
 
         /* ── Overnight travel alarm banner (08:30–09:30 ET) ── */
+        /* Fixed at the viewport top, z-index above the lockdown overlay
+           (9999), so the banner shows on the lock screen too. display:none
+           when inactive, so it costs nothing the rest of the day. */
         #travel-alarm-banner {
             display: none;
-            position: sticky;
-            top: 0;
-            z-index: 9998;
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 10000;
             padding: 12px 16px;
             text-align: center;
             font-size: 15px;
@@ -946,8 +949,13 @@
     // the ring is HELD, not lost: the banner shows at once and the sound
     // goes out on his next click, or the next poll, while still in the
     // window. Sound and speech both need one click/keypress on the page
-    // first (browser autoplay rule); the banner shows regardless. The alarm
-    // never fires while the lockdown overlay is up.
+    // first (browser autoplay rule); the banner shows regardless. The banner
+    // sits above the lockdown overlay, so it shows on the lock screen too;
+    // sound still waits for the overlay to lift, held as pending. Sound is
+    // computer-only: a touch-first device (phone/tablet) never rings — the
+    // banner still shows. (The deeper truth is structural: the alarm only
+    // exists on a device with the dashboard open, and the phone is in the
+    // lockbox until 11 AM.)
     const TRAVEL_LOCK_PCT = 2.0;
     const TRAVEL_WARN_PCT = 1.6;
     const TRAVEL_POLL_START_MIN = 8 * 60 + 30;
@@ -1073,9 +1081,22 @@
         } catch (e) { /* speech unavailable — chime + banner still work */ }
     }
 
+    // Sound is computer-only. A touch-first device (phone/tablet) never
+    // rings — the banner still shows, so nothing is lost visually. The
+    // check is the pointer: a computer's primary pointer is a mouse or
+    // trackpad (fine); a phone's is touch (coarse). A touchscreen laptop
+    // still rings — its primary pointer is the mouse/trackpad.
+    function _travelAlarmCanSound() {
+        try {
+            if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return false;
+            return true;
+        } catch (e) { return true; }
+    }
+
     // Ring now, but ONLY on a running audio context. Returns false when the
     // sound couldn't go out — the caller holds the ring as pending instead.
     function _travelAlarmRing(today) {
+        if (!_travelAlarmCanSound()) return false;
         if (!_travelAudioCtx || _travelAudioCtx.state !== 'running') return false;
         _travelAlarmSpeechDone = false;
         if (!_travelAlarmChime()) return false;
@@ -1138,8 +1159,6 @@
 
     async function travelAlarmCheck() {
         if (!_travelAlarmInWindow()) { _travelAlarmShow(null, 'off'); return; }
-        const overlay = document.getElementById('lockdown-overlay');
-        if (overlay && overlay.style.display === 'flex') return;  // never ring under the lock; next poll retries
         let pct = null, today = null;
         try {
             const resp = await fetch('/api/calendar');
@@ -1150,12 +1169,18 @@
         } catch (e) { return; }
         if (pct == null) { _travelAlarmShow(null, 'off'); return; }
         _travelAlarmLastPct = pct; _travelAlarmLastToday = today;
+        // The banner sits above the lockdown overlay, so it shows on the
+        // lock screen too. Sound still waits for the overlay to lift — the
+        // ring is held as pending, not lost.
+        const overlay = document.getElementById('lockdown-overlay');
+        const locked = !!(overlay && overlay.style.display === 'flex');
         if (pct >= TRAVEL_LOCK_PCT) {
             _travelAlarmShow(pct, 'red');
             if (today && !_travelAlarmAlreadyRung(today)) {
                 // Ring now if sound is live; otherwise hold it — the next
                 // click, or the next poll, retries while still in the window.
-                if (!_travelAlarmRing(today)) _travelAlarmPending = true;
+                if (locked) _travelAlarmPending = true;
+                else if (!_travelAlarmRing(today)) _travelAlarmPending = true;
             }
         } else if (pct >= TRAVEL_WARN_PCT) {
             _travelAlarmShow(pct, 'amber');
