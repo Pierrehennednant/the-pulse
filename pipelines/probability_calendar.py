@@ -72,6 +72,7 @@ compression, weekday direction, pre-FOMC drift, options-expiry positioning.
 """
 
 import json
+import math
 import os
 from datetime import date, datetime, time, timedelta
 
@@ -519,13 +520,24 @@ class ProbabilityCalendar:
         weeks = [{"week_of": monday.isoformat(), "label": "This week",
                   "days": days}]
         week_dates = [monday + timedelta(days=o) for o in range(5)]
+        # Live number for the dashboard travel alarm (today's overnight
+        # travel %, same value the DON'T LOOK call uses). None until the
+        # overnight window has enough bars to measure. Coerced to a plain
+        # finite float (or None): _fetch_bars already returns plain floats
+        # with NaN bars skipped, so this is a second guard at the
+        # serialisation boundary — a numpy float or NaN here would 500
+        # /api/calendar and break the existing tile, not just the alarm.
+        _travel = facts.get("travel_pct") if facts else None
+        try:
+            _travel = float(_travel) if _travel is not None else None
+        except (TypeError, ValueError):
+            _travel = None
+        if _travel is not None and not math.isfinite(_travel):
+            _travel = None
         return {"generated_at": now.isoformat(), "today": today.isoformat(),
                 "updated_label": now.strftime("%b %-d, %Y · %-I:%M %p ET"),
                 "summer_banner": _summer_banner(week_dates),
-                # Live number for the dashboard travel alarm (today's
-                # overnight travel %, same value the DON'T LOOK call uses).
-                # None until the overnight window has enough bars to measure.
-                "today_travel_pct": facts.get("travel_pct"),
+                "today_travel_pct": _travel,
                 "weeks": weeks}
 
     def _week_red_days(self, monday, events):
