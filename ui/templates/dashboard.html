@@ -202,6 +202,52 @@
         #travel-alarm-banner.travel-alarm-red { background: #e74c3c; color: #fff; }
         #travel-alarm-banner.travel-alarm-amber { background: #b7791f; color: #fff; }
 
+        /* ── Overnight travel meter gauge ──
+           Travel ONLY — no direction, no net move, no Pulse bias or
+           scores — the same guardrail as the calendar, which is why one
+           instance sits inside the lock card and stays visible during
+           the lockdown. Bar scaled 0–2.5% with the locked 2% line
+           ticked; fill colour by zone: green <1.0%, yellow 1.0–1.6%,
+           orange 1.6–2.0%, red >=2.0%. Zone tints on the track are the
+           dashboard palette at low opacity; the fill is the full colour. */
+        .travel-meter { text-align: left; }
+        .travel-meter .tm-head {
+            display: flex; justify-content: space-between; align-items: baseline;
+            margin-bottom: 6px;
+        }
+        .travel-meter .tm-label {
+            font-size: 10.5px; font-weight: 700; letter-spacing: 1.6px; color: #7a8fa8;
+        }
+        .travel-meter .tm-value { font-size: 24px; font-weight: 800; color: #d6e4f0; }
+        .travel-meter .tm-bar {
+            position: relative; height: 12px; border-radius: 6px; overflow: hidden;
+            background: linear-gradient(90deg,
+                rgba(46,204,113,.28) 0%, rgba(46,204,113,.28) 40%,
+                rgba(245,197,66,.28) 40%, rgba(245,197,66,.28) 64%,
+                rgba(230,126,34,.28) 64%, rgba(230,126,34,.28) 80%,
+                rgba(231,76,60,.28) 80%, rgba(231,76,60,.28) 100%);
+        }
+        .travel-meter .tm-fill {
+            position: absolute; top: 0; left: 0; bottom: 0; width: 0%;
+            background: #2ecc71; border-radius: 6px;
+            transition: width .6s ease, background .6s ease;
+        }
+        .travel-meter .tm-tick {
+            position: absolute; top: 0; bottom: 0; left: 80%; width: 2px;
+            background: #fff; opacity: .85;
+        }
+        .travel-meter .tm-scale {
+            position: relative; height: 14px; margin-top: 3px;
+            font-size: 9.5px; color: #5a6f88;
+        }
+        .travel-meter .tm-scale .tm-s0 { position: absolute; left: 0; }
+        .travel-meter .tm-scale .tm-s2 {
+            position: absolute; left: 80%; transform: translateX(-50%);
+            color: #b0c4d8; font-weight: 700; white-space: nowrap;
+        }
+        .travel-meter .tm-scale .tm-s25 { position: absolute; right: 0; }
+        .travel-meter .tm-status { margin-top: 5px; font-size: 11.5px; color: #b0c4d8; }
+
         /* ── Lockdown overlay (display-only, 4:00 PM → 8:00 AM ET) ── */
         #lockdown-overlay {
             display: none;
@@ -301,6 +347,12 @@
         <div class="lock-note">Display only — the engine keeps running underneath, so the morning read is current the moment this lifts.</div>
         <a class="lock-cal" href="/calendar">🗓️ Day Probability Calendar</a>
         <div class="lock-note" style="margin-top:10px">Ratings only — no direction, no scores. That's why it stays open during the lock.</div>
+        <div class="travel-meter" style="margin-top:20px;border-top:1px solid #1e2d4a;padding-top:16px;">
+            <div class="tm-head"><span class="tm-label">OVERNIGHT TRAVEL</span><span class="tm-value">—</span></div>
+            <div class="tm-bar"><div class="tm-fill"></div><div class="tm-tick"></div></div>
+            <div class="tm-scale"><span class="tm-s0">0</span><span class="tm-s2">2% — LOCK LINE</span><span class="tm-s25">2.5%</span></div>
+            <div class="tm-status">Loading…</div>
+        </div>
     </div>
 </div>
 <div id="travel-alarm-banner" role="alert"></div>
@@ -382,6 +434,12 @@
     <!-- Day Probability tile — the full calendar page lives outside the dashboard lock -->
     <div id="calendar-tile" style="background:#0d1224;border:1px solid #1e2d4a;border-left:3px solid #f5c542;border-radius:12px;padding:16px 18px;margin-bottom:20px;">
         <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#f5c542;margin-bottom:8px;">🗓️ Day Probability</h3>
+        <div class="travel-meter" style="margin:2px 0 14px;">
+            <div class="tm-head"><span class="tm-label">OVERNIGHT TRAVEL</span><span class="tm-value">—</span></div>
+            <div class="tm-bar"><div class="tm-fill"></div><div class="tm-tick"></div></div>
+            <div class="tm-scale"><span class="tm-s0">0</span><span class="tm-s2">2% — LOCK LINE</span><span class="tm-s25">2.5%</span></div>
+            <div class="tm-status">Loading…</div>
+        </div>
         <div id="calendar-tile-body" style="font-size:13px;color:#b0c4d8;">Loading…</div>
     </div>
 
@@ -1198,6 +1256,89 @@
         setInterval(travelAlarmCheck, 60 * 1000);
     }
 
+    // ── Overnight travel meter ──────────────────────────────────────────
+    // A gauge of tonight's overnight travel — the live session that
+    // started at the most recent 18:00 ET — fed by /api/calendar's
+    // tonight_travel_pct: both Yahoo feeds measured with the same ruler
+    // as the calendar's DON'T LOOK call and averaged. Travel ONLY: no
+    // direction, no net move, no Pulse bias, confidence or scores — the
+    // same guardrail as the calendar, which is why one instance sits
+    // inside the lock card. Polls every 60s and never gates on the
+    // lockdown overlay, so the lock-screen gauge stays live all night.
+    // Bar scaled 0–2.5% with the locked 2% line ticked; fill colour by
+    // zone: green <1.0%, yellow 1.0–1.6%, orange 1.6–2.0%, red >=2.0%
+    // (TRAVEL_WARN_PCT / TRAVEL_LOCK_PCT are the alarm's constants,
+    // same lines). Status: while the session is live (18:00 → 09:30),
+    // "Travel so far — locks 9:30 AM"; once the number freezes at
+    // 09:30, "LOCKED — DON'T LOOK" at/over the line, else
+    // "CLEAR — x.xx%". No reading yet — session not started or feeds
+    // silent — shows a neutral dash, never a fake number. A failed
+    // poll leaves the last reading on screen.
+    const TRAVEL_METER_SCALE_PCT = 2.5;
+
+    function _travelMeterZoneColor(pct) {
+        if (pct >= TRAVEL_LOCK_PCT) return '#e74c3c';
+        if (pct >= TRAVEL_WARN_PCT) return '#e67e22';
+        if (pct >= 1.0) return '#f5c542';
+        return '#2ecc71';
+    }
+
+    function _travelMeterLive() {
+        // The session runs 18:00 ET → the 09:30 freeze; between 09:30
+        // and 18:00 the number on the gauge is the frozen final.
+        const { h, m } = _travelAlarmETParts();
+        const mins = h * 60 + m;
+        return mins >= 18 * 60 || mins < 9 * 60 + 30;
+    }
+
+    function _travelMeterRender(pct) {
+        document.querySelectorAll('.travel-meter').forEach(meter => {
+            const val = meter.querySelector('.tm-value');
+            const fill = meter.querySelector('.tm-fill');
+            const status = meter.querySelector('.tm-status');
+            if (!val || !fill || !status) return;
+            if (pct == null || typeof pct !== 'number' || !isFinite(pct)) {
+                val.textContent = '—';
+                val.style.color = '#d6e4f0';
+                fill.style.width = '0%';
+                status.textContent = 'No reading yet';
+                status.style.color = '#b0c4d8';
+                return;
+            }
+            const color = _travelMeterZoneColor(pct);
+            val.textContent = pct.toFixed(2) + '%';
+            val.style.color = color;
+            fill.style.width = Math.min(pct / TRAVEL_METER_SCALE_PCT, 1) * 100 + '%';
+            fill.style.background = color;
+            if (_travelMeterLive()) {
+                status.textContent = 'Travel so far — locks 9:30 AM';
+                status.style.color = '#b0c4d8';
+            } else if (pct >= TRAVEL_LOCK_PCT) {
+                status.textContent = 'LOCKED — DON\u2019T LOOK';
+                status.style.color = '#e74c3c';
+            } else {
+                status.textContent = 'CLEAR — ' + pct.toFixed(2) + '%';
+                status.style.color = '#b0c4d8';
+            }
+        });
+    }
+
+    async function travelMeterCheck() {
+        let pct = null;
+        try {
+            const resp = await fetch('/api/calendar');
+            if (!resp.ok) return;
+            const cal = await resp.json();
+            pct = (cal && typeof cal.tonight_travel_pct === 'number') ? cal.tonight_travel_pct : null;
+        } catch (e) { return; }
+        _travelMeterRender(pct);
+    }
+
+    function travelMeterInit() {
+        travelMeterCheck();
+        setInterval(travelMeterCheck, 60 * 1000);
+    }
+
     function copySnapshot() {
         const url = window.location.origin + document.getElementById('share-btn').getAttribute('href');
         navigator.clipboard.writeText(url).then(() => alert('Snapshot link copied!'));
@@ -1647,6 +1788,7 @@
     fetchData();
     loadCalendarTile();
     try { travelAlarmInit(); } catch (e) { /* the alarm must never break the dashboard */ }
+    try { travelMeterInit(); } catch (e) { /* the meter must never break the dashboard */ }
     scheduleRefresh();
 </script>
 </body>

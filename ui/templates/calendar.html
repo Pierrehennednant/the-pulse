@@ -55,6 +55,52 @@
     @media (max-width: 420px) {
         .day-block { flex: 1 1 100%; }
     }
+    /* ── Overnight travel meter gauge (same component as the dashboard
+       lock screen) ── Travel ONLY — no direction, no net move, no
+       scores — the guardrail that lets this page stay open during the
+       lockdown. Bar scaled 0–2.5% with the locked 2% line ticked; fill
+       colour by zone: green <1.0%, yellow 1.0–1.6%, orange 1.6–2.0%,
+       red >=2.0%. */
+    .travel-meter {
+        text-align: left; background: #0d1224; border: 1px solid #1e2d4a;
+        border-radius: 10px; padding: 12px 14px; margin-bottom: 20px;
+    }
+    .travel-meter .tm-head {
+        display: flex; justify-content: space-between; align-items: baseline;
+        margin-bottom: 6px;
+    }
+    .travel-meter .tm-label {
+        font-size: 10.5px; font-weight: 700; letter-spacing: 1.6px; color: #7a8fa8;
+    }
+    .travel-meter .tm-value { font-size: 24px; font-weight: 800; color: #d6e4f0; }
+    .travel-meter .tm-bar {
+        position: relative; height: 12px; border-radius: 6px; overflow: hidden;
+        background: linear-gradient(90deg,
+            rgba(46,204,113,.28) 0%, rgba(46,204,113,.28) 40%,
+            rgba(245,197,66,.28) 40%, rgba(245,197,66,.28) 64%,
+            rgba(230,126,34,.28) 64%, rgba(230,126,34,.28) 80%,
+            rgba(231,76,60,.28) 80%, rgba(231,76,60,.28) 100%);
+    }
+    .travel-meter .tm-fill {
+        position: absolute; top: 0; left: 0; bottom: 0; width: 0%;
+        background: #2ecc71; border-radius: 6px;
+        transition: width .6s ease, background .6s ease;
+    }
+    .travel-meter .tm-tick {
+        position: absolute; top: 0; bottom: 0; left: 80%; width: 2px;
+        background: #fff; opacity: .85;
+    }
+    .travel-meter .tm-scale {
+        position: relative; height: 14px; margin-top: 3px;
+        font-size: 9.5px; color: #5a6f88;
+    }
+    .travel-meter .tm-scale .tm-s0 { position: absolute; left: 0; }
+    .travel-meter .tm-scale .tm-s2 {
+        position: absolute; left: 80%; transform: translateX(-50%);
+        color: #b0c4d8; font-weight: 700; white-space: nowrap;
+    }
+    .travel-meter .tm-scale .tm-s25 { position: absolute; right: 0; }
+    .travel-meter .tm-status { margin-top: 5px; font-size: 11.5px; color: #b0c4d8; }
     .foot {
         margin-top: 32px; font-size: 12px; line-height: 1.6; color: #5a6f88;
         border-top: 1px solid #1e2d4a; padding-top: 14px;
@@ -69,6 +115,13 @@
         Each day rated in advance on how probable it is to be worth trading,
         from the week's recorded facts. <a href="/">← Back to the Pulse</a>
         {% if cal %} · Updated {{ cal.updated_label }}{% endif %}
+    </div>
+
+    <div class="travel-meter">
+        <div class="tm-head"><span class="tm-label">OVERNIGHT TRAVEL</span><span class="tm-value">—</span></div>
+        <div class="tm-bar"><div class="tm-fill"></div><div class="tm-tick"></div></div>
+        <div class="tm-scale"><span class="tm-s0">0</span><span class="tm-s2">2% — LOCK LINE</span><span class="tm-s25">2.5%</span></div>
+        <div class="tm-status">Loading…</div>
     </div>
 
     {% if cal and cal.summer_banner %}
@@ -110,5 +163,91 @@
         never lowers a day.
     </div>
 </div>
+<script>
+    // Overnight travel meter — the same gauge as the dashboard lock
+    // screen. Travel ONLY: no direction, no net move, no bias or
+    // scores — the guardrail that lets this page stay open during the
+    // lockdown. Polls /api/calendar every 60s for tonight_travel_pct:
+    // the live session from the most recent 18:00 ET, both Yahoo feeds
+    // measured with the calendar's ruler and averaged. Bar scaled
+    // 0–2.5% with the locked 2% line ticked; zones green <1.0%,
+    // yellow 1.0–1.6%, orange 1.6–2.0%, red >=2.0%. While the session
+    // is live (18:00 → 09:30 ET) the status reads "Travel so far —
+    // locks 9:30 AM"; after the 09:30 freeze it reads "LOCKED —
+    // DON'T LOOK" at/over the line, else "CLEAR — x.xx%". No reading
+    // yet shows a neutral dash, never a fake number; a failed poll
+    // leaves the last reading on screen. Fully self-contained: a
+    // meter error can never break the calendar.
+    (function () {
+        var LOCK = 2.0, WARN = 1.6, SCALE = 2.5;
+        function etParts() {
+            var parts = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'America/New_York', hour: 'numeric',
+                minute: 'numeric', hour12: false
+            }).formatToParts(new Date());
+            var h = 0, m = 0;
+            for (var i = 0; i < parts.length; i++) {
+                if (parts[i].type === 'hour') h = parseInt(parts[i].value, 10) % 24;
+                if (parts[i].type === 'minute') m = parseInt(parts[i].value, 10);
+            }
+            return { h: h, m: m };
+        }
+        function live() {
+            var p = etParts(), mins = p.h * 60 + p.m;
+            return mins >= 18 * 60 || mins < 9 * 60 + 30;
+        }
+        function zoneColor(pct) {
+            if (pct >= LOCK) return '#e74c3c';
+            if (pct >= WARN) return '#e67e22';
+            if (pct >= 1.0) return '#f5c542';
+            return '#2ecc71';
+        }
+        function render(pct) {
+            var meter = document.querySelector('.travel-meter');
+            if (!meter) return;
+            var val = meter.querySelector('.tm-value');
+            var fill = meter.querySelector('.tm-fill');
+            var status = meter.querySelector('.tm-status');
+            if (!val || !fill || !status) return;
+            if (pct == null || typeof pct !== 'number' || !isFinite(pct)) {
+                val.textContent = '—';
+                val.style.color = '#d6e4f0';
+                fill.style.width = '0%';
+                status.textContent = 'No reading yet';
+                status.style.color = '#b0c4d8';
+                return;
+            }
+            var color = zoneColor(pct);
+            val.textContent = pct.toFixed(2) + '%';
+            val.style.color = color;
+            fill.style.width = Math.min(pct / SCALE, 1) * 100 + '%';
+            fill.style.background = color;
+            if (live()) {
+                status.textContent = 'Travel so far — locks 9:30 AM';
+                status.style.color = '#b0c4d8';
+            } else if (pct >= LOCK) {
+                status.textContent = 'LOCKED — DON\u2019T LOOK';
+                status.style.color = '#e74c3c';
+            } else {
+                status.textContent = 'CLEAR — ' + pct.toFixed(2) + '%';
+                status.style.color = '#b0c4d8';
+            }
+        }
+        function check() {
+            fetch('/api/calendar').then(function (resp) {
+                if (!resp.ok) return null;
+                return resp.json();
+            }).then(function (cal) {
+                if (!cal) return;
+                render(typeof cal.tonight_travel_pct === 'number'
+                    ? cal.tonight_travel_pct : null);
+            }).catch(function () { /* keep the last reading */ });
+        }
+        try {
+            check();
+            setInterval(check, 60 * 1000);
+        } catch (e) { /* the meter must never break the calendar */ }
+    })();
+</script>
 </body>
 </html>
