@@ -58,6 +58,14 @@ DATA SOURCES (all already used by this codebase)
     p94 line is NOT used here: it judges the NET overnight move for the
     morning-read flag, a different rule (an earlier build applied it to
     travel by mistake — corrected 2026-11-10).
+    The travel number verifies itself (Pierre, 2026-11-11): the same
+    window is measured a second time from Yahoo's chart API — a separate
+    Yahoo product whose bars disagreed with the yfinance pull by ~3 pts
+    on the overnight low on 2026-11-11, enough to flip the lock — and
+    the final travel is the AVERAGE of the feeds that answered. When
+    the feeds split across the 2% line the day's reason says so; the
+    average is still the final say. If only one feed answers, it
+    decides alone (the pre-verification behaviour).
   * Pulse strength: processors.snapshot_generator latest snapshot — only the
     confidence number is compared against the 55% gate, internally.
   * Earnings markers: data/earnings_markers.json — top-weight Nasdaq-100
@@ -74,6 +82,8 @@ compression, weekday direction, pre-FOMC drift, options-expiry positioning.
 import json
 import math
 import os
+import urllib.parse
+import urllib.request
 from datetime import date, datetime, time, timedelta
 
 import pytz
@@ -266,6 +276,39 @@ def _travel_story(facts):
     return f"The path: {path}; net {net:+.1f}%."
 
 
+def _travel_from_bars(window, prior_close):
+    """Overnight travel components from window bars (18:00 → 09:30 ET)
+    measured against the prior close. None when the window is too thin
+    to judge. Shared by both travel feeds so each feed is measured with
+    the same ruler."""
+    if len(window) < 10 or not prior_close:
+        return None
+    hi_bar = max(window, key=lambda b: b[2])
+    lo_bar = min(window, key=lambda b: b[3])
+    hi, lo = hi_bar[2], lo_bar[3]
+    return {
+        "travel_pct": (hi - lo) / prior_close * 100,
+        "travel_high_pct": (hi / prior_close - 1) * 100,
+        "travel_low_pct": (lo / prior_close - 1) * 100,
+        "travel_net_pct": (window[-1][4] / prior_close - 1) * 100,
+        "travel_low_first": lo_bar[0] < hi_bar[0],
+        "first_open": window[0][1],
+    }
+
+
+def _travel_check_note(facts):
+    """When the travel feeds split across the lock line, say so — the
+    average is the final say, but a split is a recorded fact, not a
+    detail to smooth over. Empty string otherwise."""
+    if not facts.get("travel_contested"):
+        return ""
+    reads = facts.get("travel_sources") or []
+    if len(reads) < 2:
+        return ""
+    return (f" Feed check split across the line — {max(reads):.2f}% vs "
+            f"{min(reads):.2f}%; the average is the final say.")
+
+
 # ── Summer mode (Pierre's LOCKED next-summer plan, 2026-11-09) ──
 SUMMER_MONTHS = (6, 7, 8)
 
@@ -425,6 +468,45 @@ class ProbabilityCalendar:
                              level="WARNING")
             return []
 
+    def _fetch_bars_chart(self, symbol, range_, interval):
+        """[(timestamp_et, open, high, low, close)] from Yahoo's chart API —
+        the second travel feed. Same return shape as _fetch_bars; [] on
+        any failure (the caller then degrades to the single feed)."""
+        try:
+            qs = urllib.parse.urlencode({
+                "range": range_, "interval": interval,
+                "includePrePost": "true",
+            })
+            url = ("https://query1.finance.yahoo.com/v8/finance/chart/"
+                   + urllib.parse.quote(symbol) + "?" + qs)
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+            result = payload["chart"]["result"][0]
+            stamps = result.get("timestamp") or []
+            quote = (result.get("indicators", {}).get("quote") or [{}])[0]
+            opens = quote.get("open") or []
+            highs = quote.get("high") or []
+            lows = quote.get("low") or []
+            closes = quote.get("close") or []
+            n = min(len(stamps), len(opens), len(highs), len(lows),
+                    len(closes))
+            bars = []
+            for i in range(n):
+                vals = (opens[i], highs[i], lows[i], closes[i])
+                if any(v is None for v in vals):
+                    continue
+                vals = tuple(float(v) for v in vals)
+                if any(v != v for v in vals):  # NaN guard
+                    continue
+                bars.append((datetime.fromtimestamp(stamps[i], ET), *vals))
+            return bars
+        except Exception as e:
+            pulse_logger.log(f"Calendar: chart bars fetch failed {symbol} "
+                             f"{interval}: {e}", level="WARNING")
+            return []
+
     def _market_facts(self, today, now):
         """Recorded market facts: prior-session range percentiles, today's
         overnight travel (range + path detail), Monday's weekend gap."""
@@ -432,7 +514,8 @@ class ProbabilityCalendar:
                  "prev_close_pos": None, "median10_rank": None,
                  "travel_pct": None, "travel_high_pct": None,
                  "travel_low_pct": None, "travel_net_pct": None,
-                 "travel_low_first": None, "weekend_gap_pct": None}
+                 "travel_low_first": None, "weekend_gap_pct": None,
+                 "travel_sources": None, "travel_contested": False}
 
         # NQ daily bars → completed sessions and range percentiles.
         nq_daily = self._fetch_bars("NQ=F", "2y", "1d")
@@ -456,24 +539,38 @@ class ProbabilityCalendar:
                 facts["prev_close_pos"] = (pc - pl) / (ph - pl)
 
         # Overnight travel into today + weekend gap (NQ 5-minute bars).
-        nq_5m = self._fetch_bars("NQ=F", "5d", "5m")
-        if nq_5m and completed:
+        # The travel number verifies itself against a second feed (Yahoo's
+        # chart API) before it can lock a day — see the DATA SOURCES note.
+        if completed:
             prior_close = completed[-1][4]
             win_start = ET.localize(datetime.combine(
                 today - timedelta(days=1), time(18, 0)))
             win_end = min(now, ET.localize(datetime.combine(today, time(9, 30))))
-            window = [b for b in nq_5m if win_start <= b[0] <= win_end]
-            if len(window) >= 10 and prior_close:
-                hi_bar = max(window, key=lambda b: b[2])
-                lo_bar = min(window, key=lambda b: b[3])
-                hi, lo = hi_bar[2], lo_bar[3]
-                facts["travel_pct"] = (hi - lo) / prior_close * 100
-                facts["travel_high_pct"] = (hi / prior_close - 1) * 100
-                facts["travel_low_pct"] = (lo / prior_close - 1) * 100
-                facts["travel_net_pct"] = (window[-1][4] / prior_close - 1) * 100
-                facts["travel_low_first"] = lo_bar[0] < hi_bar[0]
+
+            def _window(bars):
+                return [b for b in bars if win_start <= b[0] <= win_end]
+
+            comp_a = _travel_from_bars(
+                _window(self._fetch_bars("NQ=F", "5d", "5m")), prior_close)
+            comp_b = _travel_from_bars(
+                _window(self._fetch_bars_chart("NQ=F", "5d", "5m")),
+                prior_close)
+            comps = [c for c in (comp_a, comp_b) if c]
+            if comps:
+                reads = [c["travel_pct"] for c in comps]
+                facts["travel_pct"] = sum(reads) / len(reads)
+                facts["travel_sources"] = reads
+                facts["travel_contested"] = (
+                    any(r >= TRAVEL_LOCK_PCT for r in reads)
+                    and any(r < TRAVEL_LOCK_PCT for r in reads))
+                primary = comps[0]
+                facts["travel_high_pct"] = primary["travel_high_pct"]
+                facts["travel_low_pct"] = primary["travel_low_pct"]
+                facts["travel_net_pct"] = primary["travel_net_pct"]
+                facts["travel_low_first"] = primary["travel_low_first"]
                 if today.weekday() == 0:
-                    facts["weekend_gap_pct"] = (window[0][1] / prior_close - 1) * 100
+                    facts["weekend_gap_pct"] = (
+                        primary["first_open"] / prior_close - 1) * 100
         return facts
 
     # ── rating engine ───────────────────────────────────────────────────────
@@ -724,7 +821,8 @@ class ProbabilityCalendar:
                 scored.append((0, f"Overnight travel {travel:.1f}% — under "
                                   f"the locked {TRAVEL_LOCK_PCT:.0f}% travel "
                                   f"line, so no travel lock."
-                                  + (f" {story}" if story else "")))
+                                  + (f" {story}" if story else "")
+                                  + _travel_check_note(facts)))
             gap = facts.get("weekend_gap_pct")
             if d.weekday() == 0 and gap is not None and abs(gap) >= 0.5:
                 scored.append((-1, f"Weekend gap of {gap:+.1f}% — Monday gaps "
@@ -807,6 +905,7 @@ class ProbabilityCalendar:
                               f"{TRAVEL_LOCK_PCT:.0f}% travel line (full "
                               f"overnight range, round trips included)."
                               + (f" {story}" if story else "")
+                              + _travel_check_note(facts)
                               + " Extended overnight travel makes this a "
                               "no-trade morning, whatever else the week holds")
         if summer_out:
