@@ -939,9 +939,9 @@
     // the banner stays until the window ends. 1.6–2.0% shows an amber
     // "approaching" banner with no sound. The red ring is a soft four-note
     // chime followed by a spoken sentence: "The overnight 2 percent
-    // threshold has been struck. Do not trade today!" — spoken in Microsoft
-    // Natasha Online (Natural), en-AU, at 1.1x speed and 1.0 pitch
-    // (Pierre's pick, 2026-11-11; falls back to any en-AU voice, then the
+    // threshold has been struck. Do not trade today!" — spoken in Google UK
+    // English Female (en-GB), at 1.1x speed and 1.0 pitch (Pierre's pick,
+    // 2026-11-11; falls back to Natasha, then any en-AU voice, then the
     // default). If the cross happens before Pierre has clicked the page,
     // the ring is HELD, not lost: the banner shows at once and the sound
     // goes out on his next click, or the next poll, while still in the
@@ -1006,7 +1006,11 @@
         try {
             if (!('speechSynthesis' in window)) return;
             const voices = window.speechSynthesis.getVoices() || [];
-            _travelAlarmVoice = voices.find(v => (v.name || '').indexOf('Natasha') !== -1)
+            const byName = n => voices.find(v => (v.name || '') === n);
+            // Pierre's pick (2026-11-11, Chrome): Google UK English Female.
+            // Natasha stays in the chain for Edge; then any en-AU voice.
+            _travelAlarmVoice = byName('Google UK English Female')
+                || voices.find(v => (v.name || '').indexOf('Natasha') !== -1)
                 || voices.find(v => (v.lang || '').toLowerCase() === 'en-au')
                 || voices.find(v => (v.lang || '').toLowerCase().indexOf('en-au') === 0)
                 || null;
@@ -1056,10 +1060,14 @@
             const u = new SpeechSynthesisUtterance(
                 'The overnight 2 percent threshold has been struck. Do not trade today!');
             // Cached at init (refreshed on voiceschanged); falls back to any
-            // en-AU voice, then to the default voice. lang pins Australian
-            // English even when the voice itself is the default.
-            if (_travelAlarmVoice) u.voice = _travelAlarmVoice;
-            u.lang = 'en-AU';
+            // en-AU voice, then to the default voice. When no voice is
+            // picked, lang pins Australian English for the default voice.
+            if (_travelAlarmVoice) {
+                u.voice = _travelAlarmVoice;
+                u.lang = _travelAlarmVoice.lang || 'en-AU';
+            } else {
+                u.lang = 'en-AU';
+            }
             u.rate = 1.1; u.pitch = 1.0;
             window.speechSynthesis.speak(u);
         } catch (e) { /* speech unavailable — chime + banner still work */ }
