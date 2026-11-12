@@ -66,6 +66,12 @@ DATA SOURCES (all already used by this codebase)
     the feeds split across the 2% line the day's reason says so; the
     average is still the final say. If only one feed answers, it
     decides alone (the pre-verification behaviour).
+    The travel meter gauge (dashboard lock screen + calendar page)
+    reads the live session the same way — tonight_travel_pct: before
+    18:00 ET it is today's number; after 18:00 it is the new session's
+    travel-so-far against today's completed close, both feeds,
+    averaged. Travel only — the guardrail above applies to the gauge
+    exactly as it does to the ratings.
   * Pulse strength: processors.snapshot_generator latest snapshot — only the
     confidence number is compared against the 55% gate, internally.
   * Earnings markers: data/earnings_markers.json — top-weight Nasdaq-100
@@ -309,6 +315,19 @@ def _travel_check_note(facts):
             f"{min(reads):.2f}%; the average is the final say.")
 
 
+def _combine_travel(comps):
+    """Combine the per-feed travel reads that answered: the final number
+    is their average, and `contested` records a split across the lock
+    line. Returns (travel_pct, reads, contested) — (None, None, False)
+    when no feed answered."""
+    if not comps:
+        return None, None, False
+    reads = [c["travel_pct"] for c in comps]
+    contested = (any(r >= TRAVEL_LOCK_PCT for r in reads)
+                 and any(r < TRAVEL_LOCK_PCT for r in reads))
+    return sum(reads) / len(reads), reads, contested
+
+
 # ── Summer mode (Pierre's LOCKED next-summer plan, 2026-11-09) ──
 SUMMER_MONTHS = (6, 7, 8)
 
@@ -515,7 +534,8 @@ class ProbabilityCalendar:
                  "travel_pct": None, "travel_high_pct": None,
                  "travel_low_pct": None, "travel_net_pct": None,
                  "travel_low_first": None, "weekend_gap_pct": None,
-                 "travel_sources": None, "travel_contested": False}
+                 "travel_sources": None, "travel_contested": False,
+                 "tonight_travel_pct": None}
 
         # NQ daily bars → completed sessions and range percentiles.
         nq_daily = self._fetch_bars("NQ=F", "2y", "1d")
@@ -557,12 +577,10 @@ class ProbabilityCalendar:
                 prior_close)
             comps = [c for c in (comp_a, comp_b) if c]
             if comps:
-                reads = [c["travel_pct"] for c in comps]
-                facts["travel_pct"] = sum(reads) / len(reads)
+                avg, reads, contested = _combine_travel(comps)
+                facts["travel_pct"] = avg
                 facts["travel_sources"] = reads
-                facts["travel_contested"] = (
-                    any(r >= TRAVEL_LOCK_PCT for r in reads)
-                    and any(r < TRAVEL_LOCK_PCT for r in reads))
+                facts["travel_contested"] = contested
                 primary = comps[0]
                 facts["travel_high_pct"] = primary["travel_high_pct"]
                 facts["travel_low_pct"] = primary["travel_low_pct"]
@@ -571,6 +589,36 @@ class ProbabilityCalendar:
                 if today.weekday() == 0:
                     facts["weekend_gap_pct"] = (
                         primary["first_open"] / prior_close - 1) * 100
+
+            # Tonight's live session, for the travel meter gauge: the
+            # session that started at the most recent 18:00 ET. Before
+            # 18:00 that session IS today's overnight — the number above,
+            # no second measurement. After 18:00 a new session is
+            # running: measure it against today's completed close
+            # (prior_close — completed[-1] is today's bar once the day
+            # session has closed; on a Sunday evening it is Friday's
+            # bar, the settled close the Monday session measures
+            # against), both feeds, same ruler, averaged the same way.
+            # No session in progress (e.g. Friday evening, before the
+            # Sunday reopen) or no feed answering leaves it None — the
+            # gauge shows a dash, never a stale or invented number.
+            facts["tonight_travel_pct"] = facts["travel_pct"]
+            if now.time() >= time(18, 0):
+                t_start = ET.localize(datetime.combine(today, time(18, 0)))
+
+                def _twindow(bars):
+                    return [b for b in bars if t_start <= b[0] <= now]
+
+                tcomps = [c for c in (
+                    _travel_from_bars(
+                        _twindow(self._fetch_bars("NQ=F", "5d", "5m")),
+                        prior_close),
+                    _travel_from_bars(
+                        _twindow(self._fetch_bars_chart("NQ=F", "5d", "5m")),
+                        prior_close),
+                ) if c]
+                tonight, _treads, _tcontested = _combine_travel(tcomps)
+                facts["tonight_travel_pct"] = tonight
         return facts
 
     # ── rating engine ───────────────────────────────────────────────────────
@@ -631,10 +679,21 @@ class ProbabilityCalendar:
             _travel = None
         if _travel is not None and not math.isfinite(_travel):
             _travel = None
+        # Same plain-float treatment for tonight's live-session travel —
+        # the meter gauge's feed (see _market_facts). None until the
+        # live session has a measurable reading.
+        _tonight = facts.get("tonight_travel_pct") if facts else None
+        try:
+            _tonight = float(_tonight) if _tonight is not None else None
+        except (TypeError, ValueError):
+            _tonight = None
+        if _tonight is not None and not math.isfinite(_tonight):
+            _tonight = None
         return {"generated_at": now.isoformat(), "today": today.isoformat(),
                 "updated_label": now.strftime("%b %-d, %Y · %-I:%M %p ET"),
                 "summer_banner": _summer_banner(week_dates),
                 "today_travel_pct": _travel,
+                "tonight_travel_pct": _tonight,
                 "weeks": weeks}
 
     def _week_red_days(self, monday, events):
