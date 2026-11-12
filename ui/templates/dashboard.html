@@ -934,12 +934,14 @@
     // already >= 2% when the window opens — or when the page loads inside
     // the window — it rings immediately. One ring per day; the banner stays
     // until the window ends. 1.6–2.0% shows an amber "approaching" banner
-    // with no sound. The red ring is three beeps followed by a spoken
-    // sentence: "The 2 percent meter has been struck. Don't look mode has
-    // been activated on the Pulse." Sound and speech both need one
-    // click/keypress on the page first (browser autoplay rule); the banner
-    // shows regardless. The alarm never fires while the lockdown overlay
-    // is up.
+    // with no sound. The red ring is a soft four-note chime followed by a
+    // spoken sentence: "The overnight 2 percent threshold has been struck.
+    // Do not trade today!" — spoken in Microsoft Natasha Online (Natural),
+    // en-AU, at 1.1x speed and 1.2 pitch (Pierre's pick, 2026-11-11; falls
+    // back to the default voice if Natasha isn't installed). Chime volume
+    // is 30% peak gain. Sound and speech both need one click/keypress on
+    // the page first (browser autoplay rule); the banner shows regardless.
+    // The alarm never fires while the lockdown overlay is up.
     const TRAVEL_LOCK_PCT = 2.0;
     const TRAVEL_WARN_PCT = 1.6;
     let _travelAlarmRungFor = null;   // YYYY-MM-DD the red ring fired
@@ -959,21 +961,24 @@
     ['pointerdown', 'keydown'].forEach(ev =>
         document.addEventListener(ev, _travelAlarmUnlockAudio, { once: true }));
 
-    function _travelAlarmBeep() {
+    // Pierre's pick (2026-11-11): a soft four-note chime, not beeps.
+    // Peak gain 0.30 (his 30% on the test page); notes at 0.8x that.
+    function _travelAlarmChime() {
         try {
             _travelAlarmUnlockAudio();
             if (!_travelAudioCtx) return;
             const ctx = _travelAudioCtx, t0 = ctx.currentTime;
-            [0, 0.35, 0.7].forEach((dt, i) => {
+            [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
                 const o = ctx.createOscillator(), g = ctx.createGain();
-                o.type = 'sine'; o.frequency.value = i === 2 ? 1175 : 880;
+                o.type = 'sine'; o.frequency.value = freq;
+                const dt = i * 0.18;
                 g.gain.setValueAtTime(0.0001, t0 + dt);
-                g.gain.exponentialRampToValueAtTime(0.25, t0 + dt + 0.02);
-                g.gain.exponentialRampToValueAtTime(0.0001, t0 + dt + 0.3);
+                g.gain.exponentialRampToValueAtTime(0.24, t0 + dt + 0.02);
+                g.gain.exponentialRampToValueAtTime(0.0001, t0 + dt + 0.48);
                 o.connect(g); g.connect(ctx.destination);
-                o.start(t0 + dt); o.stop(t0 + dt + 0.32);
+                o.start(t0 + dt); o.stop(t0 + dt + 0.5);
             });
-        } catch (e) { /* never break the page over a beep */ }
+        } catch (e) { /* never break the page over a chime */ }
     }
 
     function _travelAlarmSpeak() {
@@ -982,10 +987,16 @@
             // Cancel any queued speech so a repeat ring never stacks up.
             window.speechSynthesis.cancel();
             const u = new SpeechSynthesisUtterance(
-                'The 2 percent meter has been struck. Don\u2019t look mode has been activated on the Pulse.');
-            u.rate = 1; u.pitch = 1;
+                'The overnight 2 percent threshold has been struck. Do not trade today!');
+            // Pierre's pick (2026-11-11): Microsoft Natasha Online
+            // (Natural), en-AU, at 1.1x speed and 1.2 pitch. Falls back
+            // to the default voice when Natasha isn't installed.
+            const v = window.speechSynthesis.getVoices().find(
+                x => (x.name || '').indexOf('Natasha') !== -1);
+            if (v) u.voice = v;
+            u.rate = 1.1; u.pitch = 1.2;
             window.speechSynthesis.speak(u);
-        } catch (e) { /* speech unavailable — beeps + banner still work */ }
+        } catch (e) { /* speech unavailable — chime + banner still work */ }
     }
 
     function _travelAlarmETParts() {
@@ -1042,8 +1053,9 @@
             _travelAlarmShow(pct, 'red');
             if (today && _travelAlarmRungFor !== today) {
                 _travelAlarmRungFor = today;
-                _travelAlarmBeep();
-                _travelAlarmSpeak();
+                _travelAlarmChime();
+                // Words wait for the chime to finish (~1.1s) so they don't overlap it.
+                setTimeout(_travelAlarmSpeak, 1100);
             }
         } else if (pct >= TRAVEL_WARN_PCT) {
             _travelAlarmShow(pct, 'amber');
