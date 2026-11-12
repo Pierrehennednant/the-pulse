@@ -937,7 +937,7 @@
     // with no sound. The red ring is a soft four-note chime followed by a
     // spoken sentence: "The overnight 2 percent threshold has been struck.
     // Do not trade today!" — spoken in Microsoft Natasha Online (Natural),
-    // en-AU, at 1.1x speed and 1.2 pitch (Pierre's pick, 2026-11-11; falls
+    // en-AU, at 1.1x speed and 1.0 pitch (Pierre's pick, 2026-11-11; falls
     // back to the default voice if Natasha isn't installed). Chime volume
     // is 30% peak gain. Sound and speech both need one click/keypress on
     // the page first (browser autoplay rule); the banner shows regardless.
@@ -989,12 +989,12 @@
             const u = new SpeechSynthesisUtterance(
                 'The overnight 2 percent threshold has been struck. Do not trade today!');
             // Pierre's pick (2026-11-11): Microsoft Natasha Online
-            // (Natural), en-AU, at 1.1x speed and 1.2 pitch. Falls back
+            // (Natural), en-AU, at 1.1x speed and 1.0 pitch. Falls back
             // to the default voice when Natasha isn't installed.
             const v = window.speechSynthesis.getVoices().find(
                 x => (x.name || '').indexOf('Natasha') !== -1);
             if (v) u.voice = v;
-            u.rate = 1.1; u.pitch = 1.2;
+            u.rate = 1.1; u.pitch = 1.0;
             window.speechSynthesis.speak(u);
         } catch (e) { /* speech unavailable — chime + banner still work */ }
     }
