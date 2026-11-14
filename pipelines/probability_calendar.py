@@ -39,6 +39,14 @@ what the settled design's checkpoints mean mechanically:
     that governed the day is the rating on record; Friday grading reads
     it). A past day with no frozen record is recomputed WITHOUT today's
     live facts (no range block, no today-only block).
+  * WEEK ROLLOVER: on Sat/Sun the page shows the coming week, but the
+    EC cache still holds the week just ended until the feed rolls.
+    Until events dated inside the displayed week are present, every
+    day renders PENDING — no rating is computed from another week's
+    data, and an empty event set is missing data, never evidence of
+    a quiet week. Event inheritance (day-after, week context) never
+    crosses the Mon-Fri boundary; market facts (prior-session range)
+    still do, by design.
 
 Precedence: (1) locked hard rules (overnight travel) beat everything;
 (2) the calendar is the plan — ratings move only when a recorded fact lands;
@@ -159,6 +167,7 @@ TIER_PROBABLE = "PROBABLE"
 TIER_MID = "MID"
 TIER_DEFENSIVE = "DEFENSIVE"
 TIER_DONT_LOOK = "DON'T LOOK"
+TIER_PENDING = "PENDING"
 
 # ── One-time seed for the week the freeze ships (week of 2026-11-09) ────
 # Monday and Tuesday were already past when the freeze landed, so their
@@ -410,6 +419,57 @@ class ProbabilityCalendar:
 
         return events
 
+    def _ec_week_covered(self, monday):
+        """True when the EC cache actually holds events dated inside the
+        displayed Mon-Fri week — i.e. the feed has rolled to this week.
+        While the cache still holds last week's events (the weekend
+        before the new week's calendar lands), this week's shape is not
+        known yet, and no rating may be computed from that data: an
+        empty event set for the week is missing data, not evidence of
+        a quiet week."""
+        try:
+            payload = self.cache.load("economic_calendar") or {}
+            ec_data = payload.get("data") or payload
+            friday = monday + timedelta(days=4)
+            for ev in ec_data.get("events") or []:
+                dstr = ev.get("event_date") or ""
+                if monday.isoformat() <= dstr <= friday.isoformat():
+                    return True
+        except Exception as e:
+            pulse_logger.log(f"Calendar: EC coverage check failed: {e}",
+                             level="WARNING")
+        return False
+
+    def _pending_block(self, d, today, markers):
+        """A day in a week whose red-folder calendar hasn't landed yet.
+        No rating is computed. Earnings markers are date-explicit facts
+        from a separate store, so they still show."""
+        reasons = ["Week's calendar pending — the new week's red-folder "
+                   "calendar hasn't landed yet, so this week isn't rated "
+                   "yet; ratings post when it does"]
+        prev_td = _prior_trading_day(d)
+        for m in markers:
+            try:
+                mdate = date.fromisoformat(m.get("date", ""))
+            except ValueError:
+                continue
+            session = m.get("session", "after_close")
+            applies = (mdate == d and session == "before_open") or (
+                mdate == prev_td and session == "after_close")
+            if applies:
+                when = "before the open" if session == "before_open" else "last night"
+                reasons.append(f"Earnings marker — {m.get('symbol', '')} "
+                               f"({m.get('name', '')}) reported {when}; a top-weight "
+                               "Nasdaq-100 name, marked like an election marker — "
+                               "never scored, its beat or miss never predicted")
+        return {
+            "date": d.isoformat(),
+            "weekday": d.strftime("%A"),
+            "rating": TIER_PENDING,
+            "reasons": reasons,
+            "is_today": d == today,
+        }
+
     def _load_earnings_markers(self):
         try:
             with open(EARNINGS_PATH) as f:
@@ -631,6 +691,7 @@ class ProbabilityCalendar:
             monday += timedelta(days=7)
 
         events = self._load_events()
+        week_covered = self._ec_week_covered(monday)
         markers = self._load_earnings_markers()
         facts = self._market_facts(today, now)
         pulse_conf = self._pulse_confidence()
@@ -649,6 +710,14 @@ class ProbabilityCalendar:
                 frozen = dict(history[d.isoformat()])
                 frozen["is_today"] = False
                 days.append(frozen)
+                continue
+            if not week_covered:
+                # The displayed week's own calendar hasn't landed (the
+                # weekend roll shows next week while the EC cache still
+                # holds this week's events). Pending, never a rating
+                # computed from another week's data — and never saved
+                # to history, so a pending block can't freeze.
+                days.append(self._pending_block(d, today, markers))
                 continue
             block = self._rate_day(
                 d, today, events, markers, facts, pulse_conf,
@@ -781,9 +850,15 @@ class ProbabilityCalendar:
                              "follow-through doesn't; no automatic upgrade")
 
         # Day after a data release: the print is still being counted.
+        # Same week only: a Monday never inherits last Friday's release —
+        # event facts do not cross the Mon-Fri week boundary (market
+        # facts below still do: Friday's range is Monday's input by
+        # design). Before this bound, a Saturday render of next week
+        # handed Monday the day-after boost from last week's Friday
+        # print, because the EC cache had not rolled yet.
         prev_releases = [e["title"] for e in events.get(prev_td.isoformat(), [])
                          if e["title"] not in FOMC_TITLES]
-        if prev_releases and not is_release_day and not is_fomc:
+        if prev_releases and prev_td >= monday_of and not is_release_day and not is_fomc:
             names = ", ".join(sorted(set(prev_releases)))
             scored.append((1, f"Day after the {names} release — the print is "
                               "still being counted; the day after stays in play"))
