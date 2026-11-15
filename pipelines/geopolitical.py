@@ -4187,14 +4187,53 @@ CONTEXT: {context}"""
             pulse_logger.log(f"⚠️ Sentiment analyzer failed: {e}", level="WARNING")
             return 0.0
 
+    # Article-page fetch only (not shared with any API call). Some news CDNs
+    # hold a bare-UA request open without ever answering; a full browser
+    # header set gets a normal response. gzip/deflate only — no brotli dep.
+    ARTICLE_FETCH_HEADERS = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1',
+    }
+    # One attempt, no retries, so a hanging or trickling site gives up before
+    # _fetch_and_stamp_articles()' 15 s wall-clock cap and falls back cleanly.
+    # Worst case: no body = connect 4 + read 6 = 10 s; trickling body = last
+    # deadline check at 8 s + one final read wait of 6 s = 14 s.
+    ARTICLE_FETCH_TIMEOUT = (4, 6)
+    ARTICLE_FETCH_DEADLINE_S = 8
+
     def fetch_full_article(self, url, fallback_description):
         """Fetch full article text for Gemini context. Falls back to description if paywalled."""
         try:
-            response = fetch_with_retry(url, headers=self.headers, timeout=8)
-            if response.status_code != 200:
-                return fallback_description
+            started = time.monotonic()
+            with requests.get(url, headers=self.ARTICLE_FETCH_HEADERS,
+                              timeout=self.ARTICLE_FETCH_TIMEOUT, stream=True) as response:
+                if response.status_code != 200:
+                    return fallback_description
+                # read1 (urllib3 >= 2.3) returns as soon as any bytes arrive
+                # (each wait still capped by the read timeout), so the deadline
+                # check runs even against a slow-trickling body. Older urllib3
+                # (no read1): plain read, still bounded by the 15 s cap upstream.
+                chunks = []
+                try:
+                    while True:
+                        if time.monotonic() - started > self.ARTICLE_FETCH_DEADLINE_S:
+                            return fallback_description
+                        chunk = response.raw.read1(65536, decode_content=True)
+                        if not chunk:
+                            break
+                        chunks.append(chunk)
+                    content = b''.join(chunks)
+                except (AttributeError, NotImplementedError):
+                    content = response.content
             from bs4 import BeautifulSoup
-            soup = BeautifulSoup(response.content, 'html.parser')
+            soup = BeautifulSoup(content, 'html.parser')
             # Remove script, style, nav elements
             for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside']):
                 tag.decompose()
