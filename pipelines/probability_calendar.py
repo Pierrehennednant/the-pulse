@@ -1046,9 +1046,9 @@ class ProbabilityCalendar:
                 else:
                     scored.append((-2, f"Range exhaustion — the prior session "
                                         f"printed a {rank:.0f}th-percentile range; "
-                                        "days after huge ranges run wide but "
-                                        "inefficient and reverse about two times "
-                                        "in three"))
+                                        "the morning after a huge day usually "
+                                        "runs much wider than normal and "
+                                        "reverses more often than usual"))
             elif rank >= 95:
                 if is_release_day or is_fomc:
                     notes.append(f"The prior session's range was {rank:.0f}th "
@@ -1056,8 +1056,8 @@ class ProbabilityCalendar:
                 else:
                     scored.append((-1, f"Range exhaustion — the prior session "
                                         f"printed a {rank:.0f}th-percentile range; "
-                                        "the morning after a huge day is usually "
-                                        "poor"))
+                                        "the morning after a huge day usually "
+                                        "runs much wider than normal"))
             if (rank >= 90 and rank2 is not None and rank2 >= 90
                     and not is_release_day and not is_fomc):
                 scored.append((-1, "Two extended-range days in a row — "
