@@ -85,7 +85,7 @@ def speech(dstr, title, speaker, time_est, impact="High"):
             "time_est": time_est}
 
 
-def run_case(frozen_dt, events, markers=()):
+def run_case(frozen_dt, events, markers=(), facts=None):
     class FrozenDateTime(datetime):
         FIXED = frozen_dt
 
@@ -99,7 +99,8 @@ def run_case(frozen_dt, events, markers=()):
     cal._mem = None
     cal._mem_ts = None
     cal._market_facts = lambda today, now: Facts(
-        {"travel_pct": None, "tonight_travel_pct": None})
+        facts if facts is not None
+        else {"travel_pct": None, "tonight_travel_pct": None})
     cal._pulse_confidence = lambda: None
     cal._load_history = lambda: {}
     cal._save_history = lambda history: None
@@ -202,6 +203,48 @@ stale = [ev("2026-11-13", "PPI m/m"),
 p = run_case(datetime(2026, 11, 14, 9, 41, tzinfo=pc.ET), stale)
 ratings = [b["rating"] for w in p["weeks"] for b in w["days"]]
 check("Stale Saturday still PENDING everywhere", ratings == ["PENDING"] * 5)
+
+# Case 9 - audit D2: a speech must NOT act as a hard factor for the
+# earnings-marker exemption. Marker morning with NO prior-day release
+# (so no day-after +1): quiet -1 + speech -1 + prior-range-96th -1 = -3
+# would lock the morning out; the exemption must still lift it.
+marker_mon = [{"date": "2026-11-23", "company": "NVDA", "name": "Nvidia",
+               "note": "After the close"}]
+wk2 = [ev("2026-11-25", "Retail Sales m/m"),
+       speech("2026-11-24", "Fed Chairman Warsh Speaks", "Fed Chair",
+              "Tue Nov 24, 12:00 PM EST")]
+p = run_case(datetime(2026, 11, 23, 17, 0, tzinfo=pc.ET),
+             wk2, markers=marker_mon,
+             facts={"travel_pct": None, "tonight_travel_pct": None,
+                    "prev_rank": 96})
+tue = day(p, "2026-11-24")
+check("D2: post-earnings morning with speech stacks to DEFENSIVE, not locked out",
+      tue["rating"] == "DEFENSIVE"
+      and any("Earnings exemption" in r for r in tue["reasons"])
+      and any("Fed Chair speaks at 12:00 PM" in r for r in tue["reasons"]))
+
+# Case 10 - audit D3: a pre-open (08:00) Chair speech does not count.
+early = speech("2026-11-16", "Fed Chairman Warsh Speaks", "Fed Chair",
+               "Mon Nov 16, 08:00 AM EST")
+p = run_case(datetime(2026, 11, 15, 10, 0, tzinfo=pc.ET), WEEK + [early])
+mon = day(p, "2026-11-16")
+check("D3: 08:00 Chair speech - no factor, no suspect note",
+      not any("Fed Chair speaks" in r for r in mon["reasons"])
+      and not any("not classified" in r for r in mon["reasons"])
+      and mon["rating"] == "DEFENSIVE")
+
+# Case 11 - audit Q4: a surname-only title the EC didn't classify as a
+# Chair event surfaces as a 0-point tripwire note, never as points.
+suspect = {"event_date": "2026-11-16", "title": "Warsh Speaks",
+           "impact": "High", "is_speech": True, "speaker_type": "Other",
+           "time_est": "Mon Nov 16, 10:00 AM EST"}
+p = run_case(datetime(2026, 11, 15, 10, 0, tzinfo=pc.ET), WEEK + [suspect])
+mon = day(p, "2026-11-16")
+check("Q4: unclassified Chair-named event - tripwire note, no points",
+      any("Possible Fed Chair event not classified" in r
+          and "Warsh Speaks" in r for r in mon["reasons"])
+      and not any("Fed Chair speaks at" in r for r in mon["reasons"])
+      and mon["rating"] == "DEFENSIVE")
 
 failed = [n for n, ok in results if not ok]
 print(f"\n{len(results) - len(failed)}/{len(results)} passed")

@@ -48,17 +48,23 @@ what the settled design's checkpoints mean mechanically:
     crosses the Mon-Fri boundary; market facts (prior-session range)
     still do, by design.
   * FED CHAIR SPEECHES (Pierre's design, 2026-11-15): a scheduled
-    Chair speech before the close is an event overhang, -1 — the
-    Chair is the one speaker whose speeches measurably move
-    markets, and the morning trades into it. Below the FOMC
-    decision's -2: no vote lands, and the proven reaction clusters
-    around the speech itself, not the hours before. Speeches never
-    count as red-folder days and are never scored for direction.
-    Presidential speeches are not rated: in Pierre's design they
-    count only when topic and time connect, and no advance topic
-    signal exists (Forex Factory titles carry no topic; the EC
-    pipeline's presidential tier is classified from news coverage
-    after the speech happens).
+    Chair speech inside the session window (9:30 AM-4:00 PM ET) is
+    an event overhang, -1 — the Chair is the one speaker whose
+    speeches measurably move markets, and the morning trades into
+    it. Below the FOMC decision's -2: no vote lands, and the proven
+    reaction clusters around the speech itself, not the hours
+    before. Speeches never count as red-folder days and are never
+    scored for direction. PROVISIONAL — review rule, pre-committed:
+    after 8 qualifying Chair-speech days, compare their Friday
+    grades with non-speech days of the same tier; if speech days
+    don't grade worse, this factor drops to a 0-point note; if they
+    grade worse than DEFENSIVE implies, consider -2. Presidential
+    speeches are not rated: in Pierre's design they count only when
+    topic and time connect, and the advance-topic mechanism is not
+    built yet; until it is, presidential speeches are not rated
+    (Forex Factory titles carry no topic; the EC pipeline's
+    presidential tier is classified from news coverage after the
+    speech happens).
 
 Precedence: (1) locked hard rules (overnight travel) beat everything;
 (2) the calendar is the plan — ratings move only when a recorded fact lands;
@@ -279,6 +285,14 @@ def _percentile(sorted_vals, q):
 # for the morning-read flag, a separate rule.
 TRAVEL_LOCK_PCT = 2.0
 
+# Chair surname(s) for the misclassification tripwire in
+# _load_speeches(): any cache event naming the Chair that the EC
+# pipeline did NOT classify as a Fed Chair event surfaces as a
+# 0-point note + WARNING, so a silent no-fire can't hide. Detection
+# only — it never scores. Update when the Chair changes, the same
+# way FOMC dates are maintained.
+CHAIR_SURNAMES = ("Warsh",)
+
 
 def _travel_story(facts):
     """One-line overnight path story: the extremes vs the prior close, which
@@ -446,47 +460,61 @@ class ProbabilityCalendar:
         return events
 
     def _load_speeches(self):
-        """speeches: date -> [{'title', 'time_label'}] qualifying Fed
-        Chair speeches, from the same EC cache the events load from.
+        """(speeches, suspects): speeches is date ->
+        [{'title', 'time_label'}] qualifying Fed Chair events, from
+        the same EC cache the events load from.
 
-        Qualifying = the EC pipeline flagged the event a speech
-        (is_speech), classified the speaker as the Fed Chair
-        (speaker_type), the title is not an FOMC-day title, and the
-        scheduled start is before the 4 PM close — a speech at or
-        after the close is graded by the overnight tape, not by an
-        overhang on a finished session. An unlisted or unparseable
-        time still counts: the Chair counts.
+        Qualifying = the EC pipeline classified the speaker as the
+        Fed Chair (speaker_type — set for speeches and testimony
+        alike, so testimony qualifies on the same footing), the title
+        is not an FOMC-day title, and the scheduled start falls
+        inside the session window, 9:30 AM-4:00 PM ET: a pre-open
+        speech is priced in futures before the open (the morning is
+        digestion, not overhang), and a speech at or after the close
+        is graded by the overnight tape, not by an overhang on a
+        finished session. An unlisted or unparseable time still
+        counts: the Chair counts.
+
+        Also returns suspects: date -> [titles] naming the Chair
+        (CHAIR_SURNAMES) that the EC did NOT classify as Fed Chair
+        events — the tripwire against a silent no-fire (a renamed
+        title, a classifier miss). Suspects never score; they
+        surface as a 0-point note + WARNING.
 
         Presidential speeches are deliberately NOT loaded (see the
-        module docstring): no advance topic signal exists, and an
-        unfiltered factor would rate the ceremonial appearances
-        Pierre excluded. Other officials are excluded on the
-        evidence — only the Chair's speeches measurably move
-        markets."""
+        module docstring): the advance-topic mechanism is not built
+        yet, and until it is, an unfiltered factor would rate the
+        ceremonial appearances Pierre excluded. Other officials are
+        excluded on the evidence — only the Chair's speeches
+        measurably move markets."""
         speeches = {}
+        suspects = {}
         try:
             payload = self.cache.load("economic_calendar") or {}
             ec_data = payload.get("data") or payload
             for ev in ec_data.get("events") or []:
-                if not ev.get("is_speech"):
-                    continue
-                if ev.get("speaker_type") != "Fed Chair":
-                    continue
                 title = ev.get("title") or ""
-                if title in FOMC_TITLES:
-                    continue
                 dstr = ev.get("event_date") or ""
                 if not dstr:
                     continue
+                if ev.get("speaker_type") != "Fed Chair":
+                    if any(s in title for s in CHAIR_SURNAMES):
+                        suspects.setdefault(dstr, []).append(title)
+                        pulse_logger.log(
+                            f"Calendar: possible Fed Chair event not "
+                            f"classified as one: {title}", level="WARNING")
+                    continue
+                if title in FOMC_TITLES:
+                    continue
                 label, start = _speech_start(ev.get("time_est") or "")
-                if start is not None and start >= time(16, 0):
+                if start is not None and not (time(9, 30) <= start < time(16, 0)):
                     continue
                 speeches.setdefault(dstr, []).append(
                     {"title": title, "time_label": label})
         except Exception as e:
             pulse_logger.log(f"Calendar: speech load failed: {e}",
                              level="WARNING")
-        return speeches
+        return speeches, suspects
 
     def _ec_week_covered(self, monday):
         """True when the EC cache actually holds events dated inside the
@@ -760,7 +788,7 @@ class ProbabilityCalendar:
             monday += timedelta(days=7)
 
         events = self._load_events()
-        speeches = self._load_speeches()
+        speeches, speech_suspects = self._load_speeches()
         week_covered = self._ec_week_covered(monday)
         markers = self._load_earnings_markers()
         facts = self._market_facts(today, now)
@@ -792,7 +820,8 @@ class ProbabilityCalendar:
             block = self._rate_day(
                 d, today, events, markers, facts, pulse_conf,
                 monday_of=monday, quiet_week_known=True,
-                frozen_past=d < today, speeches=speeches)
+                frozen_past=d < today, speeches=speeches,
+                speech_suspects=speech_suspects)
             days.append(block)
             if d == today:
                 # Save today's live block on every compute (overwrite) —
@@ -849,8 +878,9 @@ class ProbabilityCalendar:
 
     def _rate_day(self, d, today, events, markers, facts, pulse_conf,
                   monday_of, quiet_week_known, frozen_past=False,
-                  speeches=None):
+                  speeches=None, speech_suspects=None):
         speeches = speeches or {}
+        speech_suspects = speech_suspects or {}
         scored = []   # (points, text) — points drive the tier, text is rendered
         notes = []    # 0-point reason strings
 
@@ -957,15 +987,16 @@ class ProbabilityCalendar:
         # hours before. Not a release day: the speech never counts
         # toward the week's red-folder days. Never on an FOMC day —
         # that morning already trades into the decision itself.
-        speech_overhang = False
         if not is_fomc:
             for sp in speeches.get(d.isoformat(), []):
                 when = sp.get("time_label") or "time not listed"
                 scored.append((-1, f"Fed Chair speaks at {when} — event "
-                                   "overhang; the Chair's speeches move "
-                                   "markets, and the morning trades into it"))
-                speech_overhang = True
+                                   "overhang into the session (provisional "
+                                   "factor, graded Fridays)"))
                 break
+        for suspect in speech_suspects.get(d.isoformat(), []):
+            notes.append(f"Possible Fed Chair event not classified — "
+                         f"check: {suspect}")
 
         # ── Participation / session shape ──
         if d in BOND_CLOSED_THIN:
@@ -981,6 +1012,11 @@ class ProbabilityCalendar:
             scored.append((-1, "Quiet week — one or zero red-folder days all "
                                 "week; a weak calendar is positive evidence "
                                 "of quiet, not just a missing boost"))
+            week_dates = {(monday_of + timedelta(days=i)).isoformat()
+                          for i in range(5)}
+            if any(ds in speeches for ds in week_dates):
+                notes.append("Quiet week counts prints only; the Fed "
+                             "Chair speech is rated separately")
 
         if summer_carry:
             scored.append((1, "Summer carry — the week's release window is "
@@ -1113,7 +1149,7 @@ class ProbabilityCalendar:
         else:
             tier = TIER_DONT_LOOK
 
-        hard_factors = travel_lock or is_fomc or summer_out or speech_overhang or d in BOND_CLOSED_THIN or any(
+        hard_factors = travel_lock or is_fomc or summer_out or d in BOND_CLOSED_THIN or any(
             "Pre-FOMC" in t for _p, t in scored)
         if marker_fired and tier == TIER_DONT_LOOK and not hard_factors:
             tier = TIER_DEFENSIVE
