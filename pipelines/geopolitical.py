@@ -56,6 +56,17 @@ def _first_text(response):
     )
 
 
+def _parse_divergence_reply(text):
+    """'diverged' / 'unchanged' from a one-word Haiku reply, tolerant of case,
+    punctuation and extra words ("Unchanged.", "**DIVERGED**"); None when
+    neither or both tokens appear (unparseable)."""
+    words = set(re.findall(r'[A-Z]+', (text or '').upper()))
+    d, u = 'DIVERGED' in words, 'UNCHANGED' in words
+    if d == u:
+        return None
+    return 'diverged' if d else 'unchanged'
+
+
 def _et_display(dt):
     """Aware datetime -> 'Mon DD, HH:MM AM EDT|EST' in New York time."""
     local = dt.astimezone(_NY_TZ)
@@ -479,6 +490,11 @@ _EVENT_CONCEPTS = (
     ('inflation', r'\b(?:inflation\w*|cpi)\b'),
     ('tariff', r'\b(?:tariffs?|levy|levies|import dut(?:y|ies))\b'),
     ('sanction', r'\b(?:sanction\w*|designat\w*|blacklist\w*)\b'),
+    # Export controls: licence curbs, entity listings, chip/tech export bans
+    # and the loopholes they close (a trade-restriction ACTION, like tariff).
+    ('export_control', r'\b(?:export[- ]controls?|export (?:curbs?|restrictions?|bans?|rules?|licen[cs]es?)|'
+                       r'entity list\w*|(?:chips?|semiconductors?) (?:curbs?|restrictions?|bans?|rules?|exports?|loopholes?)|'
+                       r'(?:third-country|transshipment|export) loopholes?|crack(?:s|ed|ing)? down on [\w-]+ loopholes?)\b'),
     ('tanker', r'\b(?:tankers?|vessels?|ships?)\b'),
     ('jobs', r'\b(?:payrolls?|jobs?|employment|labor market)\b'),
     ('voter', r'\b(?:voters?|electorate)\b'),
@@ -488,10 +504,13 @@ _EVENT_CONCEPTS = (
 _EVENT_CONCEPT_RES = tuple((n, re.compile(p)) for n, p in _EVENT_CONCEPTS)
 # Which concepts name the core ACTION (kind) vs what it is ABOUT (object).
 _EVENT_KIND_CONCEPTS = frozenset({'attack', 'ceasefire', 'call', 'talks', 'deal', 'output', 'ratemove',
-                                  'tariff', 'sanction', 'deploy'})
+                                  'tariff', 'sanction', 'export_control', 'deploy'})
 # A coercive act named only as a threat, warning or possibility ("warns of
 # new Iran strikes", "could impose tariffs") is kind 'threat', not the act.
-_EVENT_THREAT_KINDS = frozenset({'attack', 'tariff', 'sanction'})
+_EVENT_THREAT_KINDS = frozenset({'attack', 'tariff', 'sanction', 'export_control'})
+# Trade-restriction actions: the policy itself is the event's object (see
+# _event_same_event_gates()).
+_EVENT_POLICY_KINDS = frozenset({'tariff', 'sanction', 'export_control'})
 # Kind compatibility for event-memory folds (see _event_kind_class()): each
 # core-action concept belongs to one event CLASS; an article whose headline
 # class is incompatible with the event row's headline class never folds into
@@ -500,7 +519,7 @@ _EVENT_THREAT_KINDS = frozenset({'attack', 'tariff', 'sanction'})
 # class None = unknown, which keeps the existing fold behavior.
 _EVENT_KIND_CLASS = {'attack': 'kinetic', 'deploy': 'kinetic',
                      'talks': 'diplomacy', 'deal': 'diplomacy', 'call': 'diplomacy', 'ceasefire': 'diplomacy',
-                     'tariff': 'economic', 'sanction': 'economic'}
+                     'tariff': 'economic', 'sanction': 'economic', 'export_control': 'economic'}
 _EVENT_KIND_INCOMPATIBLE = frozenset({frozenset({'kinetic', 'diplomacy'}), frozenset({'kinetic', 'economic'})})
 _EVENT_THREAT_RE = re.compile(
     r"\b(?:warn(?:s|ed|ing)?|threat(?:s|en|ens|ened|ening)?|vow(?:s|ed)?|signal(?:s|ed|ing|led|ling)?|"
@@ -1022,6 +1041,15 @@ _EVENT_PROPER_SKIP = frozenset({
 })
 
 
+def _event_is_title_case(headline):
+    """True when the headline is written in headline (Title) Case: nearly
+    every word of 4+ letters is capitalized. str.istitle() misses the usual
+    style that keeps short words lowercase ("Moves to Close ... of China"),
+    which turned every capitalized headline word into a same-event OBJECT."""
+    words = [w for w in re.findall(r"[A-Za-z][A-Za-z'\u2019\-]*", headline or '') if len(w) >= 4]
+    return len(words) >= 3 and sum(w[0].isupper() for w in words) >= 0.8 * len(words)
+
+
 def _event_proper_nouns(raw_text, headline=''):
     """Lowercased proper nouns from the article's sentence-case text (and
     the headline unless it is Title Case). Actor names and concept words
@@ -1197,7 +1225,12 @@ def _event_identity(ctx, today):
         if m.group(2).lower() in {n for n, _ in speakers}:
             obj_raw = obj_raw.replace(m.group(1), ' ')
     obj_norm = _event_norm_text(obj_raw)
-    obj_tokens = _event_identity_tokens(obj_norm, proper - speaker_words)
+    # A Title Case headline capitalizes ordinary words ("Moves to Close ...
+    # Loophole"): they still weigh as tokens, but only a name the article's own
+    # sentence-case text capitalizes counts as an OBJECT for the same-event gate.
+    obj_proper = (_event_proper_nouns(' '.join([desc, summary1]))
+                  if _event_is_title_case(headline) else proper) - speaker_words
+    obj_tokens = _event_identity_tokens(obj_norm, obj_proper)
     objects = sorted(t for t in obj_tokens
                      if (t[:1] == '#' and t[1:] in _EVENT_OBJECT_CONCEPTS) or t[:1] == '!')
     sites = sorted(_event_sites(' '.join([headline if not headline.istitle() else '', desc])))
@@ -1205,7 +1238,7 @@ def _event_identity(ctx, today):
     hl_plain = [t for t in _event_identity_tokens(hl_norm, proper) if t[:1] not in ('#', '@', '!')]
     lead_proper = sorted(_event_proper_nouns(lead, headline) - speaker_words)
     # What the headline itself names as the target/place (for NEW TARGET).
-    hl_objects = sorted({t for t in _event_identity_tokens(hl_norm, proper - speaker_words)
+    hl_objects = sorted({t for t in _event_identity_tokens(hl_norm, obj_proper)
                          if (t[:1] == '#' and t[1:] in _EVENT_OBJECT_CONCEPTS) or t[:1] == '!'}
                         | {'!' + s for s in _event_sites(headline if not headline.istitle() else '')})
     return {
@@ -1253,7 +1286,15 @@ def _event_same_event_gates(a, b):
     ah, bh = set(a.get('hl_actors') or []), set(b.get('hl_actors') or [])
     if ah and bh and not ah & bh:
         return 'headline_actors'
-    if ah - ba:
+    # The U.S. (incl. Trump/White House) is the default subject of most
+    # stories: in a non-kinetic story that already shares another headline
+    # actor with the row it is not a NEW actor by itself (as in the T1 live
+    # match). Kinetic items keep the strict rule (a new attacker matters).
+    new_actors = ah - ba
+    if (new_actors == {'us'} and (ah & bh) - {'us'}
+            and not (a.get('kinetic') or b.get('kinetic'))):
+        new_actors = set()
+    if new_actors:
         return 'new_actor'
     ak, bk = set(a.get('kinds') or []), set(b.get('kinds') or [])
     if (ak or bk) and not ak & bk:
@@ -1263,9 +1304,15 @@ def _event_same_event_gates(a, b):
         if sp and sp not in set(y.get('names') or []):
             return 'speaker'
     ao, bo = set(a.get('objects') or []), set(b.get('objects') or [])
+    # A shared trade-restriction action (tariff / sanction / export control)
+    # on a shared non-U.S. actor IS what a policy story is about: it stands
+    # in for a named object when one side names none.
+    shared_policy = bool(ak & bk & _EVENT_POLICY_KINDS)
     if ao and bo:
         if not ao & bo:
             return 'object'
+    elif shared_policy and (aa & ba) - {'us'}:
+        pass
     elif len(aa & ba) < 2:
         return 'object'
     elif ao or bo:
@@ -1328,6 +1375,23 @@ def _event_kind_incompatible(headline, row):
     return None
 
 
+def _event_state_change(anchor_headline, headline):
+    """Why `headline` is a real state change versus `anchor_headline`, or None:
+    its core action moved to a different known event class (talks -> sanctions),
+    anything became kinetic (talks/statement -> strike), or it names an
+    escalation class (_T1_ESCALATION_CLASSES) the anchor did not. An anchor
+    of unknown class only proves a change when the new item is kinetic, so
+    a vocabulary gap alone never counts as a change."""
+    a, b = _event_kind_class(headline), _event_kind_class(anchor_headline)
+    if a and a != b and (b or a == 'kinetic'):
+        return f"class {b or 'unknown'}->{a}"
+    new_t, old_t = _event_norm_text(headline), _event_norm_text(anchor_headline)
+    for name, rx in _T1_ESCALATION_CLASSES:
+        if rx.search(new_t) and not rx.search(old_t):
+            return f"escalation {name}"
+    return None
+
+
 def _event_identity_matches(ident, row):
     """Best similarity of `ident` against any identity on `row`, or None."""
     best = None
@@ -1339,6 +1403,23 @@ def _event_identity_matches(ident, row):
         if overlap >= EVENT_IDENTITY_MIN_OVERLAP:
             if best is None or overlap > best[1]:
                 best = sim
+    return best
+
+
+def _event_identity_miss(ident, row):
+    """Why `ident` did NOT match `row` (call only when
+    _event_identity_matches() returned None): (reason, score) for the stored
+    identity sharing the most token weight, or None when nothing is shared
+    at all (an unrelated row, not a candidate). reason is 'gate:<name>' or
+    'overlap<min>'."""
+    best = None
+    for stored in row.get('identities') or []:
+        other = _event_identity_of(stored)
+        score = _event_identity_score(ident, other)
+        if score <= 0 or (best is not None and score <= best[1]):
+            continue
+        gate = _event_same_event_gates(ident, other)
+        best = (f"gate:{gate}" if gate else f"overlap<{EVENT_IDENTITY_MIN_OVERLAP}", score)
     return best
 
 
@@ -3559,7 +3640,8 @@ Respond with only one word: SAME or DIFFERENT"""
             pulse_logger.log(f"⚠️ Haiku story comparison failed: {e}", level="WARNING")
             return False
 
-    def has_outcome_diverged(self, existing_summary, existing_reason, new_summary, new_reason):
+    def has_outcome_diverged(self, existing_summary, existing_reason, new_summary, new_reason,
+                             headline='', anchor=''):
         """Ask Haiku whether two same-story classifications actually describe a
         different underlying outcome, despite matching direction/tier/confidence
         labels. Only ever called when those three labels already agree — this is
@@ -3568,16 +3650,25 @@ Respond with only one word: SAME or DIFFERENT"""
         unrelated reasons, so label agreement alone can't tell real staleness
         from coincidence).
 
-        Fails CLOSED (returns True = diverged) on no client, empty summary/reason
-        text on either side, a malformed/unexpected response, or any API error —
-        deliberately biased toward treating an ambiguous read as a real change
-        rather than silently reusing what might be a stale classification."""
+        True ONLY on a parsed DIVERGED answer. Every non-answer — no client,
+        empty summary/reason text on either side, an unparseable reply, or an
+        API error — returns False (fallback): is_same_story() already said
+        SAME, and a check that could not run must never override that verdict
+        (Nov 16 chip-loophole double count). One OUTCOME DIVERGENCE CHECK line
+        per call names the result and why."""
+        def done(result, diverged, detail=''):
+            pulse_logger.log(
+                f"OUTCOME DIVERGENCE CHECK | result={result} | treated_as={'diverged' if diverged else 'same'}"
+                + (f" | {detail}" if detail else '')
+                + f" | headline={(headline or '')[:90]} | anchor={(anchor or '')[:60]}")
+            return diverged
         if self.anthropic_client is None:
-            return True
+            return done('fallback-error', False, 'no Haiku client')
         existing_text = (existing_summary or existing_reason or '').strip()
         new_text = (new_summary or new_reason or '').strip()
         if not existing_text or not new_text:
-            return True
+            side = 'anchor' if not existing_text else 'new'
+            return done('fallback-empty', False, f"empty summary/reason on {side}")
         try:
             prompt = f"""You are comparing two market/geopolitical event summaries that have already been classified as the same underlying story, with matching direction and impact tier.
 
@@ -3594,14 +3685,79 @@ Respond with only one word: DIVERGED or UNCHANGED"""
                 max_tokens=10,
                 messages=[{"role": "user", "content": prompt}]
             )
-            result = _first_text(response).strip().upper()
-            if result == "UNCHANGED":
-                return False
-            # "DIVERGED", or anything malformed/unexpected — fail closed.
-            return True
+            raw = _first_text(response)
         except Exception as e:
-            pulse_logger.log(f"⚠️ Haiku outcome divergence check failed: {e}", level="WARNING")
-            return True
+            return done('fallback-error', False, f"error={str(e)[:120]}")
+        verdict = _parse_divergence_reply(raw)
+        if verdict is None:
+            return done('fallback-unparseable', False, f"reply={raw.strip()[:40]!r}")
+        return done(verdict, verdict == 'diverged')
+
+    def _event_fold_of(self, anchor, existing):
+        """Fold fields placing an item on the event the anchor card belongs to
+        (the anchor's own fold target, else the event-memory row holding the
+        anchor's headline), or None when no such row exists."""
+        try:
+            with self._event_memory_lock:
+                mem, _ = self._load_event_memory()
+        except Exception:
+            return None
+        key = existing.get('event_key') if existing.get('event_folded') else None
+        if key not in mem:
+            ident = {'headline_norm': _event_headline_norm(anchor), 'story_url': ''}
+            key = next((k for k, row in mem.items() if _event_is_same_article(row, ident)), None)
+        if key is None:
+            return None
+        row = mem[key]
+        return {'event_folded': True, 'event_key': key,
+                'clock_anchor': row.get('clock_start') or row.get('first_seen'),
+                'clock_hours': row.get('clock_hours') or (
+                    24 if row.get('haiku_kind_on_first_seen') == 'follow_up' else MAX_ARTICLE_AGE_HOURS)}
+
+    def _outcome_divergence_resolve(self, headline, anchor, existing, new_class, r):
+        """Same-story item whose labels match its anchor's: return `anchor`
+        to handle it as a duplicate, or None to keep it on the board.
+
+        One rule at every tier (generalizes the Tier 1 live-fold guard): a
+        divergence keep never becomes a second independent vote on the same
+        event. Only a REAL STATE CHANGE keeps its own card and vote, i.e. the
+        headline's core action moved to a different event class than the
+        anchor's (_event_kind_class: talks/deal -> strike, threat -> tariff
+        imposed, ...) or names an escalation class (_T1_ESCALATION_CLASSES)
+        the anchor never named. (A direction or tier flip never reaches here:
+        those are the label changes the caller already merges on.) Any other
+        DIVERGED read is a new fact on the same event: folded into the
+        anchor's event — visible, anchor's clock, no pin, no vote."""
+        if r.get('t1_live_fold'):
+            pulse_logger.log(
+                f"GEO T1 LIVE FOLD | outcome-divergence keep skipped | folded into live Tier 1 event "
+                f"{r.get('event_key')} | headline={headline[:90]}")
+            return anchor
+        if not self.has_outcome_diverged(
+            existing.get('summary', ''), existing.get('reason', ''),
+            new_class.get('summary', ''), new_class.get('reason', ''),
+            headline=headline, anchor=anchor
+        ):
+            return anchor
+        pulse_logger.log(f"🧭 Outcome divergence detected despite matching labels: '{headline[:60]}' vs anchor '{anchor[:60]}'")
+        change = _event_state_change(anchor, headline)
+        if not change and not r.get('event_folded'):
+            fold = self._event_fold_of(anchor, existing)
+            if fold is None:
+                pulse_logger.log(
+                    f"GEO KEEP skipped | reason=outcome-divergence | no state change, anchor event not in memory | "
+                    f"handled as duplicate of '{anchor[:60]}' | headline={headline[:90]}")
+                return anchor
+            for k, v in fold.items():
+                r[k] = new_class[k] = v
+        pulse_logger.log(
+            f"GEO KEEP | reason=outcome-divergence | "
+            + (f"state_change={change}" if change else "no state change (new fact)")
+            + f" | not a duplicate of '{anchor[:60]}' | "
+            + (f"folded into event {r.get('event_key')} (original clock {r.get('clock_anchor')} +{r.get('clock_hours')}h, no vote)"
+               if r.get('event_folded') else "kept as own card")
+            + f" | headline={headline[:90]}")
+        return None
 
     def update_pinned_store(self, new_items, classifications):
         """Update pinned store with newly Haiku-verified high-confidence articles."""
@@ -4367,9 +4523,17 @@ CONTEXT: {context}"""
                     self._event_log_once('cand_refused', (identity['headline_norm'], rkey, reason),
                                          f"EVENT CANDIDATE REFUSED | reason={reason} | key={rkey}{extra} | "
                                          f"matched=\"{mem[rkey].get('sample_headline', '')[:90]}\" | headline={short}")
+                skipped = []
                 for rkey, row in mem.items():
                     sim = _event_identity_matches(ident, row)
                     if sim is None:
+                        # A row sharing identity tokens that failed a same-event
+                        # gate or the overlap minimum is a refused candidate too
+                        # (was silent: refused=0 hid the near-miss).
+                        miss = _event_identity_miss(ident, row)
+                        if miss is not None:
+                            refused.add(rkey)
+                            skipped.append((miss[1], rkey, miss[0]))
                         continue
                     kind_why = _event_kind_incompatible(headline, row)
                     if kind_why:
@@ -4380,6 +4544,12 @@ CONTEXT: {context}"""
                         folds.append((-sim[1], row.get('first_seen', ''), rkey, sim))
                     else:
                         new_facts.append((rkey, reason))
+                if skipped:
+                    skipped.sort(reverse=True)
+                    self._event_log_once('cand_skipped', identity['headline_norm'],
+                                         f"EVENT CANDIDATE SKIPPED | n={len(skipped)} | "
+                                         + '; '.join(f"key={k} reason={why} score={sc:.2f}" for sc, k, why in skipped[:3])
+                                         + f" | headline={short}")
                 full_identity = dict(identity, **ident)
                 t1_live = False
                 if folds and (kind, tier) == ('first_print', 1) and haiku_kind == 'first_print' and haiku_tier == 1:
@@ -5838,25 +6008,9 @@ CONTEXT: {context}"""
                                     tier_changed = existing.get('tier') != new_class['tier']
                                     direction_changed = existing.get('direction') != new_class['direction']
                                     confidence_shifted = abs((existing.get('confidence') or 0) - (new_class.get('confidence') or 0)) >= 0.10
-                                    if r.get('t1_live_fold'):
-                                        pulse_logger.log(
-                                            f"GEO T1 LIVE FOLD | outcome-divergence keep skipped | folded into live Tier 1 event "
-                                            f"{r.get('event_key')} | headline={headline[:90]}")
-                                    elif not (tier_changed or direction_changed or confidence_shifted):
-                                        if self.has_outcome_diverged(
-                                            existing.get('summary', ''), existing.get('reason', ''),
-                                            new_class.get('summary', ''), new_class.get('reason', '')
-                                        ):
-                                            # Different outcome = different story: keep it as its
-                                            # own card; never drop it or merge it into the anchor.
-                                            pulse_logger.log(f"🧭 Outcome divergence detected despite matching labels: '{headline[:60]}' vs anchor '{duplicate_of[:60]}'")
-                                            pulse_logger.log(
-                                                f"GEO KEEP | reason=outcome-divergence | not a duplicate of "
-                                                f"'{duplicate_of[:60]}' | "
-                                                + (f"folded into event {r.get('event_key')} (original clock {r.get('clock_anchor')} +{r.get('clock_hours')}h)"
-                                                   if r.get('event_folded') else "kept as own card")
-                                                + f" | headline={headline[:90]}")
-                                            duplicate_of = None
+                                    if r.get('t1_live_fold') or not (tier_changed or direction_changed or confidence_shifted):
+                                        duplicate_of = self._outcome_divergence_resolve(
+                                            headline, duplicate_of, existing, new_class, r)
 
                                 if duplicate_of:
                                     existing = gemini_cache[duplicate_of]
