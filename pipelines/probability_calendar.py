@@ -245,6 +245,21 @@ def _prior_trading_day(d):
     return d
 
 
+def _release_landed(day, today):
+    """Whether a red-folder release day's print has landed, judged the
+    same way the checkpoints judge it: a past date has landed; a future
+    date has not; on the day itself the print lands at 8:30 AM ET, the
+    print time the release-day reason already assumes. Reason strings
+    key off this state so the words age with the rating — a checkpoint
+    can move a day's tier, and the explanation must not keep describing
+    a landed print as if it were still pending (Pierre, 2026-11-17)."""
+    if day < today:
+        return True
+    if day > today:
+        return False
+    return datetime.now(ET).time() >= time(8, 30)
+
+
 def _third_friday(year, month):
     d = date(year, month, 1)
     first_friday_offset = (4 - d.weekday()) % 7  # weekday(): Mon=0 … Fri=4
@@ -939,8 +954,13 @@ class ProbabilityCalendar:
                                "the next day is the play"))
         elif is_release_day:
             names = ", ".join(sorted(set(releases)))
-            scored.append((2, f"Red-folder release day — {names} at 8:30 AM ET; "
-                              "the day's range is built around the print"))
+            if _release_landed(d, today):
+                scored.append((2, f"Red-folder release day — {names} landed "
+                                  "at 8:30 AM ET; the day now trades the "
+                                  "repricing, not the wait"))
+            else:
+                scored.append((2, f"Red-folder release day — {names} at 8:30 AM ET; "
+                                  "the day's range is built around the print"))
         else:
             # Pre-FOMC: 1–2 trading days out, not itself a release day.
             if next_td in FOMC_DECISION_DATES or _next_trading_day(next_td) in FOMC_DECISION_DATES:
@@ -951,7 +971,9 @@ class ProbabilityCalendar:
                 notes.append("Post-FOMC — participation returns, but reliable "
                              "follow-through doesn't; no automatic upgrade")
 
-        # Day after a data release: the print is still being counted.
+        # Day after a data release: the print carries into the next
+        # session. The wording follows the checkpoint state — before
+        # the print it is the plan; once it has landed it is history.
         # Same week only: a Monday never inherits last Friday's release —
         # event facts do not cross the Mon-Fri week boundary (market
         # facts below still do: Friday's range is Monday's input by
@@ -962,8 +984,17 @@ class ProbabilityCalendar:
                          if e["title"] not in FOMC_TITLES]
         if prev_releases and prev_td >= monday_of and not is_release_day and not is_fomc:
             names = ", ".join(sorted(set(prev_releases)))
-            scored.append((1, f"Day after the {names} release — the print is "
-                              "still being counted; the day after stays in play"))
+            if _release_landed(prev_td, today):
+                when = ("this morning" if prev_td == today
+                        else prev_td.strftime("%A"))
+                scored.append((1, f"Day after the {names} release — the print "
+                                  f"landed {when}; the repricing it started "
+                                  "is still the day's driver, so the day "
+                                  "after stays in play"))
+            else:
+                scored.append((1, f"Day after the {names} release — the print "
+                                  f"lands {prev_td.strftime('%A')}; the day "
+                                  "after stays in play"))
         elif not is_release_day and not is_fomc:
             # Week inheritance: an earlier release this week is still the story.
             for offset in range(d.weekday()):
@@ -973,9 +1004,15 @@ class ProbabilityCalendar:
                                   if e["title"] not in FOMC_TITLES]
                 if earlier_titles:
                     names = ", ".join(sorted(set(earlier_titles)))
-                    notes.append(f"Week context — still counting {names} from "
-                                 f"{earlier.strftime('%A')}; the week inherits "
-                                 "its state, it doesn't reset each morning")
+                    if _release_landed(earlier, today):
+                        notes.append(f"Week context — {names} landed "
+                                     f"{earlier.strftime('%A')}; the week "
+                                     "keeps the state that print set, it "
+                                     "doesn't reset each morning")
+                    else:
+                        notes.append(f"Week context — still counting {names} from "
+                                     f"{earlier.strftime('%A')}; the week inherits "
+                                     "its state, it doesn't reset each morning")
                     break
 
         # ── Fed Chair speech overhang ──
