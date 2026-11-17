@@ -133,13 +133,13 @@ pA = run_case(datetime(2026, 11, 15, 10, 0, tzinfo=pc.ET), WEEK)
 tue, wed, fri = (day(pA, "2026-11-17"), day(pA, "2026-11-18"),
                  day(pA, "2026-11-20"))
 check("Sunday: release day prospective",
-      any("the day's range is built around the print" in r
+      any("the range will be built around the print" in r
           for r in tue["reasons"]))
 check("Sunday: day-after says the print lands Tuesday",
-      any("Day after the" in r and "the print lands Tuesday" in r
+      any("day after the" in r and "the print lands Tuesday" in r
           for r in wed["reasons"]))
 check("Sunday: week context still counting from Tuesday",
-      any("Week context — still counting" in r and "from Tuesday" in r
+      any("will still be trading off" in r and "from Tuesday" in r
           for r in fri["reasons"]))
 check("Sunday: no landed wording anywhere",
       not any("landed" in r for w in pA["weeks"] for b in w["days"]
@@ -149,7 +149,7 @@ check("Sunday: no landed wording anywhere",
 pB = run_case(datetime(2026, 11, 17, 7, 0, tzinfo=pc.ET), WEEK)
 tue, wed = day(pB, "2026-11-17"), day(pB, "2026-11-18")
 check("Tue 7 AM: release day still prospective",
-      any("the day's range is built around the print" in r
+      any("the range will be built around the print" in r
           for r in tue["reasons"]))
 check("Tue 7 AM: day-after still says lands Tuesday",
       any("the print lands Tuesday" in r for r in wed["reasons"]))
@@ -161,21 +161,21 @@ check("Tue 10 AM: release day reads landed",
       any("landed at 8:30 AM ET" in r and "trades the repricing" in r
           for r in tue["reasons"]))
 check("Tue 10 AM: day-after reads landed this morning",
-      any("Day after the" in r and "landed this morning" in r
+      any("day after the" in r and "landed this morning" in r
           for r in wed["reasons"]))
 
 # Case D — Wednesday 9:00 AM: Pierre's screenshot, a day later.
 pD = run_case(datetime(2026, 11, 18, 9, 0, tzinfo=pc.ET), WEEK)
 wed, fri = day(pD, "2026-11-18"), day(pD, "2026-11-20")
 check("Wed: day-after reads landed Tuesday",
-      any("Day after the" in r and "landed Tuesday" in r
+      any("day after the" in r and "landed Tuesday" in r
           for r in wed["reasons"]))
 check("Wed: week context reads landed Tuesday, state kept",
-      any("Week context" in r and "landed Tuesday" in r
-          and "keeps the state that print set" in r
+      any("still trading off" in r and "landed Tuesday" in r
+          and "keeps the state its print set" in r
           for r in fri["reasons"]))
 check("Wed: no pending wording survives anywhere",
-      not any("still being counted" in r or "still counting" in r
+      not any("will be built around the print" in r or "will still be trading off" in r
               for w in pD["weeks"] for b in w["days"] for r in b["reasons"]))
 
 # Wording only: tiers identical in all four states.

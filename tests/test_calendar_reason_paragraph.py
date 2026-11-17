@@ -137,7 +137,7 @@ check("Every reason survives into the paragraph, in order",
       == sorted(para.index(r.strip().rstrip(".")[:24])
                 for r in wed["reasons"]))
 check("Sentences are stop-separated",
-      "stays in play. Quiet week" in para)
+      "stays in play. The week is quiet" in para)
 check("Paragraph ends with a full stop", para.endswith("."))
 check("Ratings untouched (Tue PROBABLE, Wed MID on stubbed facts)",
       day(p, "2026-11-17")["rating"] == "PROBABLE"

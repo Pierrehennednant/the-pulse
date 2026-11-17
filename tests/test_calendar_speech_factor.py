@@ -138,7 +138,7 @@ check("Warsh Monday: DEFENSIVE, not DON'T LOOK",
 check("Warsh Monday: speech overhang reason present",
       any("Fed Chair speaks at 12:00 PM" in r for r in mon["reasons"]))
 check("Warsh Monday: quiet week still applies (speech is not a red day)",
-      any("Quiet week" in r for r in mon["reasons"]))
+      any("The week is quiet" in r for r in mon["reasons"]))
 tue = day(p, "2026-11-17")
 check("Retail Tuesday unaffected: PROBABLE", tue["rating"] == "PROBABLE")
 
@@ -220,7 +220,7 @@ p = run_case(datetime(2026, 11, 23, 17, 0, tzinfo=pc.ET),
 tue = day(p, "2026-11-24")
 check("D2: post-earnings morning with speech stacks to DEFENSIVE, not locked out",
       tue["rating"] == "DEFENSIVE"
-      and any("Earnings exemption" in r for r in tue["reasons"])
+      and any("can't be rated DON'T LOOK on quietness alone" in r for r in tue["reasons"])
       and any("Fed Chair speaks at 12:00 PM" in r for r in tue["reasons"]))
 
 # Case 10 - audit D3: a pre-open (08:00) Chair speech does not count.
@@ -241,7 +241,7 @@ suspect = {"event_date": "2026-11-16", "title": "Warsh Speaks",
 p = run_case(datetime(2026, 11, 15, 10, 0, tzinfo=pc.ET), WEEK + [suspect])
 mon = day(p, "2026-11-16")
 check("Q4: unclassified Chair-named event - tripwire note, no points",
-      any("Possible Fed Chair event not classified" in r
+      any("possible Fed Chair event" in r
           and "Warsh Speaks" in r for r in mon["reasons"])
       and not any("Fed Chair speaks at" in r for r in mon["reasons"])
       and mon["rating"] == "DEFENSIVE")
