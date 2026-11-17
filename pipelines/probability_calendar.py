@@ -260,6 +260,24 @@ def _release_landed(day, today):
     return datetime.now(ET).time() >= time(8, 30)
 
 
+def _reasons_paragraph(reasons):
+    """Join a day's reason lines into one flowing paragraph (Pierre,
+    2026-11-17: the stacked lines read like bullet points; he wants a
+    paragraph). Same words, same order — each line becomes a sentence,
+    with a full stop added only where the line does not already end
+    with terminal punctuation. Derived at render time from the reasons
+    list, never stored, so a frozen day's record is untouched."""
+    parts = []
+    for r in reasons or []:
+        s = " ".join(str(r).split()).strip()
+        if not s:
+            continue
+        if s[-1] not in ".!?":
+            s += "."
+        parts.append(s)
+    return " ".join(parts)
+
+
 def _third_friday(year, month):
     d = date(year, month, 1)
     first_friday_offset = (4 - d.weekday()) % 7  # weekday(): Mon=0 … Fri=4
@@ -845,6 +863,11 @@ class ProbabilityCalendar:
                 history_dirty = True
         if history_dirty:
             self._save_history(history)
+        # Display form: each day's reasons as one paragraph. Derived
+        # here, on copies, so frozen history blocks keep exactly the
+        # record that governed their day.
+        days = [dict(b, reasons_paragraph=_reasons_paragraph(b.get("reasons")))
+                for b in days]
         weeks = [{"week_of": monday.isoformat(), "label": "This week",
                   "days": days}]
         week_dates = [monday + timedelta(days=o) for o in range(5)]
