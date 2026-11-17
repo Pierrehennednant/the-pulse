@@ -144,7 +144,7 @@ check("Sat rollover: no PPI inheritance", "PPI" not in joined)
 check("Sat rollover: no invented quiet week", "Quiet week" not in joined)
 wed = day(p, "2026-11-18")
 check("Pending Wednesday still shows the NVDA marker",
-      any("Earnings marker" in r and "NVDA" in r for r in wed["reasons"]))
+      any("NVDA" in r and "never scores" in r for r in wed["reasons"]))
 
 # Case 2 — Sunday Nov 15, cache has rolled (both weeks present): Monday
 # must NOT inherit Friday's PPI even though PPI sits in the cache.
@@ -165,14 +165,14 @@ week = [ev("2026-11-03", "CPI m/m"), ev("2026-11-06", "Nonfarm Payrolls")]
 p = run_case(datetime(2026, 11, 4, 10, 0, tzinfo=pc.ET), week)
 wed = day(p, "2026-11-04")
 check("Same-week day-after boost intact",
-      any("Day after the CPI m/m release" in r for r in wed["reasons"]))
+      any("day after the CPI m/m release" in r for r in wed["reasons"]))
 
 # Case 4 — a genuinely quiet week, once its calendar has landed, still
 # earns the quiet-week factor (coverage must not mute real quiet).
 p = run_case(datetime(2026, 11, 15, 10, 0, tzinfo=pc.ET), NEXT_WEEK, NVDA)
 thu = day(p, "2026-11-19")
 check("Covered quiet week still applies the quiet-week factor",
-      any("Quiet week" in r for r in thu["reasons"]))
+      any("The week is quiet" in r for r in thu["reasons"]))
 
 failed = [n for n, ok in results if not ok]
 print(f"\n{len(results) - len(failed)}/{len(results)} passed")

@@ -979,7 +979,7 @@
                     <div class="db-day">${esc(d.weekday.slice(0, 3))}</div>
                     <div class="db-date">${esc(d.date.slice(5))}</div>
                     <div class="db-tier">${esc(d.rating)}</div>
-                    <div class="db-reasons">${(d.reasons || []).map(r => `<p>${esc(r)}</p>`).join('')}</div>
+                    <div class="db-reasons"><p>${esc(d.reasons_paragraph || (d.reasons || []).join(' '))}</p></div>
                 </div>`).join('') + '</div>' +
                 '<div class="strip-footer">Baseline set Sunday · Revises at checkpoints only</div>';
         } catch (e) {

@@ -260,6 +260,24 @@ def _release_landed(day, today):
     return datetime.now(ET).time() >= time(8, 30)
 
 
+def _reasons_paragraph(reasons):
+    """Join a day's reason lines into one flowing paragraph (Pierre,
+    2026-11-17: the stacked lines read like bullet points; he wants a
+    paragraph). Same words, same order — each line becomes a sentence,
+    with a full stop added only where the line does not already end
+    with terminal punctuation. Derived at render time from the reasons
+    list, never stored, so a frozen day's record is untouched."""
+    parts = []
+    for r in reasons or []:
+        s = " ".join(str(r).split()).strip()
+        if not s:
+            continue
+        if s[-1] not in ".!?":
+            s += "."
+        parts.append(s)
+    return " ".join(parts)
+
+
 def _third_friday(year, month):
     d = date(year, month, 1)
     first_friday_offset = (4 - d.weekday()) % 7  # weekday(): Mon=0 … Fri=4
@@ -362,8 +380,9 @@ def _travel_check_note(facts):
     reads = facts.get("travel_sources") or []
     if len(reads) < 2:
         return ""
-    return (f" Feed check split across the line — {max(reads):.2f}% vs "
-            f"{min(reads):.2f}%; the average is the final say.")
+    return (f" The two feeds split across the line on that read — "
+            f"{max(reads):.2f}% against {min(reads):.2f}% — and the "
+            f"average is the final say.")
 
 
 def _combine_travel(comps):
@@ -556,9 +575,9 @@ class ProbabilityCalendar:
         """A day in a week whose red-folder calendar hasn't landed yet.
         No rating is computed. Earnings markers are date-explicit facts
         from a separate store, so they still show."""
-        reasons = ["Week's calendar pending — the new week's red-folder "
-                   "calendar hasn't landed yet, so this week isn't rated "
-                   "yet; ratings post when it does"]
+        reasons = ["The new week's red-folder calendar hasn't landed "
+                   "yet, so this week isn't rated — the ratings post "
+                   "when it does"]
         prev_td = _prior_trading_day(d)
         for m in markers:
             try:
@@ -570,10 +589,12 @@ class ProbabilityCalendar:
                 mdate == prev_td and session == "after_close")
             if applies:
                 when = "before the open" if session == "before_open" else "last night"
-                reasons.append(f"Earnings marker — {m.get('symbol', '')} "
-                               f"({m.get('name', '')}) reported {when}; a top-weight "
-                               "Nasdaq-100 name, marked like an election marker — "
-                               "never scored, its beat or miss never predicted")
+                reasons.append(f"{m.get('symbol', '')} ({m.get('name', '')}) "
+                               f"reported {when}, and it's a top-weight "
+                               "Nasdaq-100 name, so the night is marked the "
+                               "way an election is marked — the marker "
+                               "never scores, and the beat or miss is never "
+                               "predicted")
         return {
             "date": d.isoformat(),
             "weekday": d.strftime("%A"),
@@ -845,6 +866,11 @@ class ProbabilityCalendar:
                 history_dirty = True
         if history_dirty:
             self._save_history(history)
+        # Display form: each day's reasons as one paragraph. Derived
+        # here, on copies, so frozen history blocks keep exactly the
+        # record that governed their day.
+        days = [dict(b, reasons_paragraph=_reasons_paragraph(b.get("reasons")))
+                for b in days]
         weeks = [{"week_of": monday.isoformat(), "label": "This week",
                   "days": days}]
         week_dates = [monday + timedelta(days=o) for o in range(5)]
@@ -926,21 +952,22 @@ class ProbabilityCalendar:
             first_release = week_release_days[0] if week_release_days else None
             if first_release is None:
                 summer_out = True
-                summer_reason = ("Summer plan — no red-folder release this "
-                                 "week; the locked summer rule trades release "
-                                 "windows only, so the whole week sits out")
+                summer_reason = ("Under the summer plan there's no "
+                                 "red-folder release this week, and the "
+                                 "locked rule trades release windows only "
+                                 "— so the whole week sits out")
             elif is_fomc:
                 summer_out = True
-                summer_reason = ("Summer plan — FOMC day; he never trades "
-                                 "the FOMC morning, so the window opens the "
-                                 "next day")
+                summer_reason = ("Under the summer plan this is an FOMC "
+                                 "day — he never trades the FOMC morning, "
+                                 "so the window opens tomorrow")
             elif d < first_release:
                 summer_out = True
-                summer_reason = ("Summer plan — no catalyst yet; the week's "
-                                 "first release is "
-                                 f"{first_release.strftime('%A')}, and the "
-                                 "locked summer rule stays out until the "
-                                 "window opens")
+                summer_reason = ("Under the summer plan there's no "
+                                 "catalyst yet — the week's first release "
+                                 f"comes {first_release.strftime('%A')}, "
+                                 "and the locked rule stays out until "
+                                 "that window opens")
             elif not is_release_day:
                 summer_carry = True
 
@@ -949,27 +976,33 @@ class ProbabilityCalendar:
 
         # ── Event timing (strongest factor family) ──
         if is_fomc:
-            scored.append((-2, "FOMC decision day — the morning is dead into a "
-                               "2 PM announcement; his pattern is no FOMC morning, "
-                               "the next day is the play"))
+            scored.append((-2, "It's an FOMC decision day, and the morning "
+                               "is usually dead ahead of the 2 PM "
+                               "announcement — he doesn't trade FOMC "
+                               "mornings, so the play is the next day"))
         elif is_release_day:
             names = ", ".join(sorted(set(releases)))
             if _release_landed(d, today):
-                scored.append((2, f"Red-folder release day — {names} landed "
-                                  "at 8:30 AM ET; the day now trades the "
-                                  "repricing, not the wait"))
+                scored.append((2, f"{names} landed at 8:30 AM ET, so the "
+                                  "waiting is over — the day now trades "
+                                  "the repricing"))
             else:
-                scored.append((2, f"Red-folder release day — {names} at 8:30 AM ET; "
-                                  "the day's range is built around the print"))
+                scored.append((2, f"The day brings {names} at 8:30 AM ET, "
+                                  "and the range will be built around "
+                                  "the print"))
         else:
             # Pre-FOMC: 1–2 trading days out, not itself a release day.
             if next_td in FOMC_DECISION_DATES or _next_trading_day(next_td) in FOMC_DECISION_DATES:
-                scored.append((-2, "Pre-FOMC — positioning into the decision; "
-                                   "volume runs about 24% below normal in the "
-                                   "run-up, the weakest mornings of the cycle"))
+                scored.append((-2, "The FOMC decision is close, and the "
+                                   "market is positioning into it — volume "
+                                   "runs about 24% below normal in the "
+                                   "run-up, which makes these the weakest "
+                                   "mornings of the cycle"))
             if prev_td in FOMC_DECISION_DATES:
-                notes.append("Post-FOMC — participation returns, but reliable "
-                             "follow-through doesn't; no automatic upgrade")
+                notes.append("The FOMC decision is behind us and "
+                             "participation comes back, but reliable "
+                             "follow-through usually doesn't — there's no "
+                             "automatic upgrade for that")
 
         # Day after a data release: the print carries into the next
         # session. The wording follows the checkpoint state — before
@@ -987,14 +1020,15 @@ class ProbabilityCalendar:
             if _release_landed(prev_td, today):
                 when = ("this morning" if prev_td == today
                         else prev_td.strftime("%A"))
-                scored.append((1, f"Day after the {names} release — the print "
-                                  f"landed {when}; the repricing it started "
-                                  "is still the day's driver, so the day "
-                                  "after stays in play"))
+                scored.append((1, f"It's the day after the {names} release, "
+                                  f"which landed {when} — the repricing "
+                                  "it started is still what's driving the "
+                                  "tape, so the day stays in play"))
             else:
-                scored.append((1, f"Day after the {names} release — the print "
-                                  f"lands {prev_td.strftime('%A')}; the day "
-                                  "after stays in play"))
+                scored.append((1, f"It's the day after the {names} release "
+                                  f"— the print lands "
+                                  f"{prev_td.strftime('%A')}, and the day "
+                                  "after a print stays in play"))
         elif not is_release_day and not is_fomc:
             # Week inheritance: an earlier release this week is still the story.
             for offset in range(d.weekday()):
@@ -1005,14 +1039,17 @@ class ProbabilityCalendar:
                 if earlier_titles:
                     names = ", ".join(sorted(set(earlier_titles)))
                     if _release_landed(earlier, today):
-                        notes.append(f"Week context — {names} landed "
-                                     f"{earlier.strftime('%A')}; the week "
-                                     "keeps the state that print set, it "
+                        notes.append(f"The week is still trading off the "
+                                     f"{names} print that landed "
+                                     f"{earlier.strftime('%A')} — a week "
+                                     "keeps the state its print set; it "
                                      "doesn't reset each morning")
                     else:
-                        notes.append(f"Week context — still counting {names} from "
-                                     f"{earlier.strftime('%A')}; the week inherits "
-                                     "its state, it doesn't reset each morning")
+                        notes.append(f"The week will still be trading off "
+                                     f"the {names} print from "
+                                     f"{earlier.strftime('%A')} — a week "
+                                     "inherits its state; it doesn't reset "
+                                     "each morning")
                     break
 
         # ── Fed Chair speech overhang ──
@@ -1027,39 +1064,44 @@ class ProbabilityCalendar:
         if not is_fomc:
             for sp in speeches.get(d.isoformat(), []):
                 when = sp.get("time_label") or "time not listed"
-                scored.append((-1, f"Fed Chair speaks at {when} — event "
-                                   "overhang into the session (provisional "
-                                   "factor, graded Fridays)"))
+                scored.append((-1, f"The Fed Chair speaks at {when}, and a "
+                                   "Chair speech hangs over the session "
+                                   "until it lands (provisional factor, "
+                                   "graded Fridays)"))
                 break
         for suspect in speech_suspects.get(d.isoformat(), []):
-            notes.append(f"Possible Fed Chair event not classified — "
+            notes.append(f"There's a possible Fed Chair event on the "
+                         f"calendar that isn't classified yet — worth a "
                          f"check: {suspect}")
 
         # ── Participation / session shape ──
         if d in BOND_CLOSED_THIN:
-            scored.append((-2, f"Thin session — bond market closed "
-                                f"({BOND_CLOSED_THIN[d]}); participation runs "
-                                "structurally light while futures stay open"))
+            scored.append((-2, f"It's a thin session — the bond market is "
+                                f"closed ({BOND_CLOSED_THIN[d]}), so "
+                                "participation runs structurally light "
+                                "even though futures stay open"))
         if d in HALF_DAYS:
-            scored.append((-1, "Half session — shortened day; volume runs "
-                                "about half of a normal session"))
+            scored.append((-1, "It's a half session, and volume runs "
+                                "about half of a normal day"))
 
         red_days = self._week_red_days(monday_of, events)
         if quiet_week_known and red_days <= 1 and not is_release_day and not is_fomc and not summer:
-            scored.append((-1, "Quiet week — one or zero red-folder days all "
-                                "week; a weak calendar is positive evidence "
-                                "of quiet, not just a missing boost"))
+            scored.append((-1, "The week is quiet — one red-folder day at "
+                                "most, and maybe none — and a weak calendar "
+                                "counts as positive evidence of quiet, not "
+                                "just a missing boost"))
             week_dates = {(monday_of + timedelta(days=i)).isoformat()
                           for i in range(5)}
             if any(ds in speeches for ds in week_dates):
-                notes.append("Quiet week counts prints only; the Fed "
-                             "Chair speech is rated separately")
+                notes.append("That count covers prints only — the Fed "
+                             "Chair speech is rated separately and never "
+                             "counts as one")
 
         if summer_carry:
-            scored.append((1, "Summer carry — the week's release window is "
-                              "open and carries through Friday while the Pulse "
-                              "gives the okay; a catalyst week doesn't close "
-                              "after two days"))
+            scored.append((1, "The summer window is open — it opened on "
+                              "the week's print day and carries through "
+                              "Friday while the Pulse gives the okay; a "
+                              "catalyst week doesn't close after two days"))
 
         # ── Range facts (checkpoint inputs; only for days whose prior ──
         #    session is already a recorded fact) ──
@@ -1077,36 +1119,41 @@ class ProbabilityCalendar:
             rank2 = facts.get("prev2_rank")
             if rank >= 97:
                 if is_release_day or is_fomc:
-                    notes.append(f"The prior session's range was {rank:.0f}th "
-                                 "percentile — expect two-sided trade around "
-                                 "the catalyst")
+                    notes.append(f"Yesterday's session ran a {rank:.0f}th-"
+                                 "percentile range, so expect two-sided "
+                                 "trade around the catalyst")
                 else:
-                    scored.append((-2, f"Range exhaustion — the prior session "
-                                        f"printed a {rank:.0f}th-percentile range; "
-                                        "the morning after a huge day usually "
-                                        "runs much wider than normal and "
-                                        "reverses more often than usual"))
+                    scored.append((-2, f"Yesterday's range was huge — a "
+                                        f"{rank:.0f}th-percentile day — and "
+                                        "the morning after a day like that "
+                                        "usually runs much wider than "
+                                        "normal and reverses more often "
+                                        "than usual"))
             elif rank >= 95:
                 if is_release_day or is_fomc:
-                    notes.append(f"The prior session's range was {rank:.0f}th "
-                                 "percentile — wide day behind, catalyst ahead")
+                    notes.append(f"Yesterday ran wide, a {rank:.0f}th-"
+                                 "percentile range, with the catalyst "
+                                 "still ahead")
                 else:
-                    scored.append((-1, f"Range exhaustion — the prior session "
-                                        f"printed a {rank:.0f}th-percentile range; "
-                                        "the morning after a huge day usually "
+                    scored.append((-1, f"Yesterday's range hit the "
+                                        f"{rank:.0f}th percentile, and the "
+                                        "morning after a huge day usually "
                                         "runs much wider than normal"))
             if (rank >= 90 and rank2 is not None and rank2 >= 90
                     and not is_release_day and not is_fomc):
-                scored.append((-1, "Two extended-range days in a row — "
-                                    "exhaustion stacks"))
+                scored.append((-1, "The last two sessions both ran "
+                                    "extended ranges, and that kind of "
+                                    "exhaustion tends to stack"))
             pos = facts.get("prev_close_pos")
             if pos is not None and not any(p <= -1 for p, _t in scored):
                 if 0.35 <= pos <= 0.65:
-                    notes.append("The prior session closed mid-range — balance "
-                                 "was accepted; rotation is the default read")
+                    notes.append("Yesterday closed mid-range, so balance "
+                                 "was accepted and rotation is the "
+                                 "default read")
                 elif pos >= 0.85 or pos <= 0.15:
-                    notes.append("The prior session closed at its range extreme "
-                                 "— initiative; follow-through odds tick up")
+                    notes.append("Yesterday closed at the edge of its "
+                                 "range, which shows initiative — "
+                                 "follow-through odds tick up from there")
 
         # ── Today-only checkpoint facts ──
         travel_lock = False
@@ -1116,48 +1163,55 @@ class ProbabilityCalendar:
                 travel_lock = True
             elif travel is not None:
                 story = _travel_story(facts)
-                scored.append((0, f"Overnight travel {travel:.1f}% — under "
-                                  f"the locked {TRAVEL_LOCK_PCT:.0f}% travel "
-                                  f"line, so no travel lock."
+                scored.append((0, f"Overnight travel came in at "
+                                  f"{travel:.1f}%, under the locked "
+                                  f"{TRAVEL_LOCK_PCT:.0f}% line, so there's "
+                                  f"no travel lock."
                                   + (f" {story}" if story else "")
                                   + _travel_check_note(facts)))
             gap = facts.get("weekend_gap_pct")
             if d.weekday() == 0 and gap is not None and abs(gap) >= 0.5:
-                scored.append((-1, f"Weekend gap of {gap:+.1f}% — Monday gaps "
-                                    "carry a fill tendency; the gap is the "
-                                    "morning's first story"))
+                scored.append((-1, f"The weekend left a gap of {gap:+.1f}%, "
+                                    "and Monday gaps tend to get filled "
+                                    "— the gap is the morning's first "
+                                    "story"))
             if pulse_conf is not None:
                 compressed = (facts.get("median10_rank") is not None
                               and facts["median10_rank"] <= 25)
                 if pulse_conf >= 55:
-                    scored.append((1, "The Pulse has crossed its 55% gate at "
-                                      "this checkpoint — gate crossings count "
-                                      "as recorded facts for the plan"))
+                    scored.append((1, "The Pulse has crossed its 55% gate "
+                                      "at this checkpoint, and gate "
+                                      "crossings count as recorded facts "
+                                      "for the plan"))
                 elif compressed:
-                    scored.append((-1, "Low-vol stack — recent ranges are "
-                                        "compressed (10-session median at or "
-                                        "below the 25th percentile) with the "
-                                        "Pulse under its gate; intraday "
-                                        "follow-through is weakest here"))
+                    scored.append((-1, "Ranges have been compressed "
+                                        "lately — the 10-session median "
+                                        "sits at or below the 25th "
+                                        "percentile — and the Pulse is "
+                                        "under its gate; intraday "
+                                        "follow-through is at its weakest "
+                                        "in this stack"))
             if summer and not summer_out and pulse_conf is not None \
                     and pulse_conf < 55:
                 summer_out = True
-                summer_reason = ("Summer plan — the Pulse reads Neutral this "
-                                 "morning (confidence under the 55% gate); "
-                                 "the locked summer rule ignores the day "
-                                 "entirely")
+                summer_reason = ("Under the summer plan the Pulse reads "
+                                 "Neutral this morning, with confidence "
+                                 "under the 55% gate — and the locked "
+                                 "rule ignores a Neutral day entirely")
 
         # ── Markers (noted, never scored) ──
         marker_fired = False
         expiry = _third_friday(d.year, d.month) if d.month in (3, 6, 9, 12) else None
         if expiry is not None and _roll_week_monday(d) is not None:
             if d == expiry:
-                notes.append("Expiry Friday — the quarterly futures roll "
-                             "completes today; churn here is plumbing, not signal")
+                notes.append("It's expiry Friday, when the quarterly "
+                             "futures roll completes — any churn from "
+                             "that is plumbing, not signal")
             else:
-                notes.append("Futures roll week — volume is migrating to the "
-                             "next quarter's contract; a modest effect in "
-                             "NQ/ES, thinner in the outgoing contract")
+                notes.append("It's futures roll week, so volume is "
+                             "migrating to next quarter's contract — a "
+                             "modest effect in NQ and ES, and thinner in "
+                             "the outgoing contract")
 
         for m in markers:
             try:
@@ -1170,10 +1224,12 @@ class ProbabilityCalendar:
             if applies:
                 marker_fired = True
                 when = "before the open" if session == "before_open" else "last night"
-                notes.append(f"Earnings marker — {m.get('symbol', '')} "
-                             f"({m.get('name', '')}) reported {when}; a top-weight "
-                             "Nasdaq-100 name, marked like an election marker — "
-                             "never scored, its beat or miss never predicted")
+                notes.append(f"{m.get('symbol', '')} ({m.get('name', '')}) "
+                             f"reported {when}, and it's a top-weight "
+                             "Nasdaq-100 name, so the night is marked the "
+                             "way an election is marked — the marker "
+                             "never scores, and the beat or miss is never "
+                             "predicted")
 
         # ── Tier ──
         points = sum(p for p, _t in scored)
@@ -1190,18 +1246,19 @@ class ProbabilityCalendar:
             "Pre-FOMC" in t for _p, t in scored)
         if marker_fired and tier == TIER_DONT_LOOK and not hard_factors:
             tier = TIER_DEFENSIVE
-            notes.append("Earnings exemption — a marker night can't be rated "
-                         "DON'T LOOK on quietness alone; the overnight "
-                         "checkpoint (travel, gap) does the real rating work")
+            notes.append("A marker night can't be rated DON'T LOOK on "
+                         "quietness alone — the overnight checkpoint, "
+                         "travel and the gap, does the real rating work "
+                         "there")
 
         reasons = [t for _p, t in scored] + notes
         if travel_lock:
             tier = TIER_DONT_LOOK
             story = _travel_story(facts)
-            reasons.insert(0, f"LOCKED RULE — overnight travel "
-                              f"{facts['travel_pct']:.1f}% crossed the locked "
-                              f"{TRAVEL_LOCK_PCT:.0f}% travel line (full "
-                              f"overnight range, round trips included)."
+            reasons.insert(0, f"Overnight travel hit "
+                              f"{facts['travel_pct']:.1f}% and crossed the "
+                              f"locked {TRAVEL_LOCK_PCT:.0f}% line — the "
+                              f"full overnight range, round trips included."
                               + (f" {story}" if story else "")
                               + _travel_check_note(facts)
                               + " Extended overnight travel makes this a "
@@ -1210,8 +1267,9 @@ class ProbabilityCalendar:
             tier = TIER_DONT_LOOK
             reasons.insert(0, summer_reason)
         if not reasons:
-            reasons = ["No catalyst and no positive evidence of quiet — a "
-                       "baseline day; the morning itself decides"]
+            reasons = ["There's no catalyst today and no positive "
+                       "evidence of quiet either — it's a baseline day, "
+                       "and the morning itself decides"]
         return {
             "date": d.isoformat(),
             "weekday": d.strftime("%A"),

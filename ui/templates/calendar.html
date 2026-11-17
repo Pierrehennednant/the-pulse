@@ -145,7 +145,7 @@
                 <div class="db-day">{{ day.weekday }}</div>
                 <div class="db-date">{{ day.date }}{% if day.is_today %} · Today{% endif %}</div>
                 <div class="db-tier">{{ day.rating }}</div>
-                <div class="db-reasons">{% for reason in day.reasons %}<p>{{ reason }}</p>{% endfor %}</div>
+                <div class="db-reasons"><p>{{ day.reasons_paragraph or (day.reasons | join(' ')) }}</p></div>
             </div>
             {% endfor %}
         </div>
