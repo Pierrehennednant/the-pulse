@@ -260,6 +260,35 @@ def _release_landed(day, today):
     return datetime.now(ET).time() >= time(8, 30)
 
 
+def _speech_landed(sp, day, today):
+    """Whether a Fed Chair speech has started, judged the same way
+    _release_landed judges a print: a past date has landed; a future
+    date has not; on the day itself the speech lands at its scheduled
+    start. An unknown start keeps the prospective wording — the safe
+    fallback, since the Chair counts either way (Pierre, 2026-11-17:
+    the speech line had the same checkpoint lag as the release lines —
+    Monday's card still said the speech 'hangs over the session' hours
+    after Warsh had spoken)."""
+    if day < today:
+        return True
+    if day > today:
+        return False
+    start = sp.get("start")
+    if start is None:
+        return False
+    return datetime.now(ET).time() >= start
+
+
+def _fomc_landed(day, today):
+    """Whether the FOMC announcement has landed: it lands at 2:00 PM
+    ET on the decision day; judged like _release_landed."""
+    if day < today:
+        return True
+    if day > today:
+        return False
+    return datetime.now(ET).time() >= time(14, 0)
+
+
 def _reasons_paragraph(reasons):
     """Join a day's reason lines into one flowing paragraph (Pierre,
     2026-11-17: the stacked lines read like bullet points; he wants a
@@ -544,7 +573,7 @@ class ProbabilityCalendar:
                 if start is not None and not (time(9, 30) <= start < time(16, 0)):
                     continue
                 speeches.setdefault(dstr, []).append(
-                    {"title": title, "time_label": label})
+                    {"title": title, "time_label": label, "start": start})
         except Exception as e:
             pulse_logger.log(f"Calendar: speech load failed: {e}",
                              level="WARNING")
@@ -976,10 +1005,17 @@ class ProbabilityCalendar:
 
         # ── Event timing (strongest factor family) ──
         if is_fomc:
-            scored.append((-2, "It's an FOMC decision day, and the morning "
-                               "is usually dead ahead of the 2 PM "
-                               "announcement — he doesn't trade FOMC "
-                               "mornings, so the play is the next day"))
+            if _fomc_landed(d, today):
+                scored.append((-2, "It's an FOMC decision day — the 2 PM "
+                                   "announcement has landed, and he "
+                                   "doesn't trade FOMC mornings, so the "
+                                   "play is the next day"))
+            else:
+                scored.append((-2, "It's an FOMC decision day, and the "
+                                   "morning is usually dead ahead of the "
+                                   "2 PM announcement — he doesn't trade "
+                                   "FOMC mornings, so the play is the "
+                                   "next day"))
         elif is_release_day:
             names = ", ".join(sorted(set(releases)))
             if _release_landed(d, today):
@@ -1064,10 +1100,18 @@ class ProbabilityCalendar:
         if not is_fomc:
             for sp in speeches.get(d.isoformat(), []):
                 when = sp.get("time_label") or "time not listed"
-                scored.append((-1, f"The Fed Chair speaks at {when}, and a "
-                                   "Chair speech hangs over the session "
-                                   "until it lands (provisional factor, "
-                                   "graded Fridays)"))
+                if _speech_landed(sp, d, today):
+                    scored.append((-1, f"The Fed Chair spoke at {when} — "
+                                       "the speech has landed, and the "
+                                       "morning traded into it "
+                                       "(provisional factor, graded "
+                                       "Fridays)"))
+                else:
+                    scored.append((-1, f"The Fed Chair speaks at {when}, "
+                                       "and a Chair speech hangs over the "
+                                       "session until it lands "
+                                       "(provisional factor, graded "
+                                       "Fridays)"))
                 break
         for suspect in speech_suspects.get(d.isoformat(), []):
             notes.append(f"There's a possible Fed Chair event on the "
